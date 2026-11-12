@@ -131,7 +131,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const platform = GAME_PLATFORM[input.data.game as MonitorGame];
     const pairing = store.createPairing({ ...input.data, platform }, uidOf(req));
     const link = pairingLink(server, pairing.code);
-    res.status(201).json({ ...pairing, platform, link, qr: await QRCode.toDataURL(link, { margin: 1, width: 280 }), agentCommand: `npm run agent -- --server ${server} --code ${pairing.code}` });
+    res.status(201).json({ ...pairing, platform, link, qr: await QRCode.toDataURL(link, { margin: 1, width: 280 }), agentCommand: `arenahub-agent.exe --server ${server} --code ${pairing.code}` });
   });
   staff.get('/sessions', (req, res) => {
     const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : undefined;

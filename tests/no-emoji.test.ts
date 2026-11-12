@@ -4,8 +4,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { findEmoji, stripEmoji, hasEmoji } from '../src/lib/emoji.ts';
 
-const ROOTS = ['src', 'server', 'scripts', 'tests/fixtures'];
-const TEXT = /\.(tsx?|mjs|js|css|json|html|md)$/;
+const ROOTS = ['src', 'server', 'scripts', 'tests/fixtures', 'tools', 'companion'];
+const SKIP = new Set(['build', '.gradle', 'node_modules', '.idea']);
+const TEXT = /\.(tsx?|mjs|js|css|json|html|md|kt|kts|xml)$/;
 // Temporary: removed from production paths in Phase 1, then this list must be empty.
 const PENDING: string[] = [];
 
@@ -13,7 +14,7 @@ function files(dir: string): string[] {
   try { statSync(dir); } catch { return []; }
   return readdirSync(dir).flatMap(name => {
     const path = join(dir, name);
-    return statSync(path).isDirectory() ? files(path) : TEXT.test(name) ? [path] : [];
+    return statSync(path).isDirectory() ? (SKIP.has(name) ? [] : files(path)) : TEXT.test(name) ? [path] : [];
   });
 }
 

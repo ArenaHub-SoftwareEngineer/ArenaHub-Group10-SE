@@ -125,7 +125,7 @@ test('Dota 2 GSI and OpenDota checks on a PC session', async t => {
   };
   const { call } = await setup(t, fetcher);
   const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2', expectedSteamId: '76561198000000001' } })).json() as any;
-  assert.equal(pair.platform, 'pc'); assert.match(pair.agentCommand, /npm run agent -- --server http:\/\/192\.168\.1\.5:3000 --code [A-Z2-9]{8}/);
+  assert.equal(pair.platform, 'pc'); assert.match(pair.agentCommand, /^arenahub-agent\.exe --server http:\/\/192\.168\.1\.5:3000 --code [A-Z2-9]{8}$/);
   const claimed = await (await call('/device/claim', { body: { code: pair.code } })).json() as any;
   assert.deepEqual(claimed.monitor.blockedProcesses.slice(0, 1), ['cheatengine*']);
 
