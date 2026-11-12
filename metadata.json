@@ -1,0 +1,6 @@
+{
+  "name": "ArenaHub — School Esports Platform",
+  "description": "AI-assisted esports tournament management and live-viewing platform for school intramurals (WMSU Palaro).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

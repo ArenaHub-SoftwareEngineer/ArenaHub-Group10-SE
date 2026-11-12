@@ -1,0 +1,15 @@
+node_modules/
+build/
+dist/
+coverage/
+output/
+test-results/
+playwright-report/
+.firebase/
+.DS_Store
+*.log
+.env*
+!.env.example
+*.local
+service-account*.json
+*-service-account.json

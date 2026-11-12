@@ -1,0 +1,533 @@
+import React, { useState, useMemo } from 'react';
+import { Match, PlayerMatchStats, Player } from '../../lib/types';
+import {
+  Swords,
+  Trophy,
+  Zap,
+  Target,
+  Shield,
+  Award,
+  ChevronDown,
+  ChevronUp,
+} from '../ui/Icons';
+
+interface MatchPlayerStatsSummaryProps {
+  match: Match;
+  className?: string;
+}
+
+interface EnrichedPlayerStat extends PlayerMatchStats {
+  id: string;
+  ign: string;
+  playerName?: string;
+  role: string;
+  teamCode: string;
+  teamName: string;
+  isTeam1: boolean;
+  kdaRatio: number;
+  isMvp: boolean;
+}
+
+export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = ({
+  match,
+  className = '',
+}) => {
+  const [activeTab, setActiveTab] = useState<'all' | 'team1' | 'team2'>('all');
+  const [sortBy, setSortBy] = useState<'kda' | 'kills' | 'assists'>('kills');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+
+  const team1Code = match.team1?.collegeCode || 'T1';
+  const team2Code = match.team2?.collegeCode || 'T2';
+  const team1Name = match.team1?.name || 'Team 1';
+  const team2Name = match.team2?.name || 'Team 2';
+
+  const mvpIgn = useMemo(() => {
+    if (!match.mvp) return '';
+    if (typeof match.mvp === 'string') return match.mvp.toLowerCase();
+    return (match.mvp.ign || match.mvp.playerName || '').toLowerCase();
+  }, [match.mvp]);
+
+  // Aggregate players and stats
+  const enrichedStats = useMemo(() => {
+    const list: EnrichedPlayerStat[] = [];
+    const statsMap = match.playerStats || {};
+
+    const findStat = (player: Player): PlayerMatchStats | undefined => {
+      if (statsMap[player.id]) return statsMap[player.id];
+      if (statsMap[player.ign]) return statsMap[player.ign];
+      // Case-insensitive match on ign or id
+      const entry = Object.entries(statsMap).find(
+        ([key]) =>
+          key.toLowerCase() === player.id.toLowerCase() ||
+          key.toLowerCase() === player.ign.toLowerCase()
+      );
+      return entry ? entry[1] : undefined;
+    };
+
+    // Process Team 1 players
+    (match.team1?.players || []).forEach((p) => {
+      const stat = findStat(p);
+      const kills = stat?.kills ?? 0;
+      const deaths = stat?.deaths ?? 0;
+      const assists = stat?.assists ?? 0;
+      const kdaRatio = deaths === 0 ? kills + assists : (kills + assists) / deaths;
+      const isMvp =
+        match.status === 'completed' &&
+        mvpIgn !== '' &&
+        (p.ign.toLowerCase() === mvpIgn || p.name.toLowerCase() === mvpIgn);
+
+      list.push({
+        id: p.id,
+        playerId: p.id,
+        ign: p.ign,
+        playerName: p.name,
+        role: p.role,
+        teamCode: team1Code,
+        teamName: team1Name,
+        isTeam1: true,
+        kills,
+        deaths,
+        assists,
+        cs: stat?.cs,
+        gold: stat?.gold,
+        damage: stat?.damage,
+        kdaRatio,
+        isMvp,
+      });
+    });
+
+    // Process Team 2 players
+    (match.team2?.players || []).forEach((p) => {
+      const stat = findStat(p);
+      const kills = stat?.kills ?? 0;
+      const deaths = stat?.deaths ?? 0;
+      const assists = stat?.assists ?? 0;
+      const kdaRatio = deaths === 0 ? kills + assists : (kills + assists) / deaths;
+      const isMvp =
+        match.status === 'completed' &&
+        mvpIgn !== '' &&
+        (p.ign.toLowerCase() === mvpIgn || p.name.toLowerCase() === mvpIgn);
+
+      list.push({
+        id: p.id,
+        playerId: p.id,
+        ign: p.ign,
+        playerName: p.name,
+        role: p.role,
+        teamCode: team2Code,
+        teamName: team2Name,
+        isTeam1: false,
+        kills,
+        deaths,
+        assists,
+        cs: stat?.cs,
+        gold: stat?.gold,
+        damage: stat?.damage,
+        kdaRatio,
+        isMvp,
+      });
+    });
+
+    // If playerStats contains entries not in team1/team2 players list (e.g. standalone stats)
+    if (list.length === 0 && Object.keys(statsMap).length > 0) {
+      Object.entries(statsMap).forEach(([key, s], idx) => {
+        const kills = s.kills ?? 0;
+        const deaths = s.deaths ?? 0;
+        const assists = s.assists ?? 0;
+        const kdaRatio = deaths === 0 ? kills + assists : (kills + assists) / deaths;
+        const isTeam1 = s.teamCode ? s.teamCode === team1Code : idx < Object.keys(statsMap).length / 2;
+        const ign = s.ign || s.playerName || key;
+        const isMvp = match.status === 'completed' && mvpIgn !== '' && ign.toLowerCase() === mvpIgn;
+
+        list.push({
+          id: s.playerId || key,
+          playerId: s.playerId || key,
+          ign,
+          playerName: s.playerName,
+          role: s.role || 'Player',
+          teamCode: s.teamCode || (isTeam1 ? team1Code : team2Code),
+          teamName: isTeam1 ? team1Name : team2Name,
+          isTeam1,
+          kills,
+          deaths,
+          assists,
+          cs: s.cs,
+          gold: s.gold,
+          damage: s.damage,
+          kdaRatio,
+          isMvp,
+        });
+      });
+    }
+
+    return list;
+  }, [match, team1Code, team2Code, team1Name, team2Name, mvpIgn]);
+
+  // Leaders
+  const killLeader = useMemo(() => {
+    if (!enrichedStats.length) return null;
+    return [...enrichedStats].sort((a, b) => b.kills - a.kills)[0];
+  }, [enrichedStats]);
+
+  const assistLeader = useMemo(() => {
+    if (!enrichedStats.length) return null;
+    return [...enrichedStats].sort((a, b) => b.assists - a.assists)[0];
+  }, [enrichedStats]);
+
+  const team1Totals = useMemo(() => {
+    const t1 = enrichedStats.filter((s) => s.isTeam1);
+    return {
+      kills: t1.reduce((sum, s) => sum + s.kills, 0),
+      deaths: t1.reduce((sum, s) => sum + s.deaths, 0),
+      assists: t1.reduce((sum, s) => sum + s.assists, 0),
+    };
+  }, [enrichedStats]);
+
+  const team2Totals = useMemo(() => {
+    const t2 = enrichedStats.filter((s) => !s.isTeam1);
+    return {
+      kills: t2.reduce((sum, s) => sum + s.kills, 0),
+      deaths: t2.reduce((sum, s) => sum + s.deaths, 0),
+      assists: t2.reduce((sum, s) => sum + s.assists, 0),
+    };
+  }, [enrichedStats]);
+
+  // Filtered & Sorted
+  const displayedStats = useMemo(() => {
+    let result = enrichedStats;
+    if (activeTab === 'team1') {
+      result = result.filter((s) => s.isTeam1);
+    } else if (activeTab === 'team2') {
+      result = result.filter((s) => !s.isTeam1);
+    }
+
+    return [...result].sort((a, b) => {
+      let comparison = 0;
+      if (sortBy === 'kills') {
+        comparison = b.kills - a.kills || b.assists - a.assists;
+      } else if (sortBy === 'assists') {
+        comparison = b.assists - a.assists || b.kills - a.kills;
+      } else if (sortBy === 'kda') {
+        comparison = b.kdaRatio - a.kdaRatio;
+      }
+      return sortOrder === 'desc' ? comparison : -comparison;
+    });
+  }, [enrichedStats, activeTab, sortBy, sortOrder]);
+
+  const handleSort = (field: 'kda' | 'kills' | 'assists') => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortBy(field);
+      setSortOrder('desc');
+    }
+  };
+
+  if (enrichedStats.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className={`rounded-[4px] border border-[#333333] bg-[#222222] p-5 space-y-4 shadow-xl ${className}`}
+    >
+      {/* Header with Title & Filter Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2E2E2E] pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-[3px] bg-[#33221A] border border-[#ff6600]/50 flex items-center justify-center text-[#ff6600]">
+              <Swords className="w-4 h-4 stroke-[2.2]" />
+            </div>
+            <h3 className="text-base font-heading font-black text-white tracking-tight uppercase">
+              Player Performance Summary
+            </h3>
+          </div>
+          <p className="text-xs text-[#888888] mt-1">
+            Real-time kills, deaths, and assists breakdown for all active competitors
+          </p>
+        </div>
+
+        {/* Tab Controls: All / Team 1 / Team 2 */}
+        <div className="flex items-center bg-[#181818] p-1 rounded-[4px] border border-[#303030] self-start sm:self-auto text-xs">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-3 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer ${
+              activeTab === 'all'
+                ? 'bg-[#ff6600] text-white shadow-sm'
+                : 'text-[#888888] hover:text-white'
+            }`}
+          >
+            All Players ({enrichedStats.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('team1')}
+            className={`px-3 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'team1'
+                ? 'bg-[#202733] text-[#ff6600] border border-[#303E54]'
+                : 'text-[#888888] hover:text-[#ff6600]'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-[#ff6600]" />
+            {team1Code}
+          </button>
+          <button
+            onClick={() => setActiveTab('team2')}
+            className={`px-3 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'team2'
+                ? 'bg-[#332020] text-[#EF4444] border border-[#543030]'
+                : 'text-[#888888] hover:text-[#EF4444]'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
+            {team2Code}
+          </button>
+        </div>
+      </div>
+
+      {/* Team Aggregates & Highlights Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Team Kills Comparison */}
+        <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2D2D2D] p-3 flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-[10px] uppercase tracking-wider text-[#888888] font-bold block">
+              Team Kills Score
+            </span>
+            <div className="flex items-center gap-2 font-mono text-xs">
+              <span className="text-[#3B82F6] font-bold">{team1Code}: {team1Totals.kills}</span>
+              <span className="text-[#555555]">vs</span>
+              <span className="text-[#EF4444] font-bold">{team2Code}: {team2Totals.kills}</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-[#666666] block">Total elims</span>
+            <span className="text-lg font-heading font-black text-white font-mono">
+              {team1Totals.kills + team2Totals.kills}
+            </span>
+          </div>
+        </div>
+
+        {/* Top Frag / Kill Leader */}
+        {killLeader && (
+          <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2D2D2D] p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[4px] bg-[#2E2218] border border-[#ff6600]/40 flex items-center justify-center text-[#ff6600] shrink-0">
+                <Target className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase tracking-wider text-[#ff6600] font-bold block">
+                  Kill Leader
+                </span>
+                <span className="text-xs font-heading font-black text-white truncate block">
+                  {killLeader.ign} ({killLeader.teamCode})
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-[#888888] block">Kills</span>
+              <span className="text-base font-heading font-black text-[#3DD68C] font-mono">
+                {killLeader.kills}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Playmaker / Assist Leader */}
+        {assistLeader && (
+          <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2D2D2D] p-3 flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-[4px] bg-[#1C2533] border border-[#ff6600]/40 flex items-center justify-center text-[#ff6600] shrink-0">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase tracking-wider text-[#ff6600] font-bold block">
+                  Top Playmaker
+                </span>
+                <span className="text-xs font-heading font-black text-white truncate block">
+                  {assistLeader.ign} ({assistLeader.teamCode})
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-[#888888] block">Assists</span>
+              <span className="text-base font-heading font-black text-[#ff6600] font-mono">
+                {assistLeader.assists}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Main Stats Table */}
+      <div className="overflow-x-auto rounded-[4px] border border-[#2D2D2D]">
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="bg-[#1A1A1A] text-[#888888] border-b border-[#2D2D2D] font-heading font-bold uppercase text-[10px] tracking-wider">
+              <th className="py-2.5 px-3">Player</th>
+              <th className="py-2.5 px-3">Team</th>
+              <th className="py-2.5 px-3">Role</th>
+              <th
+                onClick={() => handleSort('kills')}
+                className="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors select-none"
+              >
+                <div className="inline-flex items-center gap-1">
+                  <span>Kills</span>
+                  {sortBy === 'kills' && (
+                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-[#ff6600]" /> : <ChevronUp className="w-3 h-3 text-[#ff6600]" />
+                  )}
+                </div>
+              </th>
+              <th className="py-2.5 px-3 text-center">Deaths</th>
+              <th
+                onClick={() => handleSort('assists')}
+                className="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors select-none"
+              >
+                <div className="inline-flex items-center gap-1">
+                  <span>Assists</span>
+                  {sortBy === 'assists' && (
+                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-[#ff6600]" /> : <ChevronUp className="w-3 h-3 text-[#ff6600]" />
+                  )}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('kda')}
+                className="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors select-none"
+              >
+                <div className="inline-flex items-center gap-1">
+                  <span>KDA Ratio</span>
+                  {sortBy === 'kda' && (
+                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-[#ff6600]" /> : <ChevronUp className="w-3 h-3 text-[#ff6600]" />
+                  )}
+                </div>
+              </th>
+              <th className="py-2.5 px-3 text-right">CS / Gold</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#262626]">
+            {displayedStats.map((p) => {
+              const kdaFormatted = `${p.kills} / ${p.deaths} / ${p.assists}`;
+              return (
+                <tr
+                  key={p.id}
+                  className={`hover:bg-[#282828] transition-colors ${
+                    p.isMvp ? 'bg-[#ff6600]/5' : ''
+                  }`}
+                >
+                  {/* Player Name & Badge */}
+                  <td className="py-2.5 px-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-7 h-7 rounded-[3px] flex items-center justify-center text-[10px] font-bold font-mono ${
+                          p.isTeam1
+                            ? 'bg-[#202733] text-[#3B82F6] border border-[#303E54]'
+                            : 'bg-[#332020] text-[#EF4444] border border-[#543030]'
+                        }`}
+                      >
+                        {p.ign.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-heading font-black text-white text-xs">
+                            {p.ign}
+                          </span>
+                          {p.isMvp && (
+                            <span className="px-1.5 py-0.2 rounded-[2px] bg-[#ff6600] text-white text-[9px] font-heading font-black uppercase flex items-center gap-0.5">
+                              <Zap className="w-2.5 h-2.5 fill-white" />
+                              MVP
+                            </span>
+                          )}
+                        </div>
+                        {p.playerName && p.playerName !== p.ign && (
+                          <span className="text-[10px] text-[#777777] block leading-none">
+                            {p.playerName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Team */}
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-heading font-bold ${
+                        p.isTeam1
+                          ? 'bg-[#202733] text-[#3B82F6]'
+                          : 'bg-[#332020] text-[#EF4444]'
+                      }`}
+                    >
+                      {p.teamCode}
+                    </span>
+                  </td>
+
+                  {/* Role */}
+                  <td className="py-2.5 px-3 text-[#AAAAAA] text-xs font-medium">
+                    {p.role}
+                  </td>
+
+                  {/* Kills */}
+                  <td className="py-2.5 px-3 text-center">
+                    <span
+                      className={`font-heading font-black font-mono text-xs ${
+                        p.kills > 0 ? 'text-[#3DD68C]' : 'text-[#888888]'
+                      }`}
+                    >
+                      {p.kills}
+                    </span>
+                  </td>
+
+                  {/* Deaths */}
+                  <td className="py-2.5 px-3 text-center">
+                    <span
+                      className={`font-heading font-black font-mono text-xs ${
+                        p.deaths > 3 ? 'text-[#E8544B]' : 'text-[#AAAAAA]'
+                      }`}
+                    >
+                      {p.deaths}
+                    </span>
+                  </td>
+
+                  {/* Assists */}
+                  <td className="py-2.5 px-3 text-center">
+                    <span
+                      className={`font-heading font-black font-mono text-xs ${
+                        p.assists > 5 ? 'text-[#ff6600]' : 'text-[#AAAAAA]'
+                      }`}
+                    >
+                      {p.assists}
+                    </span>
+                  </td>
+
+                  {/* KDA Ratio & breakdown */}
+                  <td className="py-2.5 px-3 text-center font-mono">
+                    <span className="font-heading font-black text-white text-xs block">
+                      {p.kdaRatio.toFixed(2)}
+                    </span>
+                    <span className="text-[10px] text-[#777777] block">
+                      {kdaFormatted}
+                    </span>
+                  </td>
+
+                  {/* CS / Gold */}
+                  <td className="py-2.5 px-3 text-right font-mono text-[#AAAAAA]">
+                    {p.gold && (
+                      <span className="text-[#ff6600] text-[11px] font-semibold block">
+                        {p.gold}
+                      </span>
+                    )}
+                    {p.cs !== undefined && (
+                      <span className="text-[10px] text-[#666666] block">
+                        {p.cs} CS
+                      </span>
+                    )}
+                    {!p.gold && p.cs === undefined && (
+                      <span className="text-[11px] text-[#555555]">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};

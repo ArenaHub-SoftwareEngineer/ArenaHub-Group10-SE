@@ -1,0 +1,98 @@
+import { before, after, test } from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
+import { doc, collection, setDoc, getDoc, getDocs, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore';
+let env;
+const campus = (uid, staff = false) => env.authenticatedContext(uid, { email_verified: true, email: `${uid}@wmsu.edu.ph`, ...(staff ? { admin: true } : {}) }).firestore();
+before(async () => {
+  env = await initializeTestEnvironment({ projectId: 'demo-arenahub-ops', firestore: { host: '127.0.0.1', port: 8085, rules: await readFile(new URL('../firestore.rules', import.meta.url), 'utf8') } });
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async ctx => {
+    for (const uid of ['captain', 'other', 'staff', 'banned']) await setDoc(doc(ctx.firestore(), 'users', uid), { uid, email: `${uid}@wmsu.edu.ph`, status: uid === 'banned' ? 'banned' : 'active', emailVerified: true });
+  });
+});
+after(async () => { await env?.cleanup(); });
+const notification = () => ({ kind: 'registration', title: 'Roster approved', body: 'Your own update.', tab: 'operations', entityId: 'team-a', createdAt: serverTimestamp(), readAt: null });
+const player = { name: 'Test Player', ign: 'TestIGN', studentId: 's-1', accountId: 'game-1', substitute: false };
+const registration = (ownerId = 'captain', overrides = {}) => ({ ownerId, tournamentId: 't', teamId: 'a', teamName: 'Team A', gameId: 'game-mlbb', college: 'CCS', players: [player], status: 'submitted', revision: 1, reviewNote: '', sanction: 'none', createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...overrides });
+test('notification inboxes and read status are private to each user', async () => {
+  const owner = campus('captain'), other = campus('other'), staff = campus('staff', true);
+  await assertSucceeds(setDoc(doc(staff, 'users/captain/notifications/n1'), notification()));
+  await assertSucceeds(getDocs(collection(owner, 'users/captain/notifications')));
+  await assertFails(getDocs(collection(other, 'users/captain/notifications')));
+  await assertFails(getDoc(doc(staff, 'users/captain/notifications/n1')));
+  await assertFails(setDoc(doc(other, 'users/captain/notifications/forged'), notification()));
+  await assertSucceeds(updateDoc(doc(owner, 'users/captain/notifications/n1'), { readAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(other, 'users/captain/notifications/n1'), { readAt: null }));
+  await assertFails(updateDoc(doc(owner, 'users/captain/notifications/n1'), { title: 'Changed official title' }));
+});
+test('private rosters need an open policy and only staff can approve and lock them', async () => {
+  const owner = campus('captain'), other = campus('other'), staff = campus('staff', true);
+  await assertFails(setDoc(doc(owner, 'tournamentPolicies/t'), { tournamentId: 't', gameId: 'game-mlbb', playersRequired: 1, maxSubstitutes: 1, registrationOpen: true, updatedAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(staff, 'tournamentPolicies/t'), { tournamentId: 't', gameId: 'game-mlbb', playersRequired: 1, maxSubstitutes: 1, registrationOpen: true, updatedAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(owner, 'tournamentRegistrations/t__a'), registration()));
+  await assertFails(getDoc(doc(other, 'tournamentRegistrations/t__a')));
+  await assertFails(getDocs(collection(owner, 'tournamentRegistrations')));
+  await assertFails(updateDoc(doc(owner, 'tournamentRegistrations/t__a'), { status: 'approved', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(staff, 'tournamentRegistrations/t__a'), { status: 'approved', reviewNote: 'Enrollment and game account checked.', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(staff, 'tournamentRegistrations/t__a'), { status: 'locked', reviewNote: 'Approved lineup locked for competition.', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(owner, 'tournamentRegistrations/t__a'), { players: [{ ...player, accountId: 'replacement' }], revision: 2, status: 'submitted', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(staff, 'tournamentRegistrations/t__a'), { players: [{ ...player, accountId: 'replacement' }], updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(doc(campus('banned'), 'tournamentRegistrations/t__b'), registration('banned', { teamId: 'b' })));
+});
+test('check-in enforces owner, locked roster, server deadlines and immutable submitted evidence', async () => {
+  const owner = campus('captain'), other = campus('other'), staff = campus('staff', true), now = Date.now();
+  const window = { matchId: 'm', tournamentId: 't', registrationIds: ['t__a', 't__b'], opensAt: Timestamp.fromMillis(now - 60000), closesAt: Timestamp.fromMillis(now + 600000), updatedAt: serverTimestamp() };
+  await assertSucceeds(setDoc(doc(staff, 'matchWindows/m'), window));
+  const checkIn = { ownerId: 'captain', registrationId: 't__a', tournamentId: 't', matchId: 'm', rosterRevision: 1, lineup: [{ studentId: 's-1', accountId: 'game-1' }], evidenceUrl: 'https://youtu.be/example', status: 'pending', refereeNote: '', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(other, 'matchCheckIns/m__t__a'), checkIn));
+  await assertFails(setDoc(doc(owner, 'matchCheckIns/m__t__a'), { ...checkIn, lineup: [null] }));
+  await assertSucceeds(setDoc(doc(owner, 'matchCheckIns/m__t__a'), checkIn));
+  await assertFails(updateDoc(doc(owner, 'matchCheckIns/m__t__a'), { status: 'confirmed', refereeNote: 'I approve myself', updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(staff, 'matchCheckIns/m__t__a'), { lineup: [], updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(staff, 'matchCheckIns/m__t__a'), { status: 'confirmed', refereeNote: 'Observed the actual lobby and verified player identities.', updatedAt: serverTimestamp() }));
+  await setDoc(doc(staff, 'matchWindows/expired'), { ...window, matchId: 'expired', opensAt: Timestamp.fromMillis(now - 120000), closesAt: Timestamp.fromMillis(now - 60000) });
+  await assertFails(setDoc(doc(owner, 'matchCheckIns/expired__t__a'), { ...checkIn, matchId: 'expired' }));
+});
+test('a complete eight-player roster stays within database rule evaluation limits', async () => {
+  const owner = campus('captain'), staff = campus('staff', true);
+  await setDoc(doc(staff, 'tournamentPolicies/full'), { tournamentId: 'full', gameId: 'game-mlbb', playersRequired: 6, maxSubstitutes: 2, registrationOpen: true, updatedAt: serverTimestamp() });
+  const players = Array.from({ length: 8 }, (_, i) => ({ ...player, studentId: `full-${i}`, accountId: `account-${i}`, substitute: i >= 6 }));
+  await assertSucceeds(setDoc(doc(owner, 'tournamentRegistrations/full__a'), registration('captain', { tournamentId: 'full', players })));
+  await assertSucceeds(updateDoc(doc(staff, 'tournamentRegistrations/full__a'), { status: 'approved', reviewNote: 'All eight student records and accounts checked.', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(staff, 'tournamentRegistrations/full__a'), { status: 'locked', reviewNote: 'Approved eight-player roster is now locked.', updatedAt: serverTimestamp() }));
+});
+test('uploaded evidence paths are scoped to the reporter and cannot be replaced after submission', async () => {
+  const owner = campus('captain'), staff = campus('staff', true);
+  const file = { path: 'integrityEvidence/captain/clip-case/file-1', name: 'clip.mp4', mime: 'video/mp4', size: 1024 };
+  const record = { reporterId: 'captain', matchId: 'm', reason: 'Suspected cheating', details: 'Video evidence for review of the encounter and surrounding context.', evidenceUrl: '', evidenceFiles: [file], status: 'open', reviewerId: '', resolution: '', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  const submit = (value) => { const batch = writeBatch(owner); batch.set(doc(owner, 'integrityCases/clip-case'), value); batch.set(doc(owner, 'integrityRateLimits/captain'), { caseId: 'clip-case', submittedAt: serverTimestamp() }); return batch.commit(); };
+  await assertFails(submit({ ...record, evidenceFiles: [{ ...file, path: 'integrityEvidence/other/clip-case/file-1' }] }));
+  await assertSucceeds(submit(record));
+  await assertFails(updateDoc(doc(staff, 'integrityCases/clip-case'), { evidenceFiles: [], updatedAt: serverTimestamp() }));
+  await assertFails(getDoc(doc(campus('other'), 'integrityCases/clip-case')));
+});
+test('case decisions and appeals preserve immutable evidence and append-only activity', async () => {
+  const owner = campus('captain'), staff = campus('staff', true), other = campus('other');
+  await assertSucceeds(updateDoc(doc(staff, 'integrityCases/clip-case'), { status: 'resolved', reviewerId: 'staff', resolution: 'Reviewed the uncut player perspective and surrounding context.', updatedAt: serverTimestamp() }));
+  const appeal = { ownerId: 'captain', note: 'Please reconsider the second player perspective.', status: 'open', resolution: '', createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(other, 'integrityCases/clip-case/appeals/appeal'), appeal));
+  await assertSucceeds(setDoc(doc(owner, 'integrityCases/clip-case/appeals/appeal'), appeal));
+  await assertFails(updateDoc(doc(owner, 'integrityCases/clip-case/appeals/appeal'), { status: 'accepted', resolution: 'I accepted it myself.', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(staff, 'integrityCases/clip-case/appeals/appeal'), { status: 'accepted', resolution: 'Reviewed the additional perspective; record a separate corrected tournament decision.', updatedAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(doc(staff, 'integrityCases/clip-case/events/e1'), { actorId: 'staff', action: 'video-review', note: 'Observed the original frames with the referee.', frames: [], createdAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(staff, 'integrityCases/clip-case/events/e1'), { note: 'Rewritten history.' }));
+  await assertFails(deleteDoc(doc(staff, 'integrityCases/clip-case/events/e1')));
+  await assertFails(getDocs(collection(other, 'integrityCases/clip-case/events')));
+});
+test('shared configuration and audit records reject ordinary or banned writers', async () => {
+  const staff = campus('staff', true), owner = campus('captain');
+  const workspace = { games: [], categories: [], featuredHighlights: [], featuredPosts: [], tournaments: [], updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(owner, 'arenahub/workspace'), workspace));
+  await assertSucceeds(setDoc(doc(staff, 'arenahub/workspace'), workspace));
+  await assertSucceeds(getDoc(doc(owner, 'arenahub/workspace')));
+  const audit = { actorId: 'staff', action: 'Confirmed a roster.', createdAt: serverTimestamp() };
+  await assertFails(setDoc(doc(owner, 'auditEvents/a1'), audit));
+  await assertSucceeds(setDoc(doc(staff, 'auditEvents/a1'), audit));
+  await assertFails(updateDoc(doc(staff, 'auditEvents/a1'), { action: 'Rewritten.' }));
+});

@@ -1,0 +1,13 @@
+import express from 'express';
+import { config } from 'dotenv';
+import { resolve } from 'node:path';
+import { createAiRouter } from './ai';
+import { createFairPlayRouter } from './fairPlay';
+config({ path: '.env' }); config({ path: '.env.local', override: true });
+const app = express();
+app.disable('x-powered-by');
+app.use('/api/ai', createAiRouter(process.env));
+app.use('/api/fair-play', createFairPlayRouter(process.env));
+app.use(express.static(resolve('dist')));
+app.get('*', (_req, res) => res.sendFile(resolve('dist/index.html')));
+app.listen(Number(process.env.PORT || 3000), '127.0.0.1', () => console.log('ArenaHub available at http://localhost:' + (process.env.PORT || 3000)));
