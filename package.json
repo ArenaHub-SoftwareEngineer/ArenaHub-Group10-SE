@@ -10,7 +10,7 @@
     "clean": "node scripts/clean-dist.mjs",
     "lint": "tsc --noEmit",
     "start": "tsx server/index.ts",
-    "test": "tsx --test tests/core.test.ts tests/chat-history.test.ts tests/player-calendar.test.ts tests/game-ranks.test.ts tests/fair-play.test.ts tests/stream.test.ts tests/broadcasts.test.ts tests/standings.test.ts tests/operations.test.ts tests/auth-flow.test.ts tests/institution-config.test.mjs tests/no-emoji.test.ts",
+    "test": "tsx --test tests/core.test.ts tests/chat-history.test.ts tests/player-calendar.test.ts tests/game-ranks.test.ts tests/fair-play.test.ts tests/stream.test.ts tests/broadcasts.test.ts tests/standings.test.ts tests/operations.test.ts tests/auth-flow.test.ts tests/institution-config.test.mjs tests/no-emoji.test.ts tests/tournament-docs.test.ts",
     "test:auth-flow": "node --test tests/auth-flow.integration.test.mjs",
     "test:rules": "node --test tests/firestore.rules.test.mjs tests/operations.rules.test.mjs",
     "test:video-api": "tsx --test tests/fair-play-api.test.ts",
@@ -22,8 +22,10 @@
     "prebuild": "node scripts/clean-dist.mjs && node scripts/sync-institution.mjs",
     "predev": "node scripts/sync-institution.mjs",
     "test:emulators": "node tests/run-emulator-suites.mjs",
-    "test:e2e": "firebase emulators:exec --only auth,firestore,storage --project demo-arenahub --config firebase.test.json \"node tests/seed-emulators.mjs && npx playwright test\"",
-    "test:all": "npm run lint && npm test && npm run test:api && npm run test:video-api && npm run build && npm run test:emulators"
+    "test:e2e": "firebase emulators:exec --only auth,firestore,storage --project demo-arenahub --config firebase.test.json \"node tests/seed-emulators.mjs && npx tsx scripts/seed-demo.ts && npx playwright test\"",
+    "test:all": "npm run lint && npm test && npm run test:api && npm run test:video-api && npm run build && npm run test:emulators",
+    "seed:demo": "tsx scripts/seed-demo.ts",
+    "migrate:brackets": "tsx scripts/migrate-brackets.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
