@@ -5,8 +5,11 @@ import { z } from 'zod';
 
 export const MONITOR_GAMES = ['mlbb', 'codm-br', 'codm-mp', 'dota2'] as const;
 export type MonitorGame = typeof MONITOR_GAMES[number];
-export type MonitorPlatform = 'android' | 'pc';
+export type MonitorPlatform = 'android' | 'ios' | 'pc';
 export const GAME_PLATFORM: Record<MonitorGame, MonitorPlatform> = { mlbb: 'android', 'codm-br': 'android', 'codm-mp': 'android', dota2: 'pc' };
+/** iPhones cannot run device checks, so an iOS session is recording upload plus referee review. */
+export const GAME_PLATFORMS: Record<MonitorGame, MonitorPlatform[]> = { mlbb: ['android', 'ios'], 'codm-br': ['android', 'ios'], 'codm-mp': ['android', 'ios'], dota2: ['pc'] };
+export const PLATFORM_LABEL: Record<MonitorPlatform, string> = { android: 'Android', ios: 'iPhone', pc: 'PC' };
 export const GAME_LABEL: Record<MonitorGame, string> = { mlbb: 'Mobile Legends', 'codm-br': 'CODM Battle Royale', 'codm-mp': 'CODM Multiplayer', dota2: 'Dota 2' };
 
 export const SEVERITIES = ['info', 'low', 'medium', 'high', 'critical'] as const;
@@ -32,8 +35,22 @@ export const SIGNAL_CATALOG = {
   'dota-not-running': { severity: 'low', title: 'Dota 2 not running', explain: 'The PC agent did not find Dota 2 running when it reported in.' },
   'screenshot-failed': { severity: 'low', title: 'Screenshot failed', explain: 'The PC agent could not capture the screen.' },
   'stat-outlier': { severity: 'low', title: 'Unusual stats for this player', explain: 'A stat from this match is far above the player\'s own recent average. Players have good games, so this is context only.' },
+  'recording-missing': { severity: 'medium', title: 'No recording uploaded', explain: 'The session ended and this iPhone player did not upload a screen recording of the match.' },
+  'referee-observation': { severity: 'medium', title: 'Referee observation', explain: 'A referee watched the evidence and recorded something that matches a known cheat type.' },
 } as const satisfies Record<string, { severity: Severity; title: string; explain: string }>;
 export type SignalId = keyof typeof SIGNAL_CATALOG;
+
+// Every signal belongs to one category, so a player's risk can be read by area.
+export const SIGNAL_CATEGORIES = ['game-build', 'cheat-tools', 'device', 'connection', 'behaviour'] as const;
+export type SignalCategory = typeof SIGNAL_CATEGORIES[number];
+export const CATEGORY_LABEL: Record<SignalCategory, string> = { 'game-build': 'Game build', 'cheat-tools': 'Cheat tools', device: 'Device state', connection: 'Connection and recording', behaviour: 'Behaviour' };
+export const SIGNAL_CATEGORY: Record<SignalId, SignalCategory> = {
+  'game-signature-mismatch': 'game-build', 'game-signature-unverified': 'game-build', 'game-not-installed': 'game-build',
+  'cheat-tool-installed': 'cheat-tools', 'blocked-process': 'cheat-tools',
+  'root-detected': 'device', 'emulator-detected': 'device', 'accessibility-service': 'device', 'overlay-app': 'device', 'developer-options': 'device', 'usb-debugging': 'device',
+  'recording-stopped': 'connection', 'game-left-foreground': 'connection', 'heartbeat-lost': 'connection', 'dota-not-running': 'connection', 'screenshot-failed': 'connection', 'recording-missing': 'connection',
+  'steam-account-mismatch': 'behaviour', 'stat-outlier': 'behaviour', 'referee-observation': 'behaviour',
+};
 
 export interface Signal { id: SignalId; severity: Severity; evidence: string }
 
@@ -179,16 +196,17 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
 }
 
 export type RiskLevel = 'clear' | 'watch' | 'review' | 'urgent';
-export interface RiskResult { score: number; level: RiskLevel; reasons: { id: SignalId; severity: Severity; points: number; title: string }[] }
+export interface RiskResult { score: number; level: RiskLevel; reasons: { id: SignalId; severity: Severity; points: number; title: string; category: SignalCategory }[]; categories: Record<SignalCategory, number> }
 
 /** Each kind of signal counts once, at its worst severity, so one noisy check cannot dominate. */
 export function scoreSignals(signals: Pick<Signal, 'id' | 'severity'>[], thresholds = DEFAULT_MONITOR_CONFIG.thresholds): RiskResult {
   const worst = new Map<SignalId, Severity>();
   for (const s of signals) if (!worst.has(s.id) || SEVERITY_POINTS[s.severity] > SEVERITY_POINTS[worst.get(s.id)!]) worst.set(s.id, s.severity);
-  const reasons = [...worst].map(([id, level]) => ({ id, severity: level, points: SEVERITY_POINTS[level], title: SIGNAL_CATALOG[id].title })).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
+  const reasons = [...worst].map(([id, level]) => ({ id, severity: level, points: SEVERITY_POINTS[level], title: SIGNAL_CATALOG[id].title, category: SIGNAL_CATEGORY[id] })).filter(r => r.points > 0).sort((a, b) => b.points - a.points);
   const score = Math.min(100, reasons.reduce((sum, r) => sum + r.points, 0));
   const level: RiskLevel = score >= thresholds.urgent ? 'urgent' : score >= thresholds.review ? 'review' : score >= thresholds.watch ? 'watch' : 'clear';
-  return { score, level, reasons };
+  const categories = Object.fromEntries(SIGNAL_CATEGORIES.map(c => [c, Math.min(100, reasons.filter(r => r.category === c).reduce((sum, r) => sum + r.points, 0))])) as Record<SignalCategory, number>;
+  return { score, level, reasons, categories };
 }
 
 // Dota 2 Game State Integration (Valve's official local data feed).
@@ -228,4 +246,4 @@ export function statOutliers(current: Record<string, unknown>, history: Record<s
 }
 
 export const PAIRING_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-export const pairingLink = (serverUrl: string, code: string) => `arenahub://pair?s=${encodeURIComponent(serverUrl)}&c=${code}`;
+export const pairingLink = (serverUrl: string, code: string, platform: MonitorPlatform = 'android') => platform === 'ios' ? `${serverUrl}/proctor.html?c=${code}` : `arenahub://pair?s=${encodeURIComponent(serverUrl)}&c=${code}`;

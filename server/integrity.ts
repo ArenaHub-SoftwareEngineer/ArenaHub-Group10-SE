@@ -4,18 +4,23 @@
 import express from 'express';
 import { networkInterfaces } from 'node:os';
 import { createReadStream, existsSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { cheatById } from '../src/lib/cheatCatalog.ts';
 import QRCode from 'qrcode';
 import { z } from 'zod';
-import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFORM, MONITOR_GAMES, pairingLink, parseGsi, statOutliers, steamIdToAccountId, SIGNAL_CATALOG, type MonitorGame } from '../src/lib/integrityRisk.ts';
+import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFORMS, MONITOR_GAMES, SEVERITIES, SIGNAL_CATEGORY, pairingLink, parseGsi, statOutliers, steamIdToAccountId, SIGNAL_CATALOG, type MonitorGame } from '../src/lib/integrityRisk.ts';
 import { HEARTBEAT_SECONDS, IntegrityStore, type SessionRow } from './integrityStore.ts';
 import { AuthError, verifyStaffToken } from './staffAuth.ts';
 
+const CHUNK_BYTES = 8 * 1024 * 1024, MAX_CHUNKS = 1024, TICKET_MS = 10 * 60_000;
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024, MAX_IMAGE_BYTES = 3 * 1024 * 1024, MAX_SESSION_BYTES = 4 * 1024 ** 3;
 const pairingInput = z.object({
   matchId: z.string().trim().min(1).max(160),
   matchLabel: z.string().trim().min(1).max(200),
   game: z.enum(MONITOR_GAMES),
   playerName: z.string().trim().min(1).max(80),
+  team: z.string().trim().max(80).default(''),
+  platform: z.enum(['android', 'ios', 'pc']).optional(),
   expectedSteamId: z.string().trim().regex(/^(\d{17})?$/, 'Steam ID must be the 17-digit SteamID64.').default(''),
   hours: z.number().min(0.5).max(12).default(4),
 });
@@ -44,12 +49,13 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
 
   const deviceConfig = (row: SessionRow) => {
     const config = store.config();
+    if (row.platform === 'ios') return {};
     return row.platform === 'android'
       ? { gamePackages: row.game === 'mlbb' ? config.android.games.mlbb.packages : config.android.games.codm.packages, blockedPackages: config.android.blockedPackages.map(e => e.match) }
       : { blockedProcesses: config.pc.blockedProcesses.map(e => e.match) };
   };
   const sessionView = (row: SessionRow) => ({
-    id: row.id, matchId: row.match_id, matchLabel: row.match_label, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name,
+    id: row.id, matchId: row.match_id, matchLabel: row.match_label, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, team: row.team,
     expectedSteamId: row.expected_steam_id, status: row.status, connection: store.connection(row), createdAt: row.created_at, expiresAt: row.expires_at, claimedAt: row.claimed_at,
     endedAt: row.ended_at, lastSeen: row.last_seen, device: row.device ? JSON.parse(row.device) : null, gsi: row.gsi ? JSON.parse(row.gsi) : null,
     reviewNote: row.review_note, hold: row.hold === 1, mediaBytes: row.media_bytes, risk: store.risk(row),
@@ -89,6 +95,31 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     if (row.media_bytes + data.length > MAX_SESSION_BYTES) { res.status(507).json({ error: 'This session reached its recording limit.' }); return; }
     res.json({ id: store.addMedia(row, kind, data) });
   });
+  // Chunked upload for full-match recordings (iPhone). Chunks must arrive in order; the first one must look like MP4/MOV.
+  const uploads = new Map<string, { sessionId: string; file: string; next: number; total: number; bytes: number; touched: number }>();
+  router.post('/device/upload', device, express.raw({ type: 'application/octet-stream', limit: CHUNK_BYTES }), (req, res) => {
+    const row = res.locals.session as SessionRow;
+    const data = req.body as Buffer;
+    const id = String(req.get('x-upload-id') || ''), index = Number(req.get('x-chunk-index')), total = Number(req.get('x-chunk-total'));
+    if (!/^[a-z0-9]{12,40}$/.test(id) || !Number.isInteger(index) || !Number.isInteger(total) || total < 1 || total > MAX_CHUNKS || index < 0 || index >= total || !Buffer.isBuffer(data) || !data.length) { res.status(400).json({ error: 'The upload was not in the expected format. Reload the page and try again.' }); return; }
+    for (const [key, entry] of uploads) if (Date.now() - entry.touched > 30 * 60_000) { const owner = store.session(entry.sessionId); if (owner) store.abortUpload(owner, entry.file); uploads.delete(key); }
+    const key = `${row.id}:${id}`;
+    let upload = uploads.get(key);
+    if (index === 0 && !upload) {
+      if (data.length < 12 || data.subarray(4, 8).toString('latin1') !== 'ftyp') { res.status(400).json({ error: 'Choose the screen recording video from your Photos.' }); return; }
+      // One upload per session: starting again replaces an unfinished attempt.
+      for (const [other, entry] of uploads) if (entry.sessionId === row.id) { store.abortUpload(row, entry.file); uploads.delete(other); }
+      upload = { sessionId: row.id, file: store.beginUpload(row, data.subarray(8, 12).toString('latin1') === 'qt  ' ? 'mov' : 'mp4'), next: 0, total, bytes: 0, touched: Date.now() };
+      uploads.set(key, upload);
+    }
+    if (!upload || upload.total !== total || upload.next !== index) { res.status(409).json({ error: 'Upload out of order.', next: upload?.next ?? 0 }); return; }
+    if (row.media_bytes + upload.bytes + data.length > MAX_SESSION_BYTES) { store.abortUpload(row, upload.file); uploads.delete(key); res.status(507).json({ error: 'This session reached its recording limit.' }); return; }
+    store.appendUpload(row, upload.file, data);
+    upload.next++; upload.bytes += data.length; upload.touched = Date.now();
+    if (upload.next < total) { res.json({ next: upload.next }); return; }
+    uploads.delete(key);
+    res.json({ done: true, id: store.finishUpload(row, upload.file) });
+  });
   router.post('/device/stop', device, (req, res) => {
     const row = res.locals.session as SessionRow;
     store.end(row.id, 'player', 'The player stopped monitoring on the device');
@@ -101,6 +132,17 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const summary = parseGsi(req.body);
     if (summary) store.saveGsi(row, summary, evaluateGsi(summary, row.expected_steam_id));
     res.status(200).end();
+  });
+
+  // Video playback needs a plain URL for the <video> element (it cannot send the staff token), so staff
+  // exchange their token for a short-lived, single-file ticket. Range requests let large recordings seek.
+  const tickets = new Map<string, { sessionId: string; mediaId: number; expires: number }>();
+  router.get('/media/:ticket', (req, res) => {
+    const ticket = tickets.get(String(req.params.ticket));
+    if (!ticket || ticket.expires < Date.now()) { res.status(404).json({ error: 'This playback link expired. Open the recording again.' }); return; }
+    const file = store.mediaFile(ticket.sessionId, ticket.mediaId);
+    if (!file || !existsSync(file.path)) { res.status(404).json({ error: 'Recording not found or already deleted.' }); return; }
+    res.sendFile(file.path, { headers: { 'Content-Type': file.type, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } });
   });
 
   // ---------- Staff routes ----------
@@ -128,9 +170,11 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const input = pairingInput.safeParse(req.body);
     const server = typeof req.body?.serverUrl === 'string' && /^https?:\/\/[^\s/]+(:\d+)?$/.test(req.body.serverUrl) ? req.body.serverUrl : '';
     if (!input.success || !server) { res.status(400).json({ error: input.success ? 'Choose the laptop address that devices can reach.' : input.error.issues[0].message }); return; }
-    const platform = GAME_PLATFORM[input.data.game as MonitorGame];
+    const allowed = GAME_PLATFORMS[input.data.game as MonitorGame];
+    const platform = input.data.platform || allowed[0];
+    if (!allowed.includes(platform)) { res.status(400).json({ error: 'That game is not played on that kind of device.' }); return; }
     const pairing = store.createPairing({ ...input.data, platform }, uidOf(req));
-    const link = pairingLink(server, pairing.code);
+    const link = pairingLink(server, pairing.code, platform);
     res.status(201).json({ ...pairing, platform, link, qr: await QRCode.toDataURL(link, { margin: 1, width: 280 }), agentCommand: `arenahub-agent.exe --server ${server} --code ${pairing.code}` });
   });
   staff.get('/sessions', (req, res) => {
@@ -139,7 +183,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   });
   staff.get('/sessions/:id', (req, res) => {
     const row = sessionOr404(req, res); if (!row) return;
-    res.json({ ...sessionView(row), signals: store.signals(row.id).map(s => ({ ...s, ...SIGNAL_CATALOG[s.id] && { title: SIGNAL_CATALOG[s.id].title, explain: SIGNAL_CATALOG[s.id].explain } })), media: store.media(row.id), audit: store.auditFor(row.id), lastFacts: row.last_facts ? JSON.parse(row.last_facts) : null });
+    res.json({ ...sessionView(row), signals: store.signals(row.id).map(s => ({ ...s, ...SIGNAL_CATALOG[s.id] && { title: SIGNAL_CATALOG[s.id].title, explain: SIGNAL_CATALOG[s.id].explain, category: SIGNAL_CATEGORY[s.id] } })), media: store.media(row.id), audit: store.auditFor(row.id), lastFacts: row.last_facts ? JSON.parse(row.last_facts) : null });
   });
   staff.post('/sessions/:id/end', (req, res) => {
     const row = sessionOr404(req, res); if (!row) return;
@@ -150,6 +194,26 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     if (note.length < 5 || note.length > 2000) { res.status(400).json({ error: 'Write a review note of 5 to 2,000 characters.' }); return; }
     store.review(row.id, uidOf(req), note, req.body?.hold === true); res.json(sessionView(store.session(row.id)!));
+  });
+  // A referee watched the evidence and saw something from the cheat catalogue. This is the behaviour layer.
+  staff.post('/sessions/:id/observations', (req, res) => {
+    const row = sessionOr404(req, res); if (!row) return;
+    const cheat = cheatById(row.game, String(req.body?.cheatId || ''));
+    const note = typeof req.body?.note === 'string' ? req.body.note.trim().split(/[ \t\r\n]+/).join(' ') : '';
+    const severity = SEVERITIES.find(level => level === req.body?.severity);
+    if (!cheat || !severity || severity === 'critical' || note.length < 10 || note.length > 150) { res.status(400).json({ error: 'Choose a cheat type and a level, and describe what you saw and when (10 to 150 characters).' }); return; }
+    store.recordSignals(row.id, [{ id: 'referee-observation', severity, evidence: `${cheat.name}: ${note}` }]);
+    store.audit(uidOf(req), 'observation-recorded', row.id, `${cheat.name} [${severity}] ${note}`);
+    res.status(201).json(sessionView(store.session(row.id)!));
+  });
+  staff.post('/sessions/:id/media/:mediaId/ticket', (req, res) => {
+    const row = sessionOr404(req, res); if (!row) return;
+    const mediaId = Number(req.params.mediaId);
+    if (!store.mediaFile(row.id, mediaId)) { res.status(404).json({ error: 'Recording not found or already deleted.' }); return; }
+    for (const [key, entry] of tickets) if (entry.expires < Date.now()) tickets.delete(key);
+    const ticket = randomBytes(24).toString('base64url');
+    tickets.set(ticket, { sessionId: row.id, mediaId, expires: Date.now() + TICKET_MS });
+    res.json({ url: `/api/integrity/media/${ticket}` });
   });
   staff.post('/sessions/:id/trust-signature', (req, res) => {
     const row = sessionOr404(req, res); if (!row) return;
@@ -180,7 +244,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   staff.get('/sessions/:id/media/:mediaId', (req, res) => {
     const file = store.mediaFile(String(req.params.id), Number(req.params.mediaId));
     if (!file || !existsSync(file.path)) { res.status(404).json({ error: 'Recording not found or already deleted.' }); return; }
-    res.type(file.kind === 'video' ? 'video/mp4' : 'image/jpeg'); res.set('Cache-Control', 'private, no-store');
+    res.type(file.type); res.set('Cache-Control', 'private, no-store');
     createReadStream(file.path).pipe(res);
   });
   router.use(staff);

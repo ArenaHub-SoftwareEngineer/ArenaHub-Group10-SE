@@ -24,9 +24,9 @@ async function setup(t: any, fetcher?: typeof fetch) {
   const server = app.listen(0, '127.0.0.1'); await new Promise<void>(r => server.on('listening', r));
   t.after(async () => { await new Promise<void>(r => server.close(() => r())); store.close(); removeTree(dir); });
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/integrity`;
-  const call = (path: string, init: { method?: string; token?: string; body?: unknown; raw?: Buffer; type?: string; origin?: string } = {}) => fetch(base + path, {
+  const call = (path: string, init: { method?: string; token?: string; body?: unknown; raw?: Buffer; type?: string; origin?: string; headers?: Record<string, string> } = {}) => fetch(base + path, {
     method: init.method || (init.body !== undefined || init.raw ? 'POST' : 'GET'),
-    headers: { ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}), ...(init.origin ? { Origin: init.origin } : {}), 'Content-Type': init.type || 'application/json' },
+    headers: { ...(init.token ? { Authorization: `Bearer ${init.token}` } : {}), ...(init.origin ? { Origin: init.origin } : {}), 'Content-Type': init.type || 'application/json', ...init.headers },
     body: init.raw ? new Uint8Array(init.raw) : init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
   return { store, call, tick: (ms: number) => { clock += ms; } };
@@ -137,4 +137,67 @@ test('Dota 2 GSI and OpenDota checks on a PC session', async t => {
   const detail = await (await call(`/sessions/${claimed.sessionId}`, { token: 'staff' })).json() as any;
   assert.equal(detail.gsi.hero, 'lina');
   assert.deepEqual(detail.signals.map((s: any) => s.id).sort(), ['stat-outlier', 'steam-account-mismatch']);
+  assert.equal(detail.risk.categories.behaviour, 40, 'Steam mismatch 35 + outlier 5 land in the behaviour category');
+  assert.equal(detail.risk.categories['cheat-tools'], 0);
+
+  // Referee observations come from the cheat catalogue for this game only.
+  const observe = (body: unknown) => call(`/sessions/${claimed.sessionId}/observations`, { token: 'staff', body });
+  assert.equal((await observe({ cheatId: 'wall-hack', severity: 'high', note: 'Tracked enemy through wall at 12:40' })).status, 400, 'wall hack is not a Dota 2 cheat type');
+  assert.equal((await observe({ cheatId: 'map-hack', severity: 'critical', note: 'Clicked on fogged enemy at 12:40' })).status, 400, 'a person cannot record a critical signal');
+  assert.equal((await observe({ cheatId: 'map-hack', severity: 'high', note: 'short' })).status, 400);
+  assert.equal((await observe({ cheatId: 'map-hack', severity: 'high', note: 'Clicked on fogged   enemy at 12:40' })).status, 201);
+  const after = await (await call(`/sessions/${claimed.sessionId}`, { token: 'staff' })).json() as any;
+  const seen = after.signals.find((s: any) => s.id === 'referee-observation');
+  assert.equal(seen.evidence, 'Map hack or vision script: Clicked on fogged enemy at 12:40');
+  assert.equal(seen.category, 'behaviour');
+  assert.ok(after.audit.some((a: any) => a.action === 'observation-recorded' && a.actor === 'staff-uid'));
 });
+
+test('iPhone sessions: web pairing link, chunked upload, playback ticket and missing-recording signal', async t => {
+  const { call } = await setup(t);
+  assert.equal((await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2', platform: 'ios' } })).status, 400, 'Dota 2 is not an iPhone game');
+  const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, platform: 'ios', team: 'CCS Phoenix' } })).json() as any;
+  assert.equal(pair.platform, 'ios');
+  assert.equal(pair.link, `http://192.168.1.5:3000/proctor.html?c=${pair.code}`);
+  const claimed = await (await call('/device/claim', { body: { code: pair.code, device: { model: 'iPhone', os: 'iOS 18.1', agent: 'web 1.0.0' } } })).json() as any;
+  assert.deepEqual(claimed.monitor, {});
+  let view = (await (await call('/sessions', { token: 'staff' })).json() as any[])[0];
+  assert.equal(view.connection, 'paired'); assert.equal(view.team, 'CCS Phoenix'); assert.equal(view.risk.score, 0, 'a silent iPhone is not "lost"');
+
+  const video = Buffer.concat([Buffer.from([0, 0, 0, 20]), Buffer.from('ftypqt  '), Buffer.alloc(3000, 7)]);
+  const parts = [video.subarray(0, 1000), video.subarray(1000, 2000), video.subarray(2000)];
+  const chunk = (id: string, index: number, raw: Buffer, token = claimed.token) => fetchChunk(call, token, id, index, parts.length, raw);
+  assert.equal((await chunk('../../etc/passwd', 0, parts[0])).status, 400, 'upload ids cannot carry paths');
+  assert.equal((await chunk('abcdefabcdef', 0, Buffer.from('this is not a video file'))).status, 400);
+  assert.equal((await chunk('abcdefabcdef', 0, parts[0], 'forged-token')).status, 410);
+  assert.equal((await chunk('abcdefabcdef', 0, parts[0])).status, 200);
+  const skipped = await chunk('abcdefabcdef', 2, parts[2]);
+  assert.equal(skipped.status, 409); assert.equal((await skipped.json() as any).next, 1);
+  assert.equal((await chunk('abcdefabcdef', 1, parts[1])).status, 200);
+  const done = await (await chunk('abcdefabcdef', 2, parts[2])).json() as any;
+  assert.equal(done.done, true);
+
+  // Playback: staff exchange their token for a short-lived link that supports seeking.
+  assert.equal((await call(`/sessions/${view.id}/media/${done.id}/ticket`, { body: {} })).status, 401);
+  const { url } = await (await call(`/sessions/${view.id}/media/${done.id}/ticket`, { token: 'staff', body: {} })).json() as any;
+  const base = `/media/${url.split('/').pop()}`;
+  const whole = await call(base);
+  assert.equal(whole.headers.get('content-type'), 'video/quicktime');
+  assert.deepEqual(Buffer.from(await whole.arrayBuffer()), video, 'chunks are stored in order, byte for byte');
+  const ranged = await call(base, { headers: { Range: 'bytes=0-99' } });
+  assert.equal(ranged.status, 206); assert.equal((await ranged.arrayBuffer()).byteLength, 100);
+  assert.equal((await call('/media/not-a-real-ticket')).status, 404);
+
+  // A second iPhone that never uploads is flagged once its session ends.
+  await pause();
+  const quiet = await (await call('/pairings', { token: 'staff', body: { ...pairing, platform: 'ios', playerName: 'Bee' } })).json() as any;
+  await call('/device/claim', { body: { code: quiet.code } });
+  await call(`/sessions/${quiet.id}/end`, { token: 'staff', body: {} });
+  view = await (await call(`/sessions/${quiet.id}`, { token: 'staff' })).json() as any;
+  assert.deepEqual(view.risk.reasons.map((r: any) => r.id), ['recording-missing']);
+  assert.equal(view.risk.categories.connection, 15);
+});
+
+function fetchChunk(call: any, token: string, id: string, index: number, total: number, raw: Buffer) {
+  return call('/device/upload', { token, raw, type: 'application/octet-stream', headers: { 'X-Upload-Id': id, 'X-Chunk-Index': String(index), 'X-Chunk-Total': String(total) } }) as Promise<Response>;
+}

@@ -3,7 +3,7 @@
 // ArenaHub on the free Spark plan and keeps monitoring data off the public internet.
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, PAIRING_ALPHABET, scoreSignals, type MonitorConfig, type MonitorGame, type MonitorPlatform, type Signal, type SignalId, type Severity } from '../src/lib/integrityRisk.ts';
 
@@ -16,7 +16,7 @@ export interface SessionRow {
   id: string; match_id: string; match_label: string; game: MonitorGame; platform: MonitorPlatform; player_name: string;
   expected_steam_id: string; created_by: string; created_at: number; expires_at: number; code_hash: string | null; code_expires_at: number;
   token_hash: string | null; claimed_at: number | null; device: string | null; status: 'pending' | 'active' | 'ended'; ended_at: number | null;
-  last_seen: number | null; last_facts: string | null; gsi: string | null; review_note: string; hold: number; media_bytes: number;
+  team: string; last_seen: number | null; last_facts: string | null; gsi: string | null; review_note: string; hold: number; media_bytes: number;
 }
 export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -49,6 +49,9 @@ export class IntegrityStore {
       CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, kind TEXT NOT NULL, file TEXT NOT NULL, bytes INTEGER NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, session_id TEXT NOT NULL, note TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+    // Databases created before teams existed get the column added in place.
+    const columns = this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[];
+    if (!columns.some(c => c.name === 'team')) this.db.exec(`ALTER TABLE sessions ADD COLUMN team TEXT NOT NULL DEFAULT ''`);
   }
 
   config(): MonitorConfig {
@@ -67,12 +70,12 @@ export class IntegrityStore {
     this.db.prepare('INSERT INTO audit (at, actor, action, session_id, note) VALUES (?, ?, ?, ?, ?)').run(this.now(), actor, action, sessionId, note.slice(0, 500));
   }
 
-  createPairing(input: { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; playerName: string; expectedSteamId: string; hours: number }, actor: string) {
+  createPairing(input: { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; playerName: string; team?: string; expectedSteamId: string; hours: number }, actor: string) {
     const id = randomBytes(12).toString('base64url');
     const code = Array.from({ length: 8 }, () => PAIRING_ALPHABET[randomInt(PAIRING_ALPHABET.length)]).join('');
     const now = this.now();
-    this.db.prepare(`INSERT INTO sessions (id, match_id, match_label, game, platform, player_name, expected_steam_id, created_by, created_at, expires_at, code_hash, code_expires_at, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`).run(id, input.matchId, input.matchLabel, input.game, input.platform, input.playerName, input.expectedSteamId, actor, now, now + input.hours * 3600_000, sha256(code), now + PAIRING_TTL_MS);
+    this.db.prepare(`INSERT INTO sessions (id, match_id, match_label, game, platform, player_name, team, expected_steam_id, created_by, created_at, expires_at, code_hash, code_expires_at, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`).run(id, input.matchId, input.matchLabel, input.game, input.platform, input.playerName, input.team || '', input.expectedSteamId, actor, now, now + input.hours * 3600_000, sha256(code), now + PAIRING_TTL_MS);
     this.audit(actor, 'pairing-created', id, `${input.playerName} on ${input.platform} for ${input.matchLabel}`);
     return { id, code, codeExpiresAt: now + PAIRING_TTL_MS };
   }
@@ -128,15 +131,21 @@ export class IntegrityStore {
   signals(sessionId: string) {
     return this.db.prepare('SELECT signal_id AS id, severity, evidence, first_seen AS firstSeen, last_seen AS lastSeen, count FROM signals WHERE session_id = ? ORDER BY last_seen DESC').all(sessionId) as unknown as { id: SignalId; severity: Severity; evidence: string; firstSeen: number; lastSeen: number; count: number }[];
   }
-  /** Live risk: stored signals, plus a lost-contact signal while an active device is silent. */
-  risk(row: SessionRow) {
-    const stored = this.signals(row.id);
-    const live = row.status === 'active' && row.last_seen && this.now() - row.last_seen > LOST_AFTER_MS ? [{ id: 'heartbeat-lost' as const, severity: 'medium' as const }] : [];
-    return scoreSignals([...stored, ...live], this.config().thresholds);
+  /**
+   * Live risk: stored signals, plus a lost-contact signal while an active device is silent.
+   * An iPhone cannot report in the background, so it is judged on whether a recording arrived instead.
+   */
+  liveSignals(row: SessionRow): Pick<Signal, 'id' | 'severity'>[] {
+    if (row.platform === 'ios') return row.status === 'ended' && row.claimed_at && row.media_bytes === 0 ? [{ id: 'recording-missing', severity: 'medium' }] : [];
+    return row.status === 'active' && row.last_seen && this.now() - row.last_seen > LOST_AFTER_MS ? [{ id: 'heartbeat-lost', severity: 'medium' }] : [];
   }
-  connection(row: SessionRow): 'waiting' | 'online' | 'lost' | 'ended' {
+  risk(row: SessionRow) {
+    return scoreSignals([...this.signals(row.id), ...this.liveSignals(row)], this.config().thresholds);
+  }
+  connection(row: SessionRow): 'waiting' | 'online' | 'paired' | 'lost' | 'ended' {
     if (row.status === 'ended') return 'ended';
     if (row.status === 'pending') return 'waiting';
+    if (row.platform === 'ios') return 'paired';
     return row.last_seen && this.now() - row.last_seen > LOST_AFTER_MS ? 'lost' : 'online';
   }
 
@@ -149,12 +158,31 @@ export class IntegrityStore {
     this.db.prepare('UPDATE sessions SET media_bytes = media_bytes + ?, last_seen = ? WHERE id = ?').run(data.length, this.now(), row.id);
     return Number(info.lastInsertRowid);
   }
+  // Large uploads (an iPhone screen recording can be several GB) arrive in ordered chunks.
+  beginUpload(row: SessionRow, extension: 'mp4' | 'mov') {
+    const dir = join(this.mediaRoot, row.id);
+    mkdirSync(dir, { recursive: true });
+    const file = `${this.now()}-${randomBytes(3).toString('hex')}.${extension}`;
+    writeFileSync(join(dir, `${file}.part`), Buffer.alloc(0));
+    return file;
+  }
+  appendUpload(row: SessionRow, file: string, data: Buffer) { appendFileSync(join(this.mediaRoot, row.id, `${file}.part`), data); }
+  finishUpload(row: SessionRow, file: string) {
+    const path = join(this.mediaRoot, row.id, file);
+    renameSync(`${path}.part`, path);
+    const bytes = statSync(path).size;
+    const info = this.db.prepare('INSERT INTO media (session_id, kind, file, bytes, created_at) VALUES (?, ?, ?, ?, ?)').run(row.id, 'video', file, bytes, this.now());
+    this.db.prepare('UPDATE sessions SET media_bytes = media_bytes + ?, last_seen = ? WHERE id = ?').run(bytes, this.now(), row.id);
+    this.audit('device', 'recording-uploaded', row.id, `${(bytes / 1024 / 1024).toFixed(1)} MB`);
+    return Number(info.lastInsertRowid);
+  }
+  abortUpload(row: SessionRow, file: string) { try { unlinkSync(join(this.mediaRoot, row.id, `${file}.part`)); } catch {} }
   media(sessionId: string) {
     return this.db.prepare('SELECT id, kind, bytes, created_at AS createdAt FROM media WHERE session_id = ? ORDER BY created_at').all(sessionId) as unknown as { id: number; kind: string; bytes: number; createdAt: number }[];
   }
   mediaFile(sessionId: string, mediaId: number) {
     const row = this.db.prepare('SELECT kind, file FROM media WHERE session_id = ? AND id = ?').get(sessionId, mediaId) as { kind: string; file: string } | undefined;
-    return row ? { kind: row.kind, path: join(this.mediaRoot, sessionId, row.file) } : null;
+    return row ? { kind: row.kind, path: join(this.mediaRoot, sessionId, row.file), type: row.kind === 'image' ? 'image/jpeg' : row.file.endsWith('.mov') ? 'video/quicktime' : 'video/mp4' } : null;
   }
   auditFor(sessionId: string) {
     return this.db.prepare('SELECT at, actor, action, note FROM audit WHERE session_id = ? ORDER BY at').all(sessionId);
