@@ -8,6 +8,12 @@ A small Android app that pairs a player's phone with an ArenaHub match and repor
 
 ## Build (free)
 
+**On the event laptop:** run `npm run build:companion` from the project folder. It writes `dist-agent/arenahub-companion.apk`. While the ArenaHub server is running, phones can download it from `http://<laptop address>:3000/api/integrity/downloads/arenahub-companion.apk`, and the pairing panel shows that link.
+
+The command uses build tools that were set up once in `%LOCALAPPDATA%`: `ArenaHubBuild\jdk17` (Temurin JDK 17), `ArenaHubBuild\gradle-8.10.2`, and `Android\Sdk` (command-line tools, `platforms;android-35`, `build-tools;34.0.0`). It copies the project to `ArenaHubBuild\companion` first, because Android's build tools fail when the project path has non-ASCII characters and this repo's folder name has a long dash.
+
+**On another computer, with Android Studio:**
+
 1. Install [Android Studio](https://developer.android.com/studio). It includes the SDK and a JDK.
 2. Open this folder (`companion/android`) in Android Studio. Let it sync Gradle. If it offers to create the Gradle wrapper, accept.
 3. Choose **Build > Build App Bundle(s) / APK(s) > Build APK(s)**. The file is `app/build/outputs/apk/debug/app-debug.apk`.
@@ -29,9 +35,9 @@ If you change the report format, change `src/lib/integrityRisk.ts` and its tests
 
 ## Test checklist before the first event
 
-These have not been run yet, because no Android SDK or test phone was available when the app was written.
+The app compiles with no warnings (12 Nov 2026), but it has not been run on a phone yet.
 
-- [ ] It builds without errors in Android Studio.
+- [x] It builds without errors.
 - [ ] Scanning the referee QR code with the phone camera opens the app with the address and code filled in.
 - [ ] Pairing works, and the staff page shows "Online".
 - [ ] The screen-capture prompt appears. The staff page receives 30-second MP4 files, and they play.

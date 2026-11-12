@@ -3,6 +3,7 @@
 // Dota 2 Game State Integration) use a session token issued once through a single-use pairing code.
 import express from 'express';
 import { networkInterfaces } from 'node:os';
+import { resolve } from 'node:path';
 import { createReadStream, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { cheatById } from '../src/lib/cheatCatalog.ts';
@@ -12,6 +13,8 @@ import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFOR
 import { HEARTBEAT_SECONDS, IntegrityStore, type SessionRow } from './integrityStore.ts';
 import { AuthError, verifyStaffToken } from './staffAuth.ts';
 
+// Player downloads, served from dist-agent/ by exact name only.
+export const DOWNLOADS: Record<string, string> = { 'arenahub-companion.apk': 'application/vnd.android.package-archive', 'arenahub-agent.exe': 'application/octet-stream' };
 const CHUNK_BYTES = 8 * 1024 * 1024, MAX_CHUNKS = 1024, TICKET_MS = 10 * 60_000;
 const MAX_VIDEO_BYTES = 30 * 1024 * 1024, MAX_IMAGE_BYTES = 3 * 1024 * 1024, MAX_SESSION_BYTES = 4 * 1024 ** 3;
 const pairingInput = z.object({
@@ -30,12 +33,15 @@ type Deps = { store?: IntegrityStore; dataDir?: string; verifyStaff?: (token: st
 type StaffRequest = express.Request & { staffUid?: string };
 
 function lanUrls(port: number) {
-  const urls: string[] = [];
-  for (const list of Object.values(networkInterfaces())) for (const net of list || []) {
+  const real: string[] = [], virtual: string[] = [];
+  for (const [name, list] of Object.entries(networkInterfaces())) for (const net of list || []) {
     if (net.family !== 'IPv4' || net.internal) continue;
-    if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(net.address)) urls.push(`http://${net.address}:${port}`);
+    if (!/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(net.address)) continue;
+    // Virtual machine adapters (VirtualBox, VMware, Hyper-V, WSL) have private addresses that phones cannot reach, so they go last.
+    const isVirtual = /^(0a:00:27|08:00:27|00:50:56|00:0c:29|00:15:5d)/i.test(net.mac) || /virtual|vmware|vethernet|wsl|hyper-v/i.test(name) || net.address.startsWith('192.168.56.');
+    (isVirtual ? virtual : real).push(`http://${net.address}:${port}`);
   }
-  return urls;
+  return [...real, ...virtual];
 }
 
 export function createIntegrityRouter(env: Record<string, string | undefined>, deps: Deps = {}) {
@@ -59,6 +65,15 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     expectedSteamId: row.expected_steam_id, status: row.status, connection: store.connection(row), createdAt: row.created_at, expiresAt: row.expires_at, claimedAt: row.claimed_at,
     endedAt: row.ended_at, lastSeen: row.last_seen, device: row.device ? JSON.parse(row.device) : null, gsi: row.gsi ? JSON.parse(row.gsi) : null,
     reviewNote: row.review_note, hold: row.hold === 1, mediaBytes: row.media_bytes, risk: store.risk(row),
+  });
+
+  // Players fetch the Android app and the PC agent from the event laptop, so no store or sign-in is needed.
+  const downloadDir = resolve(env.INTEGRITY_DOWNLOAD_DIR || 'dist-agent');
+  const available = () => Object.keys(DOWNLOADS).filter(name => existsSync(resolve(downloadDir, name)));
+  router.get('/downloads/:name', (req, res) => {
+    const name = String(req.params.name);
+    if (!Object.hasOwn(DOWNLOADS, name) || !available().includes(name)) { res.status(404).type('text/plain').send('This download is not on the laptop yet. Ask the referee.'); return; }
+    res.download(resolve(downloadDir, name), name, { headers: { 'Content-Type': DOWNLOADS[name], 'X-Content-Type-Options': 'nosniff' } });
   });
 
   // ---------- Device routes ----------
@@ -159,7 +174,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
 
   staff.get('/server-info', (req, res) => {
     const port = req.socket.localPort || Number(env.PORT || 3000);
-    res.json({ urls: env.INTEGRITY_PUBLIC_URL ? [env.INTEGRITY_PUBLIC_URL] : lanUrls(port), signals: SIGNAL_CATALOG });
+    res.json({ urls: env.INTEGRITY_PUBLIC_URL ? [env.INTEGRITY_PUBLIC_URL] : lanUrls(port), signals: SIGNAL_CATALOG, downloads: available() });
   });
   staff.get('/config', (_req, res) => { res.json(store.config()); });
   staff.put('/config', (req, res) => {

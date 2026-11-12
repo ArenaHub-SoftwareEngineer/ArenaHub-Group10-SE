@@ -164,7 +164,7 @@ function SettingsPanel() {
 }
 
 export function MatchMonitorView({ matches }: { matches: Match[] }) {
-  const [sessions, setSessions] = useState<SessionView[]>([]), [urls, setUrls] = useState<string[]>([]), [error, setError] = useState('');
+  const [sessions, setSessions] = useState<SessionView[]>([]), [urls, setUrls] = useState<string[]>([]), [error, setError] = useState(''), [downloads, setDownloads] = useState<string[]>([]);
   const [matchId, setMatchId] = useState(''), [customLabel, setCustomLabel] = useState(''), [game, setGame] = useState<MonitorGame>('mlbb');
   const [player, setPlayer] = useState(''), [steamId, setSteamId] = useState(''), [hours, setHours] = useState(4), [server, setServer] = useState('');
   const [platform, setPlatform] = useState<MonitorPlatform>('android'), [team, setTeam] = useState('');
@@ -177,7 +177,7 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
   useEffect(() => { setTeam(''); }, [matchId]);
   const refresh = useCallback(() => call<SessionView[]>(`/sessions${filter ? `?matchId=${encodeURIComponent(filter)}` : ''}`).then(s => { setSessions(s); setError(''); }).catch(e => setError(e.message)), [filter]);
   useEffect(() => { void refresh(); const timer = setInterval(() => void refresh(), 5000); return () => clearInterval(timer); }, [refresh]);
-  useEffect(() => { call<{ urls: string[] }>('/server-info').then(info => { setUrls(info.urls); setServer(s => s || info.urls[0] || ''); }).catch(() => {}); }, []);
+  useEffect(() => { call<{ urls: string[]; downloads?: string[] }>('/server-info').then(info => { setUrls(info.urls); setDownloads(info.downloads || []); setServer(s => s || info.urls[0] || ''); }).catch(() => {}); }, []);
   useEffect(() => { if (match) { const g = gameOf(match); if (g) setGame(g); } }, [matchId]);
 
   const pair = async (e: React.FormEvent) => {
@@ -188,6 +188,7 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
       setPairing({ ...result, playerName: player.trim() }); setPlayer(''); setSteamId(''); void refresh();
     } catch (err) { setError(err instanceof Error ? err.message : 'Pairing failed.'); } finally { setBusy(false); }
   };
+  const serverBase = server.trim().endsWith('/') ? server.trim().slice(0, -1) : server.trim();
   const counts = { online: sessions.filter(s => s.connection === 'online').length, lost: sessions.filter(s => s.connection === 'lost').length, flagged: sessions.filter(s => ['review', 'urgent'].includes(s.risk.level)).length };
   const matchOptions = [...new Map(sessions.map(s => [s.matchId, s.matchLabel])).entries()];
   const arenaMatch = filter || sessions[0]?.matchId || '';
@@ -217,9 +218,9 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
       {pairing && <div className="monitor-pairing" role="status">
         <img src={pairing.qr} alt={`Pairing QR code for ${pairing.playerName}`} width={220} height={220} />
         <div><p className="field-hint">For {pairing.playerName} · expires {time(pairing.codeExpiresAt)}</p><p className="monitor-code">{pairing.code}</p>
-          {pairing.platform === 'android' ? <p>Open the ArenaHub Companion and scan this code, or type the code and the laptop address.</p>
+          {pairing.platform === 'android' ? <><p>Open the ArenaHub Companion and scan this code, or type the code and the laptop address.</p>{downloads.includes('arenahub-companion.apk') ? <p className="field-hint">No app yet? On the phone, open <code className="monitor-command">{serverBase}/api/integrity/downloads/arenahub-companion.apk</code></p> : <p className="field-hint">The Android app has not been built on this laptop yet, so there is no download link.</p>}</>
             : pairing.platform === 'ios' ? <p>The player scans this code with the iPhone camera. It opens a page in Safari where they agree, then upload their screen recording after the match. iPhones get no device checks.</p>
-            : <><p>On the player's PC, open Command Prompt in the folder with the agent and run:</p><code className="monitor-command">{pairing.agentCommand}</code></>}
+            : <><p>On the player's PC, open Command Prompt in the folder with the agent and run:</p><code className="monitor-command">{pairing.agentCommand}</code>{downloads.includes('arenahub-agent.exe') && <p className="field-hint">No agent yet? On that PC, download <code className="monitor-command">{serverBase}/api/integrity/downloads/arenahub-agent.exe</code></p>}</>}
         </div>
       </div>}
     </section>

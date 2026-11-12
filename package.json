@@ -28,7 +28,8 @@
     "migrate:brackets": "tsx scripts/migrate-brackets.ts",
     "test:integrity-api": "tsx --test tests/integrity-api.test.ts",
     "agent": "tsx tools/integrity-agent/agent.ts",
-    "build:agent": "node scripts/build-agent.mjs"
+    "build:agent": "node scripts/build-agent.mjs",
+    "build:companion": "node scripts/build-companion.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
