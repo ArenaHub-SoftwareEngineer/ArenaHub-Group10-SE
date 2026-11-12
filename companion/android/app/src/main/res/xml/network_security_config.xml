@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LAN mode: the referee laptop serves plain HTTP on the event Wi-Fi (for example http://192.168.1.5:3000).
+     Android cannot allowlist private IP ranges by pattern, so cleartext is allowed. The session token
+     is short-lived, single-match and useless once the match window closes. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

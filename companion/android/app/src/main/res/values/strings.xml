@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ArenaHub Companion</string>
+    <string name="consent">While monitoring is on, ArenaHub Companion will:\n\n- record your screen (no microphone, no camera) and send it to the referee laptop,\n- check whether Mobile Legends or CODM is the official app,\n- check for apps on the tournament blocklist, root access, screen-control (accessibility) apps, apps that draw over games, and debugging settings,\n- report every 15 seconds while the match window is open.\n\nIt does not read your messages, photos, contacts, location, passwords or other apps\' content. Only blocklist matches are sent, never your full app list.\n\nData stays on the referee laptop and is deleted after 30 days unless it is part of a case. You can stop at any time; stopping is logged for the referee, and a referee decides what happens next. Declining is not a penalty: you can play on an organizer device instead.</string>
+    <string name="notification_title">ArenaHub match monitoring is ON</string>
+    <string name="notification_channel">Match monitoring</string>
+</resources>

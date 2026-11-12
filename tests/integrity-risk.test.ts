@@ -77,3 +77,14 @@ test('config validation rejects bad thresholds and patterns', () => {
   assert.equal(monitorConfigSchema.safeParse({ ...DEFAULT_MONITOR_CONFIG, thresholds: { watch: 50, review: 40, urgent: 70 } }).success, false);
   assert.equal(monitorConfigSchema.safeParse({ ...DEFAULT_MONITOR_CONFIG, pc: { blockedProcesses: [{ match: '../evil', label: 'x x', severity: 'high' }] } }).success, false);
 });
+
+test('the Android companion reports exactly the fields the server schema expects', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { androidFactsSchema } = await import('../src/lib/integrityRisk');
+  const kotlin = readFileSync('companion/android/app/src/main/java/ph/edu/wmsu/arenahub/companion/DeviceChecks.kt', 'utf8');
+  const collect = kotlin.slice(kotlin.indexOf('fun collect('), kotlin.indexOf('private fun matchesAny'));
+  const sent = [...collect.matchAll(/put\("([A-Za-z]+)"/g)].map(m => m[1]).sort();
+  assert.deepEqual(sent, Object.keys(androidFactsSchema.shape).sort());
+  const gameKeys = [...kotlin.slice(kotlin.indexOf('private fun gameInfo')).matchAll(/put\("([A-Za-z0-9]+)"/g)].map(m => m[1]).slice(0, 3).sort();
+  assert.deepEqual(gameKeys, ['certSha256', 'packageName', 'versionName']);
+});
