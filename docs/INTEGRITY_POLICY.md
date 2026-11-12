@@ -19,6 +19,10 @@ ArenaHub tournaments may ask you to turn on match monitoring during official mat
 - Whether developer options or debugging are on.
 - Optional, only if you allow it: which app was on screen.
 
+**iPhone (Mobile Legends, CODM):**
+- Only the screen recording you make yourself and upload after the match. Nothing is installed and nothing else on the iPhone is checked.
+- Turn on Do Not Disturb before you record, so private notifications do not appear in the video.
+
 **Windows PC (Dota 2):**
 - Running programs that are on the tournament blocklist. Your full program list never leaves your PC.
 - A screenshot every 20 seconds.
@@ -35,6 +39,7 @@ ArenaHub tournaments may ask you to turn on match monitoring during official mat
 ## How decisions are made
 
 - Monitoring produces signals and a risk score. These are reasons for a referee to look, not proof of cheating. Normal apps can trigger some signals.
+- Referees may also watch your recording and note moments that match a known cheat type. A note is one referee's observation, not a verdict.
 - No penalty is automatic. A referee reviews the evidence and records a decision through Fair play.
 - You can ask for one review of that decision.
 

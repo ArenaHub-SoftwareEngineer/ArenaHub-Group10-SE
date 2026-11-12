@@ -47,3 +47,62 @@
 .monitor-audit { font-size: 13px; color: var(--text-secondary); padding-left: 18px; }
 .monitor-page details > summary { cursor: pointer; }
 .monitor-detail .module-notice .arena-outline { margin: 8px 8px 0 0; }
+
+/* Category colours, shared by the 3D arena, its legend and the session breakdown. */
+.monitor-page, .monitor-detail { --cat-game-build: #7c3aed; --cat-cheat-tools: #dc2626; --cat-device: #d97706; --cat-connection: #2563eb; --cat-behaviour: #0d9488; }
+.cat-game-build { --c: var(--cat-game-build); } .cat-cheat-tools { --c: var(--cat-cheat-tools); } .cat-device { --c: var(--cat-device); }
+.cat-connection { --c: var(--cat-connection); } .cat-behaviour { --c: var(--cat-behaviour); }
+
+/* 3D match arena: plain CSS 3D transforms, no WebGL. */
+.monitor3d-frame { position: relative; overflow: hidden; perspective: 1100px; perspective-origin: 50% 40%; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-base); cursor: grab; touch-action: pan-y; user-select: none; }
+.monitor3d-frame:active { cursor: grabbing; }
+.monitor3d-scale { display: flex; justify-content: center; transform-origin: top center; transform-style: preserve-3d; }
+.monitor3d-floor { position: relative; flex: none; transform-style: preserve-3d; border-radius: 10px; border: 1px solid var(--border-strong);
+  background: repeating-linear-gradient(0deg, transparent 0 47px, var(--border) 47px 48px), repeating-linear-gradient(90deg, transparent 0 47px, var(--border) 47px 48px), var(--surface); }
+.monitor3d-team { position: absolute; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.monitor3d-pillar { position: absolute; transform-style: preserve-3d; cursor: pointer; }
+.monitor3d-block { position: absolute; inset: 0; transform-style: preserve-3d; }
+.monitor3d-block.base { --c: var(--border-strong); }
+.monitor3d-face { position: absolute; display: block; background: var(--c); outline: 1px solid rgb(0 0 0 / .18); outline-offset: -1px; }
+.monitor3d-face.top { inset: 0; filter: brightness(1.12); }
+.monitor3d-face:is(.north, .south) { left: 0; width: 100%; transform-origin: top; transform: rotateX(90deg); filter: brightness(.86); }
+.monitor3d-face.north { top: 0; } .monitor3d-face.south { top: 100%; }
+.monitor3d-face:is(.west, .east) { top: 0; height: 100%; transform-origin: left; transform: rotateY(-90deg); filter: brightness(.7); }
+.monitor3d-face.west { left: 0; } .monitor3d-face.east { left: 100%; }
+.monitor3d-label { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-origin: 0 0; transform-style: preserve-3d; }
+.monitor3d-label button { position: absolute; left: 0; bottom: 0; transform: translateX(-50%); display: grid; justify-items: center; gap: 1px; min-width: 56px; min-height: 44px; padding: 4px 8px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--surface-elevated, var(--surface)); color: var(--text-primary); font: inherit; cursor: pointer; white-space: nowrap; }
+.monitor3d-label strong { font-size: 17px; line-height: 1; }
+.monitor3d-label span { font-size: 11px; color: var(--text-secondary); max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+.monitor3d-pillar.watch .monitor3d-label strong { color: var(--info); }
+.monitor3d-pillar.review .monitor3d-label strong { color: var(--warning); }
+.monitor3d-pillar.urgent .monitor3d-label button { background: var(--danger); border-color: var(--danger); color: #fff; }
+.monitor3d-pillar.urgent .monitor3d-label span { color: #fff; }
+.monitor3d-label button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.monitor3d-controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; margin: 12px 0 6px; }
+.monitor3d-controls label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
+.monitor3d-controls input[type=range] { width: 160px; accent-color: var(--brand); }
+.monitor3d-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0; margin: 0; font-size: 13px; color: var(--text-secondary); }
+.monitor3d-legend li { display: flex; align-items: center; gap: 6px; }
+.monitor3d-legend i { width: 12px; height: 12px; border-radius: 3px; background: var(--c); }
+
+/* Session breakdown by category, timeline and referee checklist. */
+.monitor-breakdown { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.monitor-breakdown li { display: grid; grid-template-columns: minmax(120px, 190px) 1fr 34px; gap: 10px; align-items: center; font-size: 13px; color: var(--text-secondary); }
+.monitor-bar { height: 10px; border-radius: 6px; background: var(--surface-soft); overflow: hidden; }
+.monitor-bar i { display: block; height: 100%; background: var(--c); border-radius: 6px; }
+.monitor-breakdown b { text-align: right; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.monitor-timeline { display: grid; gap: 4px; margin-top: 10px; }
+.monitor-timeline-row { display: grid; grid-template-columns: minmax(120px, 190px) 1fr; gap: 10px; align-items: center; font-size: 12px; color: var(--text-muted); }
+.monitor-track { position: relative; height: 14px; border-radius: 4px; background: var(--surface-soft); }
+.monitor-track i { position: absolute; top: 2px; bottom: 2px; min-width: 4px; border-radius: 3px; background: var(--c); }
+.monitor-timeline-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-left: calc(min(190px, 40%) + 10px); }
+.monitor-catalog { display: grid; gap: 8px; }
+.monitor-catalog details { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+.monitor-catalog summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.monitor-catalog p, .monitor-catalog li { font-size: 13px; color: var(--text-secondary); }
+.monitor-catalog ul { margin: 6px 0; padding-left: 18px; }
+.monitor-layers { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.monitor-layers span { font-size: 11px; font-weight: 650; padding: 3px 8px; border-radius: 20px; background: var(--surface-soft); color: var(--text-secondary); }
+.monitor-conn.paired { color: var(--info); }
+@media (max-width: 520px) { .monitor-breakdown li, .monitor-timeline-row { grid-template-columns: 110px 1fr auto; } .monitor-timeline-row { grid-template-columns: 110px 1fr; } .monitor-timeline-ends { margin-left: 120px; } }
