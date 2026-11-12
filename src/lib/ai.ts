@@ -9,7 +9,6 @@
 import { auth } from './firebase';
 import { firestoreService } from './firestore';
 import { AIParsedBracketParams, BracketDraft, Match, Team, MatchFormat, ExtractedTeam } from "./types";
-import { INITIAL_TEAMS, INITIAL_COLLEGES } from "./mockData";
 import {
   extractTeamsFromPrompt,
   extractTournamentTitle,
