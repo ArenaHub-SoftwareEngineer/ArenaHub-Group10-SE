@@ -1,0 +1,49 @@
+/* Match monitor (admin). Uses the shared tokens so light and dark themes both work. */
+.monitor-page .operations-section-heading > div { min-width: 0; }
+.monitor-pair-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end; }
+.monitor-pair-form .feature-dialog-actions, .monitor-pair-form > .field-hint { grid-column: 1 / -1; }
+.monitor-pairing { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-top: 18px; padding: 18px; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--surface-soft); }
+.monitor-pairing img { background: #fff; border-radius: 8px; padding: 6px; max-width: 100%; height: auto; }
+.monitor-pairing > div { min-width: 0; flex: 1 1 240px; }
+.monitor-code { font-family: ui-monospace, Consolas, monospace; font-size: clamp(26px, 7vw, 38px); letter-spacing: .18em; font-weight: 700; color: var(--text-primary); margin: 4px 0 8px; overflow-wrap: anywhere; }
+.monitor-command { display: block; margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: var(--bg-base); border: 1px solid var(--border); font-size: 13px; overflow-wrap: anywhere; user-select: all; }
+.monitor-inline { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: end; }
+.monitor-inline label { flex: 1 1 200px; }
+.monitor-sessions { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.monitor-session { border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: 12px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.monitor-session.watch { border-left-color: var(--info); }
+.monitor-session.review { border-left-color: var(--warning); }
+.monitor-session.urgent { border-left-color: var(--danger); }
+.monitor-session-risk { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--text-secondary); min-width: 0; }
+.monitor-risk { display: inline-flex; align-items: baseline; justify-content: center; min-width: 44px; padding: 4px 8px; border-radius: 10px; font-weight: 750; font-size: 18px; background: var(--surface-soft); color: var(--text-primary); }
+.monitor-risk small { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.monitor-risk.clear { color: var(--success); }
+.monitor-risk.watch { color: var(--info); }
+.monitor-risk.review { color: var(--warning); }
+.monitor-risk.urgent { color: #fff; background: var(--danger); }
+.monitor-risk.urgent small { color: inherit; }
+.monitor-conn { font-size: 11px; font-weight: 650; text-transform: uppercase; letter-spacing: .04em; padding: 4px 8px; border-radius: 20px; background: var(--surface-soft); color: var(--text-secondary); white-space: nowrap; }
+.monitor-conn.online { color: var(--success); }
+.monitor-conn.lost { color: var(--danger); }
+.monitor-risk-strip { display: flex; gap: 14px; align-items: center; }
+.monitor-risk-strip .monitor-risk { font-size: 28px; min-width: 76px; padding: 8px 12px; }
+.monitor-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 14px 0; }
+.monitor-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.monitor-facts dd { margin: 2px 0 0; font-size: 14px; color: var(--text-primary); overflow-wrap: anywhere; }
+.monitor-detail h3 { font-size: 15px; margin: 18px 0 8px; }
+.monitor-signals { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.monitor-signals li { border: 1px solid var(--border); border-left: 4px solid var(--border-strong); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; min-width: 0; }
+.monitor-signals li.sev-low { border-left-color: var(--info); }
+.monitor-signals li.sev-medium { border-left-color: var(--warning); }
+.monitor-signals li:is(.sev-high, .sev-critical) { border-left-color: var(--danger); }
+.monitor-signals p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.monitor-signals code { font-size: 12px; color: var(--text-primary); overflow-wrap: anywhere; }
+.monitor-signals small { font-size: 12px; color: var(--text-muted); }
+.monitor-sev { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--text-secondary); }
+.monitor-media { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.monitor-media-item img, .monitor-media-item video { width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
+.monitor-media-item button { width: 100%; font-size: 12px; }
+.monitor-thresholds { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.monitor-audit { font-size: 13px; color: var(--text-secondary); padding-left: 18px; }
+.monitor-page details > summary { cursor: pointer; }
+.monitor-detail .module-notice .arena-outline { margin: 8px 8px 0 0; }

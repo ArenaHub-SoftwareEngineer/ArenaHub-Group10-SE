@@ -24,5 +24,7 @@ export default defineConfig({
     url: 'http://127.0.0.1:5176',
     reuseExistingServer: true,
     timeout: 120_000,
+    // Browser tests must never write into the event laptop's real match monitor database.
+    env: { INTEGRITY_DATA_DIR: 'test-results/integrity-data' },
   },
 });

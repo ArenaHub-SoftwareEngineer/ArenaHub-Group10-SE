@@ -33,6 +33,7 @@ const SpectatorAIView = lazy(() => import('./components/spectator/SpectatorAIVie
 // Organizer / Admin Shell
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout').then(m => ({ default: m.AdminLayout })));
 const AdminOverview = lazy(() => import('./components/admin/AdminOverview').then(m => ({ default: m.AdminOverview })));
+const MatchMonitorView = lazy(() => import('./components/admin/MatchMonitorView').then(m => ({ default: m.MatchMonitorView })));
 const UsersView = lazy(() => import('./components/admin/UsersView').then(m => ({ default: m.UsersView })));
 const GamesCategoriesView = lazy(() => import('./components/admin/GamesCategoriesView').then(m => ({ default: m.GamesCategoriesView })));
 const ReportsView = lazy(() => import('./components/admin/ReportsView').then(m => ({ default: m.ReportsView })));
@@ -240,6 +241,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           {adminTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'desk'} brackets={publishedBrackets} staff initialEntityId={routeParams.get('entity')} />}
           {adminTab === 'support' && <SupportPage onNavigate={setAdminTab} />}
           {adminTab === 'settings' && <PreferencesPage user={currentUser} onSignIn={onSignIn} />}
+          {adminTab === 'match-monitor' && <MatchMonitorView matches={officialMatches} />}
           {adminTab === 'users' && <UsersView users={users} />}
           {adminTab === 'games' && (
             <GamesCategoriesView games={games} categories={categories} />

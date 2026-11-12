@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../../lib/types';
 import {
   Shield,
+  ShieldAlert,
   Bell,
   Sparkles,
   LayoutDashboard,
@@ -41,13 +42,14 @@ const ALL_TABS = [
   { id: 'games', label: 'Games', shortLabel: 'Games', icon: Gamepad2 },
   { id: 'reports', label: 'Reports', shortLabel: 'Reports', icon: AlertTriangle },
   { id: 'integrity', label: 'Fair play', shortLabel: 'Fair play', icon: Shield },
+  { id: 'match-monitor', label: 'Match monitor', shortLabel: 'Monitor', icon: ShieldAlert },
   { id: 'operations', label: 'Tournament desk', shortLabel: 'Tournament desk', icon: ClipboardList },
   { id: 'featured', label: 'Spotlight', shortLabel: 'Spotlight', icon: Star },
 ];
 
 const ADMIN_NAV_GROUPS = [
   { label: 'Workspace', ids: ['overview', 'bracket-studio', 'operations', 'match-data', 'live-stream'] },
-  { label: 'Manage', ids: ['users', 'games', 'reports', 'integrity', 'featured'] },
+  { label: 'Manage', ids: ['users', 'games', 'reports', 'integrity', 'match-monitor', 'featured'] },
   { label: 'Tools', ids: ['ai-assistant'] },
 ];
 
