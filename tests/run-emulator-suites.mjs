@@ -1,5 +1,6 @@
 // Runs every emulator-backed suite inside one disposable demo-arenahub emulator session.
 // Usage: npm run test:emulators   (requires Java 21+ and firebase-tools)
+// Set ARENAHUB_EMULATORS=auth,storage to reuse a Firestore emulator that is already running on 8085.
 import { spawnSync } from 'node:child_process';
 
 const suites = [
@@ -27,5 +28,5 @@ if (process.argv.includes('--inside')) {
   process.exit(failed ? 1 : 0);
 }
 
-const result = spawnSync('firebase', ['emulators:exec', '--only', 'auth,firestore,storage', '--project', 'demo-arenahub', '--config', 'firebase.test.json', 'node tests/run-emulator-suites.mjs --inside'], { stdio: 'inherit', shell: true });
+const result = spawnSync('firebase', ['emulators:exec', '--only', process.env.ARENAHUB_EMULATORS || 'auth,firestore,storage', '--project', 'demo-arenahub', '--config', 'firebase.test.json', '"node tests/run-emulator-suites.mjs --inside"'], { stdio: 'inherit', shell: true });
 process.exit(result.status ?? 1);
