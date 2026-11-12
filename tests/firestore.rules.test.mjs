@@ -77,14 +77,16 @@ test('profile edits persist for the owner and cannot alter account identity or p
   await assertSucceeds(updateDoc(doc(verifiedChange, 'users', 'other'), { email: 'verified-new@arena.test' }));
 });
 
-test('bracket persistence requires verified active staff and rejects ordinary users', async () => {
-  const bracket = { publishedBrackets: [], savedBracketDraft: null };
-  await assertFails(setDoc(doc(db('other'), 'arenahub', 'brackets'), bracket));
-  await assertFails(setDoc(doc(db('unverified', { role: 'organizer', email_verified: false }), 'arenahub', 'brackets'), bracket));
-  await assertFails(setDoc(doc(db('banned', { role: 'organizer', email: 'staff@wmsu.edu.ph' }), 'arenahub', 'brackets'), bracket));
-  await assertSucceeds(setDoc(doc(db('staff', { role: 'organizer', email: 'staff@wmsu.edu.ph' }), 'arenahub', 'brackets'), bracket));
+test('tournament publishing requires verified active staff; the legacy bracket document is read-only', async () => {
+  const tournament = (id, overrides = {}) => ({ id, title: 'QA Cup', gameId: 'game-dota2', gameName: 'Dota 2', gameKey: 'game-dota2', format: 'Single Elimination', matchFormat: 'Bo3', teamsCount: 2, seedingRule: 'Seed', createdAt: '1/1/2026', status: 'published', revision: 1, featured: false, matches: [], updatedAt: serverTimestamp(), ...overrides });
+  await assertFails(setDoc(doc(db('other'), 'tournaments', 'rules-t1'), tournament('rules-t1')));
+  await assertFails(setDoc(doc(db('unverified', { role: 'organizer', email_verified: false }), 'tournaments', 'rules-t1'), tournament('rules-t1')));
+  await assertFails(setDoc(doc(db('banned', { role: 'organizer', email: 'staff@wmsu.edu.ph' }), 'tournaments', 'rules-t1'), tournament('rules-t1')));
+  await assertSucceeds(setDoc(doc(db('staff', { role: 'organizer', email: 'staff@wmsu.edu.ph' }), 'tournaments', 'rules-t1'), tournament('rules-t1')));
+  await assertSucceeds(getDoc(doc(db('other', { email: 'other@wmsu.edu.ph' }), 'tournaments', 'rules-t1')));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'tournaments', 'rules-t1')));
+  await assertFails(setDoc(doc(db('staff', { role: 'organizer', email: 'staff@wmsu.edu.ph' }), 'arenahub', 'brackets'), { publishedBrackets: [] }));
   await assertSucceeds(getDoc(doc(db('other', { email: 'other@wmsu.edu.ph' }), 'arenahub', 'brackets')));
-  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'arenahub', 'brackets')));
 });
 
 test('approved students issue QR invitations for password spectators; external Google accounts stay blocked', async () => {
@@ -108,7 +110,7 @@ test('approved students issue QR invitations for password spectators; external G
   await assertFails(issue(student, 'other', token));
   await assertFails(updateDoc(doc(student, 'users', 'other'), { spectatorInviteApproved: true }));
   await assertFails(issue(personal, 'reporter', token));
-  await assertFails(getDoc(doc(personal, 'arenahub', 'brackets')));
+  await assertFails(getDoc(doc(personal, 'tournaments', 'rules-t1')));
   await env.withSecurityRulesDisabled(async context => {
     const store = context.firestore();
     await updateDoc(doc(store, 'users', 'other'), { spectatorInviteApproved: true, email: 'other@wmsu.edu.ph', emailVerified: true, name: 'Test Student' });
@@ -124,12 +126,12 @@ test('approved students issue QR invitations for password spectators; external G
   await assertFails(getDocs(collection(anonymous, 'campusInvites')));
   await assertFails(getDoc(doc(personal, 'studentInviteSlots', 'other')));
   await assertFails(redeem(unverified, token));
-  await assertFails(getDoc(doc(password, 'arenahub', 'brackets')));
+  await assertFails(getDoc(doc(password, 'tournaments', 'rules-t1')));
   await assertFails(redeem(personal, 'd'.repeat(48)));
   await assertFails(redeem(personal, token));
   await assertSucceeds(redeem(password, token));
-  await assertFails(getDoc(doc(personal, 'arenahub', 'brackets')));
-  await assertSucceeds(getDoc(doc(password, 'arenahub', 'brackets')));
+  await assertFails(getDoc(doc(personal, 'tournaments', 'rules-t1')));
+  await assertSucceeds(getDoc(doc(password, 'tournaments', 'rules-t1')));
   const message = (database, uid, id, author, extra = {}) => {
     const batch = writeBatch(database);
     batch.set(doc(database, 'matchChat', 'test-match', 'messages', id), { author, text: 'Go team!', createdAt: serverTimestamp(), ...extra });
@@ -146,5 +148,5 @@ test('approved students issue QR invitations for password spectators; external G
   await assertSucceeds(getDoc(doc(password, 'matchChat', 'test-match', 'messages', 'anonymous')));
   await env.withSecurityRulesDisabled(async context => updateDoc(doc(context.firestore(), 'users', 'other'), { spectatorInviteApproved: false }));
   await assertFails(getDoc(doc(anonymous, 'campusInvites', token)));
-  await assertFails(getDoc(doc(personal, 'arenahub', 'brackets')));
+  await assertFails(getDoc(doc(personal, 'tournaments', 'rules-t1')));
 });

@@ -18,6 +18,7 @@ test('real operation services connect roster approval, duplicates, locks, privat
   const community = await vite.ssrLoadModule('/src/lib/communityReports.ts');
   const chat = await vite.ssrLoadModule('/src/lib/matchChat.ts');
   const { createBracketFromTeams } = await vite.ssrLoadModule('/src/lib/bracketUtils.ts');
+  const docs = await vite.ssrLoadModule('/src/lib/data/tournamentDocs.ts');
   const env = await initializeTestEnvironment({ projectId: 'demo-arenahub', firestore: { host: '127.0.0.1', port: 8085 } });
   let stopBrackets = () => {};
   t.after(async () => { stopBrackets(); await signOut(firebase.auth); await terminate(firebase.db); await deleteApp(firebase.app); await env.cleanup(); });
@@ -36,11 +37,14 @@ test('real operation services connect roster approval, duplicates, locks, privat
   const login = async label => { stopBrackets(); stopBrackets = () => {}; await signOut(firebase.auth); await signInWithEmailAndPassword(firebase.auth, identities[label].email, password); };
   const draft = createBracketFromTeams({ title: 'QA tournament operations', teams: [{ name: 'QA Team A' }, { name: 'QA Team B' }], matchFormat: 'Bo1', finalMatchFormat: 'Bo1' });
   draft.gameId = 'game-mlbb'; draft.status = 'published'; draft.matches = draft.matches.map(m => ({ ...m, gameId: 'game-mlbb', scheduledDate: '2026-11-08', scheduledTime: '13:00' }));
-  await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'arenahub/brackets'), { publishedBrackets: [JSON.parse(JSON.stringify(draft))], previousPublishedBrackets: [], publicationRevision: 1 }));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'tournaments', draft.id), { ...docs.toTournamentDoc(draft, 1), updatedAt: new Date() });
+    await setDoc(doc(ctx.firestore(), 'tournaments', draft.id, 'public', 'rosters'), docs.toRosterDoc(draft));
+  });
   await login('referee');
   await operations.saveTournamentPolicy({ tournamentId: draft.id, gameId: 'game-mlbb', playersRequired: 5, maxSubstitutes: 2, registrationOpen: true });
   await firestoreService.addGame({ id: `qa-game-${runId}`, name: `QA shared game ${runId}`, registeredTeams: 0, visibility: 'Hidden', bannerImage: '/fairplay-mlbb.webp', category: 'QA' });
-  assert.ok((await getDoc(doc(firebase.db, 'arenahub/workspace'))).data().games.some(game => game.id === `qa-game-${runId}`));
+  assert.ok((await getDoc(doc(firebase.db, 'config/catalog'))).data().games.some(game => game.id === `qa-game-${runId}`));
   stopBrackets = firestoreService.watchLiveBrackets();
   if (!firestoreService.getPublishedBracketById(draft.id)) await new Promise((resolve, reject) => {
     const timer = setTimeout(() => { stop(); reject(new Error('Published bracket subscription timed out.')); }, 5000);
@@ -66,10 +70,14 @@ test('real operation services connect roster approval, duplicates, locks, privat
   await login('referee');
   await operations.reviewRegistration(b, 'approved', 'Verified all revised student records and game accounts.');
   await operations.reviewRegistration(b, 'locked', 'Approved roster locked before competition.');
-  const publicBracket = (await getDoc(doc(firebase.db, 'arenahub/brackets'))).data().publishedBrackets[0];
-  assert.ok(publicBracket.matches[0].team1.players.length === 5);
-  assert.ok(!JSON.stringify(publicBracket).includes('studentId'));
-  assert.ok(!JSON.stringify(publicBracket).includes('accountId'));
+  const publicRoster = (await getDoc(doc(firebase.db, 'tournaments', draft.id, 'public', 'rosters'))).data();
+  const publicTournament = (await getDoc(doc(firebase.db, 'tournaments', draft.id))).data();
+  assert.equal(publicRoster.teams.find(team => team.id === draft.matches[0].team1.id).players.length, 5);
+  for (const text of [JSON.stringify(publicRoster), JSON.stringify(publicTournament)]) {
+    assert.ok(!text.includes('studentId') && !text.includes('accountId') && !text.includes(`${runId}-a-student`), 'public documents carry no private roster fields');
+  }
+  const privateRoster = (await getDoc(doc(firebase.db, 'tournaments', draft.id, 'private', 'roster'))).data();
+  assert.equal(privateRoster.teams[draft.matches[0].team1.id].players[0].studentId, `${runId}-a-student-0`);
   const matchId = draft.matches[0].id;
   await operations.saveMatchWindow(matchId, draft.id, [a, b], new Date(Date.now() - 60000).toISOString(), new Date(Date.now() + 600000).toISOString());
   await login('captain');

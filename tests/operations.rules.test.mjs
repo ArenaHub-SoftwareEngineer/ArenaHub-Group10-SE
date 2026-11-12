@@ -87,10 +87,12 @@ test('case decisions and appeals preserve immutable evidence and append-only act
 });
 test('shared configuration and audit records reject ordinary or banned writers', async () => {
   const staff = campus('staff', true), owner = campus('captain');
-  const workspace = { games: [], categories: [], featuredHighlights: [], featuredPosts: [], tournaments: [], updatedAt: serverTimestamp() };
-  await assertFails(setDoc(doc(owner, 'arenahub/workspace'), workspace));
-  await assertSucceeds(setDoc(doc(staff, 'arenahub/workspace'), workspace));
-  await assertSucceeds(getDoc(doc(owner, 'arenahub/workspace')));
+  const catalog = { games: [], categories: [], updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(owner, 'config/catalog'), catalog));
+  await assertSucceeds(setDoc(doc(staff, 'config/catalog'), catalog));
+  await assertSucceeds(getDoc(doc(owner, 'config/catalog')));
+  await assertFails(setDoc(doc(staff, 'config/catalog'), { ...catalog, tournaments: [] }));
+  await assertFails(setDoc(doc(staff, 'arenahub/workspace'), { games: [], categories: [], featuredHighlights: [], featuredPosts: [], tournaments: [], updatedAt: serverTimestamp() }));
   const audit = { actorId: 'staff', action: 'Confirmed a roster.', createdAt: serverTimestamp() };
   await assertFails(setDoc(doc(owner, 'auditEvents/a1'), audit));
   await assertSucceeds(setDoc(doc(staff, 'auditEvents/a1'), audit));

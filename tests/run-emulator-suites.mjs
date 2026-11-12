@@ -10,8 +10,8 @@ const suites = [
   ['auth-flow', 'node --test tests/auth-flow.integration.test.mjs'],
   ['stream', 'node --test tests/stream.integration.test.mjs'],
   ['operations', 'node --test tests/operations.integration.test.mjs'],
-  ['migration', 'node --test tests/migration.integration.test.mjs'],
-  ['roles', 'node --test tests/set-role.integration.test.mjs'],
+  ['migration', 'npx tsx --test tests/migration.integration.test.ts'],
+  ['roles', 'npx tsx --test tests/set-role.integration.test.ts'],
 ];
 
 if (process.argv.includes('--inside')) {
@@ -22,7 +22,8 @@ if (process.argv.includes('--inside')) {
     const present = files.filter(file => existsSync(file));
     if (!present.length) { console.log(`\n=== ${name}: skipped (no test files yet) ===`); continue; }
     console.log(`\n=== ${name} ===`);
-    const run = spawnSync('node', ['--test', ...present], { stdio: 'inherit', shell: false });
+    const runner = command.split(' ').filter(part => !part.startsWith('tests/')).join(' ');
+    const run = spawnSync(`${runner} ${present.join(' ')}`, { stdio: 'inherit', shell: true });
     if (run.status !== 0) failed++;
   }
   process.exit(failed ? 1 : 0);
