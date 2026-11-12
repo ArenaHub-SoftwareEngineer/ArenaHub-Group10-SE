@@ -13,3 +13,5 @@ playwright-report/
 *.local
 service-account*.json
 *-service-account.json
+# Match monitor database and recordings stay on the event laptop
+data/

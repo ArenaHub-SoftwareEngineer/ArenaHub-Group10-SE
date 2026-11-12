@@ -5,6 +5,7 @@ import { defineConfig, loadEnv } from 'vite';
 import express from 'express';
 import { createAiRouter } from './server/ai.ts';
 import { createFairPlayRouter } from './server/fairPlay.ts';
+import { createIntegrityRouter } from './server/integrity.ts';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -20,6 +21,7 @@ export default defineConfig(({ mode }) => {
           api.disable('x-powered-by');
           api.use('/api/ai', createAiRouter(env));
           api.use('/api/fair-play', createFairPlayRouter(env));
+          api.use('/api/integrity', createIntegrityRouter(env));
           server.middlewares.use((req, res, next) => api(req as express.Request, res as express.Response, next));
         },
       },
