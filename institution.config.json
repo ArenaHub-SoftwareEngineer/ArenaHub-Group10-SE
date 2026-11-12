@@ -1,5 +1,15 @@
 {
   "name": "Western Mindanao State University",
   "shortName": "WMSU",
-  "emailDomain": "wmsu.edu.ph"
+  "emailDomain": "wmsu.edu.ph",
+  "colleges": [
+    { "code": "CCS", "name": "College of Computing Studies", "color": "#3B82F6" },
+    { "code": "COE", "name": "College of Engineering", "color": "#EF4444" },
+    { "code": "CN", "name": "College of Nursing", "color": "#10B981" },
+    { "code": "CCJE", "name": "College of Criminal Justice Education", "color": "#F59E0B" },
+    { "code": "CL", "name": "College of Law", "color": "#8B5CF6" },
+    { "code": "CA", "name": "College of Architecture", "color": "#EC4899" },
+    { "code": "CLA", "name": "College of Liberal Arts", "color": "#6366F1" },
+    { "code": "CED", "name": "College of Education", "color": "#14B8A6" }
+  ]
 }

@@ -7,12 +7,12 @@ export function notificationRecord(kind: string, title: string, body: string, ta
 }
 export function notificationRef(uid: string, id: string) { return doc(db, 'users', uid, 'notifications', id); }
 export function subscribeNotifications(uid: string, receive: (items: ArenaNotification[]) => void, fail: (message: string) => void) {
-  return onSnapshot(query(collection(db, 'users', uid, 'notifications'), orderBy('createdAt', 'desc'), limit(100)), snap => receive(snap.docs.map(d => ({ ...d.data(), id: d.id } as ArenaNotification))), () => fail('Notifications could not load. Check your connection and database permissions.'));
+  return onSnapshot(query(collection(db, 'users', uid, 'notifications'), orderBy('createdAt', 'desc'), limit(30)), snap => receive(snap.docs.map(d => ({ ...d.data(), id: d.id } as ArenaNotification))), () => fail('Notifications could not load. Check your connection and database permissions.'));
 }
 /** Durable broadcasts are copied once into each admitted user's private inbox, also after an offline period. */
 export function subscribeNotificationSources(uid: string, staff: boolean, fail: (message: string) => void) {
   let active = true;
-  const stops = ['arenaAnnouncements', ...(staff ? ['staffInbox'] : [])].map(source => onSnapshot(query(collection(db, source), orderBy('createdAt', 'desc'), limit(50)), snap => {
+  const stops = ['arenaAnnouncements', ...(staff ? ['staffInbox'] : [])].map(source => onSnapshot(query(collection(db, source), orderBy('createdAt', 'desc'), limit(20)), snap => {
     for (const change of snap.docChanges()) if (change.type === 'added') {
       const item = change.doc.data();
       void runTransaction(db, async tx => {

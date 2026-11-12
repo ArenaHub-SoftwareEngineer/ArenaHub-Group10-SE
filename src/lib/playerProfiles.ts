@@ -49,18 +49,6 @@ export function directoryTeams(samples:Team[],brackets:BracketDraft[]):Team[] {
   }
   return [...samples.filter(team=>!isRetiredGame(team) && !activeGames.has(rankGame(team.gameId,team.gameMode)||team.gameId)),...published.values()];
 }
-/** Refresh only identifiable, unchanged fictional fixtures from older browser snapshots. */
-export function hydrateSampleRoster(team: Team | undefined, fixtures: Team[]): Team | undefined {
-  const fixture = fixtures.find(t=>t.id===team?.id && t.gameId===team.gameId);
-  if (!team || !fixture) return team;
-  return { ...team,players:team.players.map(player=>{
-    const sample=fixture.players.find(p=>p.id===player.id && p.name===player.name && p.ign===player.ign && p.isSampleProfile);
-    if (!sample || player.isSampleProfile===false) return player;
-    return { ...player,peakRank:player.peakRank ?? sample.peakRank,yearLevel:player.yearLevel ?? sample.yearLevel,
-      department:player.department ?? sample.department,program:player.program ?? sample.program,bio:player.bio ?? sample.bio,
-      isSampleProfile:true,samplePortrait:player.samplePortrait ?? sample.samplePortrait };
-  }) };
-}
 /** The entire bracket document, including its draft field, is publicly readable. */
 export function publicBracket(draft: BracketDraft): BracketDraft {
   const publicTeam = (team?: Team): Team | undefined => team ? { id:team.id,name:team.name,collegeId:team.collegeId,collegeCode:team.collegeCode,

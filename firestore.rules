@@ -87,10 +87,75 @@ service cloud.firestore {
         && validInvite(request.resource.data.invite,
           get(/databases/$(database)/documents/campusInvites/$(request.resource.data.invite)).data);
     }
-    match /arenahub/brackets {
+    // Legacy single-document stores, kept readable so a rollback still works. All writes use the collections below.
+    match /arenahub/{legacy} {
       allow read: if campusStudent() || activeSpectator();
-      allow create, update: if isStaff() && campusStudent();
+      allow write: if false;
+    }
+    // One document per published bracket. Every update must raise the revision by exactly one,
+    // so two organizers cannot silently overwrite each other.
+    function validTournament(data, id) {
+      return data.keys().hasOnly(['id', 'title', 'gameId', 'gameName', 'gameKey', 'format', 'matchFormat', 'teamsCount', 'seedingRule', 'createdAt', 'status', 'revision', 'featured', 'demo', 'matches', 'updatedAt'])
+        && data.id == id && data.title is string && data.title.size() > 0 && data.title.size() <= 160
+        && data.gameKey is string && data.gameKey.size() > 0 && data.gameKey.size() <= 80
+        && data.status in ['published', 'archived', 'unpublished']
+        && data.revision is int && data.revision >= 1
+        && data.matches is list && data.matches.size() <= 1100
+        && data.featured is bool && data.updatedAt == request.time;
+    }
+    match /tournaments/{id} {
+      allow read: if (admitted() && resource.data.status == 'published') || activeStaff();
+      allow create: if activeStaff() && validTournament(request.resource.data, id);
+      allow update: if activeStaff() && validTournament(request.resource.data, id)
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.gameKey == resource.data.gameKey;
       allow delete: if false;
+      // Public roster: IGN, role and rank only.
+      match /public/rosters {
+        allow read: if admitted();
+        allow write: if activeStaff() && request.resource.data.keys().hasOnly(['teams'])
+          && request.resource.data.teams is list && request.resource.data.teams.size() <= 256;
+      }
+      // Full names, student IDs, school emails and sections. Staff only.
+      match /private/roster {
+        allow read, write: if activeStaff();
+      }
+    }
+    match /publications/{key} {
+      allow read: if activeStaff();
+      allow write: if activeStaff()
+        && request.resource.data.keys().hasOnly(['gameKey', 'currentId', 'hasPrevious', 'revision', 'updatedAt'])
+        && request.resource.data.gameKey == key && request.resource.data.revision is int
+        && request.resource.data.updatedAt == request.time;
+      match /previous/{part} {
+        allow read, write: if activeStaff() && part in ['tournament', 'rosters'];
+      }
+    }
+    match /config/catalog {
+      allow read: if admitted();
+      allow write: if activeStaff() && request.resource.data.keys().hasOnly(['games', 'categories', 'updatedAt'])
+        && request.resource.data.games is list && request.resource.data.games.size() <= 100
+        && request.resource.data.categories is list && request.resource.data.categories.size() <= 100
+        && request.resource.data.updatedAt == request.time;
+    }
+    match /featured/{id} {
+      allow read: if admitted();
+      allow create: if activeStaff()
+        && request.resource.data.keys().hasOnly(['kind', 'title', 'link', 'author', 'isFeatured', 'createdAt'])
+        && request.resource.data.kind in ['highlight', 'post']
+        && request.resource.data.title is string && request.resource.data.title.size() >= 3 && request.resource.data.title.size() <= 120
+        && request.resource.data.link is string && request.resource.data.link.size() <= 500 && request.resource.data.link.matches('https://[^@ ]+')
+        && request.resource.data.author is string && request.resource.data.author.size() >= 2 && request.resource.data.author.size() <= 80
+        && request.resource.data.isFeatured == false && request.resource.data.createdAt == request.time;
+      allow update: if activeStaff() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isFeatured'])
+        && request.resource.data.isFeatured is bool;
+      allow delete: if activeStaff();
+    }
+    match /users/{uid}/drafts/{draftId} {
+      allow read, delete: if ownsProfile(uid) && activeStaff();
+      allow create, update: if ownsProfile(uid) && activeStaff()
+        && request.resource.data.keys().hasOnly(['draft', 'savedAt'])
+        && request.resource.data.draft.id == draftId && request.resource.data.savedAt == request.time;
     }
     match /matchChat/{matchId}/messages/{messageId} {
       allow read: if campusStudent() || activeSpectator();
@@ -166,16 +231,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     function admitted() { return campusStudent() || activeSpectator(); }
-    match /arenahub/workspace {
-      allow read: if admitted();
-      allow create, update: if activeStaff() && request.resource.data.keys().hasOnly(['games', 'categories', 'featuredHighlights', 'featuredPosts', 'tournaments', 'updatedAt'])
-        && request.resource.data.games is list && request.resource.data.games.size() <= 100
-        && request.resource.data.categories is list && request.resource.data.categories.size() <= 100
-        && request.resource.data.featuredHighlights is list && request.resource.data.featuredHighlights.size() <= 100
-        && request.resource.data.featuredPosts is list && request.resource.data.featuredPosts.size() <= 100
-        && request.resource.data.tournaments is list && request.resource.data.tournaments.size() <= 100
-        && request.resource.data.updatedAt == request.time;
-    }
     function activeStaff() { return isStaff() && campusStudent(); }
     function validNotification(data) {
       return data.keys().hasOnly(['kind', 'title', 'body', 'tab', 'entityId', 'createdAt', 'readAt'])

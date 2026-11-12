@@ -123,7 +123,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
       <section className="arena-panel viewer-bracket-heading">
         <div>
           <p className="viewer-bracket-game">{activeBracket.gameName}</p>
-          <h1>{activeBracket.title || tournament.title}</h1>
+          <h1>{activeBracket.title || tournament.title}{activeBracket.demo && <span className="demo-label" title="Demonstration data, not a real event">DEMO</span>}</h1>
           <p className="studio-muted">{activeBracket.format} · {activeBracket.teamsCount} teams · {currentBracketMatches.length} matches</p>
         </div>
         <button type="button" className="arena-outline" onClick={() => setShowScheduleModal(true)}>

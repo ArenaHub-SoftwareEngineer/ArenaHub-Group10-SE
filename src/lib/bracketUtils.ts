@@ -1,5 +1,4 @@
 import { BracketDraft, Match, Team, MatchFormat, ExtractedTeam } from './types';
-import { INITIAL_TEAMS } from './mockData';
 import { doubleElimination, resolveTournamentGraph, roundRobin } from './tournamentFormats';
 
 export type { ExtractedTeam } from './types';

@@ -52,7 +52,7 @@ export function NotificationBell({ staff = false, onNavigate }: { staff?: boolea
             <button disabled={busy} className="notification-read-toggle" aria-label={`${item.readAt ? 'Mark unread' : 'Mark read'}: ${item.title}`} title={item.readAt ? 'Mark unread' : 'Mark read'} onClick={() => void mark([item.id], !item.readAt)}>{item.readAt ? <Bell size={13} /> : <Check size={13} />}</button>
           </article>;
         })}</>}
-      </div><footer>Only you can view your inbox · Latest 100 updates</footer>
+      </div><footer>Only you can view your inbox · Latest 30 updates</footer>
     </div>
     <Modal open={!!detail} title="Your notification" onClose={() => { if (!busy) setSelected(null); }} busy={busy} className="feature-dialog">
       {detail && <div className="feature-dialog-body notification-detail"><time>{detail.createdAt?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) || 'Just now'} · Philippine time</time><h3>{detail.title}</h3><p>{detail.body}</p>{error && <p role="alert" className="field-error">{error}</p>}<div className="feature-dialog-actions"><button disabled={busy} className="arena-outline" onClick={() => void mark([detail.id], !detail.readAt)}>{detail.readAt ? 'Mark unread' : 'Mark read'}</button><button disabled={busy} className="arena-primary" onClick={() => { setSelected(null); onNavigate(detail.tab, detail.entityId); }}>Open related feature</button></div><p className="feature-privacy"><ShieldCheck size={15} /> This update belongs to your private inbox.</p></div>}

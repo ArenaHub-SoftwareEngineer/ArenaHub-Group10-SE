@@ -7,7 +7,7 @@ import { bracketScheduleLabel } from '../../lib/calendar';
 import { isWatchableLiveMatch } from '../../lib/streamUtils';
 import { ArenaScene } from './ArenaScene';
 interface HomeScreenProps {
-  spotlights?: Array<{ id: string; title: string; meta: string }>;
+  spotlights?: Array<{ id: string; title: string; meta: string; link?: string }>;
   liveMatch?: Match; matches: Match[]; publishedBrackets: BracketDraft[];
   onViewLiveMatch: (m: Match) => void;
   onNavigateTab: (tab: string, params?: Record<string, string>) => void; onSelectPublishedBracket: (bracket: BracketDraft) => void;
@@ -48,7 +48,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ spotlights = [], liveMat
       </div>
     </section>
     <section className="home-bottom-grid"><div className="arena-panel"><div className="section-inline-title"><span><CalendarDays size={16} /> Upcoming matches</span><button className="arena-text-button" onClick={() => onNavigateTab('schedule')}>Schedule <ArrowUpRight size={14} /></button></div>{upcoming.length ? upcoming.map(m => <button className="schedule-row" key={m.id} onClick={() => onViewLiveMatch(m)}><span className="schedule-time">{bracketScheduleLabel(m)}</span><span><strong>{m.team1?.name} <em>vs</em> {m.team2?.name}</strong><small>{m.roundName} · {m.matchFormat}</small></span><ArrowUpRight size={16} /></button>) : <p className="text-sm text-[var(--text-muted)] py-6">No upcoming matches have been scheduled.</p>}</div><div className="arena-panel fairplay-feature"><span className="cute-icon mint"><ShieldCheck size={24} /></span><h2>Fair play</h2><p>Check roster eligibility and submit match evidence. Keep competition fair with organizer review.</p><button className="arena-text-button" onClick={() => onNavigateTab('integrity')}>Explore fair play <ArrowRight size={15} /></button></div></section>
-    {spotlights.length > 0 && <section><div className="home-section-heading"><div><span className="section-overline">COMMUNITY PICKS · SAMPLE CONTENT</span><h2>From the community.</h2></div></div><div className="published-grid">{spotlights.map(item => <article key={item.id} className="arena-panel"><span className="section-overline">FEATURED</span><h3 className="text-sm">{item.title}</h3><p className="mt-2 text-xs text-[var(--text-muted)]">{item.meta}</p></article>)}</div></section>}
+    {spotlights.length > 0 && <section><div className="home-section-heading"><div><span className="section-overline">COMMUNITY PICKS</span><h2>From the community.</h2></div></div><div className="published-grid">{spotlights.map(item => <article key={item.id} className="arena-panel"><span className="section-overline">FEATURED</span><h3 className="text-sm">{item.link ? <a href={item.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{item.title}</a> : item.title}</h3><p className="mt-2 text-xs text-[var(--text-muted)]">{item.meta}</p></article>)}</div></section>}
     <footer className="home-footer"><span>ArenaHub <span>© 2026</span></span><button onClick={() => onNavigateTab('support')}>Need a hand? <ArrowUpRight size={13} /></button></footer>
   </div>;
 };

@@ -45,10 +45,10 @@ export function createFairPlayRouter(env: Record<string, string | undefined>, de
       const profileResponse = await fetcher(`${base}/users/${encodeURIComponent(account.localId)}`, options);
       const profile = await profileResponse.json() as any;
       if (!profileResponse.ok || profile.fields?.status?.stringValue !== 'active') { res.status(403).json({ error: 'This organizer account is not active.' }); return; }
-      const bracketResponse = await fetcher(`${base}/arenahub/brackets`, options);
-      const bracketData = await bracketResponse.json() as any;
-      const brackets = decodeValue(bracketData.fields?.publishedBrackets) || [];
-      const match = brackets.flatMap((b: any) => b.matches || []).find((m: any) => m.id === matchId);
+      // Published tournaments are separate documents; query them instead of one shared bracket document.
+      const bracketResponse = await fetcher(`${base}:runQuery`, { ...options, method: 'POST', headers: { ...options.headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ structuredQuery: { from: [{ collectionId: 'tournaments' }], where: { fieldFilter: { field: { fieldPath: 'status' }, op: 'EQUAL', value: { stringValue: 'published' } } } } }) });
+      const rows = await bracketResponse.json() as any;
+      const match = (Array.isArray(rows) ? rows : []).flatMap((row: any) => decodeValue(row.document?.fields?.matches) || []).find((m: any) => m.id === matchId);
       const validIds = game === 'mlbb' ? ['game-mlbb'] : game === 'dota2' ? ['game-dota2', 'game-dota-2', 'game-dota', 'dota2'] : ['game-codm', 'game-call-of-duty-mobile', 'codm', `game-${game}`, `game-call-of-duty-mobile-${game.slice(5)}`];
       if (!bracketResponse.ok || !match || !validIds.includes(match.gameId) || (game.startsWith('codm') && match.gameMode && match.gameMode !== game.slice(5))) { res.status(400).json({ error: 'Select a published match for this game and mode.' }); return; }
       uid = account.localId;

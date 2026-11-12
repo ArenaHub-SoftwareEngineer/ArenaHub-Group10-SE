@@ -4,7 +4,8 @@ import { firestoreService } from '../../lib/firestore';
 import { useToast } from '../ui/Toast';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
-import { mlbbBanner } from '../../lib/mockData';
+import { DEFAULT_GAMES } from '../../lib/catalogDefaults';
+const DEFAULT_BANNER = DEFAULT_GAMES[0].bannerImage;
 import { RANK_GAMES } from '../../lib/gameRanks';
 import {
   Plus,
@@ -51,7 +52,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
     setFormError('');
     setEditingGameId(null);
     setGameName('');
-    setBannerUrl(mlbbBanner);
+    setBannerUrl(DEFAULT_BANNER);
     setVisibility('Show everywhere');
     setIsModalOpen(true);
   };
@@ -97,7 +98,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
     if (games.some(g => g.id !== editingGameId && g.name.toLowerCase() === gameName.trim().toLowerCase())) {
       setFormError('A game with this name already exists.'); return;
     }
-    const finalBanner = bannerUrl.trim() || mlbbBanner;
+    const finalBanner = bannerUrl.trim() || DEFAULT_BANNER;
     if (!/^https:\/\/[^\s]+$/i.test(finalBanner) && !/^\/(src\/assets\/images|assets)\//.test(finalBanner) && !/^data:image\/(png|jpeg|webp|gif);base64,/.test(finalBanner)) {
       setFormError('Choose a preset, upload an image, or enter an HTTPS image link.'); return;
     }
