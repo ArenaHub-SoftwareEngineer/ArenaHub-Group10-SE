@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "arenahub",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,10 +7,10 @@
     "dev": "vite --port=5173 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
-    "clean": "rm -rf dist server.js",
+    "clean": "node scripts/clean-dist.mjs",
     "lint": "tsc --noEmit",
     "start": "tsx server/index.ts",
-    "test": "tsx --test tests/core.test.ts tests/chat-history.test.ts tests/player-calendar.test.ts tests/game-ranks.test.ts tests/fair-play.test.ts tests/stream.test.ts tests/broadcasts.test.ts tests/standings.test.ts tests/operations.test.ts tests/auth-flow.test.ts tests/institution-config.test.mjs",
+    "test": "tsx --test tests/core.test.ts tests/chat-history.test.ts tests/player-calendar.test.ts tests/game-ranks.test.ts tests/fair-play.test.ts tests/stream.test.ts tests/broadcasts.test.ts tests/standings.test.ts tests/operations.test.ts tests/auth-flow.test.ts tests/institution-config.test.mjs tests/no-emoji.test.ts",
     "test:auth-flow": "node --test tests/auth-flow.integration.test.mjs",
     "test:rules": "node --test tests/firestore.rules.test.mjs tests/operations.rules.test.mjs",
     "test:video-api": "tsx --test tests/fair-play-api.test.ts",
@@ -19,8 +19,11 @@
     "test:stream": "node --test tests/stream.integration.test.mjs",
     "test:storage": "node --test tests/evidence.storage.test.mjs",
     "configure:institution": "node scripts/sync-institution.mjs",
-    "prebuild": "node scripts/sync-institution.mjs",
-    "predev": "node scripts/sync-institution.mjs"
+    "prebuild": "node scripts/clean-dist.mjs && node scripts/sync-institution.mjs",
+    "predev": "node scripts/sync-institution.mjs",
+    "test:emulators": "node tests/run-emulator-suites.mjs",
+    "test:e2e": "playwright test",
+    "test:all": "npm run lint && npm test && npm run test:api && npm run test:video-api && npm run build && npm run test:emulators"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -29,6 +32,7 @@
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^13.0.0",
+    "firebase-admin": "14.5.0",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -37,10 +41,13 @@
     "react-dom": "^19.0.1",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "zod": "4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@firebase/rules-unit-testing": "^6.0.0",
+    "@playwright/test": "1.64.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/qrcode": "^1.5.6",
@@ -48,6 +55,7 @@
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.28.2",
+    "playwright": "1.64.1",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2"
