@@ -49,3 +49,20 @@ If a Firestore emulator is already running on port 8085, `ARENAHUB_EMULATORS=aut
 ## Root cause found for the stale `dist/` chunks
 
 Node 24's recursive `fs.rmSync` returns without error but deletes nothing on Windows when the path contains a non-ASCII character. This project folder's name contains an em dash. Vite's `emptyOutDir` uses the same call, so `dist/` was never emptied. `scripts/clean-dist.mjs` deletes file by file, which works, and runs before every build.
+
+## After Phase 1 (12 Nov 2026, merge `20c291e`)
+
+| Suite | Result |
+|---|---|
+| lint | pass |
+| unit | 65 / 65 (59 + 6 tournament document tests) |
+| api | 1 / 1 |
+| video-api | 1 / 1 (now queries published tournaments) |
+| build | pass, 31 files; no fictional data strings in the bundle |
+| rules | 27 / 27 (19 ported + 8 new for the per-tournament layout) |
+| auth, auth-flow, stream, operations integration | 4 / 4 (stream and operations ported to the new documents) |
+| migration round trip | 1 / 1 |
+| storage | **not run**: same leftover Firestore emulator on port 8085 as in Phase 0 |
+| browser (Playwright) | 9 / 9 passed, 1 skipped by design (the propagation check runs at 1440 px only). An organizer change reached an open bracket viewer in 145 ms. |
+
+Main bundle chunks are unchanged in size (`index` 470 kB, the Firebase chunk 581 kB). Code splitting is Phase 4.
