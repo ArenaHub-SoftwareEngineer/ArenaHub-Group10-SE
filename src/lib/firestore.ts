@@ -1,655 +1,382 @@
-import { hydrateSampleRoster, publicBracket, directoryTeams } from './playerProfiles';
-import { isRetiredGame, gameCatalog } from './gameRanks';
-import { updateBroadcastLinks, validateBroadcastLinks, matchBroadcasts, detectPlatform, streamWatchUrl, type BroadcastLink, type BroadcastPlatform } from './streamUtils';
 /**
- * ArenaHub Firestore Service Layer
- * 
- * Published brackets and account status use Firebase. Sample workspace records
- * persist locally. Evidence reports have a separate transaction-based service.
+ * ArenaHub data facade.
+ *
+ * Components read synchronously from this cache and subscribe for changes. Every shared record
+ * comes from Firestore listeners; localStorage holds only per-device preferences.
+ * Storage layout and cost notes: src/lib/data/tournamentDocs.ts and docs/READ_BUDGET.md.
  */
-
-import {
-  Tournament,
-  Match,
-  College,
-  Team,
-  User,
-  ContentReport,
-  AuditLogItem,
-  GameTitle,
-  ChatMessage,
-  UserRole,
-  UserStatus,
-  BracketDraft
-} from './types';
-
-import {
-  INITIAL_TOURNAMENTS,
-  INITIAL_MATCHES,
-  INITIAL_COLLEGES,
-  INITIAL_TEAMS,
-  INITIAL_USERS,
-  INITIAL_REPORTS,
-  INITIAL_AUDIT_LOGS,
-  INITIAL_GAMES,
-  INITIAL_CHAT_MESSAGES
-} from './mockData';
-import { collection, doc, onSnapshot, runTransaction, updateDoc, addDoc, serverTimestamp, orderBy, query, limit } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, limit, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, isFirebaseConfigured } from './firebase';
+import type { Tournament, Match, College, Team, User, ContentReport, AuditLogItem, GameTitle, UserStatus, BracketDraft, TournamentFormat, MatchFormat } from './types';
 import { seriesWinsNeeded } from './types';
+import { directoryTeams } from './playerProfiles';
+import { isRetiredGame, gameCatalog } from './gameRanks';
+import { updateBroadcastLinks, validateBroadcastLinks, matchBroadcasts, detectPlatform, streamWatchUrl, type BroadcastLink, type BroadcastPlatform } from './streamUtils';
 import type { MatchScheduleUpdate } from './streamSchedule';
 import { validateScore } from './integrityChecks';
-import { publicationGameKey, replacePublishedBracket } from './bracketPublication';
 import { updateMatchAndAdvance } from './bracketUtils';
-import { notificationRecord } from './notificationService';
 import { watchCommunityReports, resolveCommunityReport } from './communityReports';
+import { collegeStandings } from './colleges';
+import { DEFAULT_CATEGORIES, DEFAULT_GAMES } from './catalogDefaults';
+import { fingerprint, toTournamentDoc } from './data/tournamentDocs';
+import {
+  publishTournament, restoreTournament, saveTournament, setTournamentFeatured, unpublishTournament,
+  watchPreviousVersions, watchPublishedTournaments, type LiveTournament,
+} from './data/tournamentStore';
+import {
+  addFeatured, deleteDraft, mutateCatalog, removeFeatured, saveDraft, setFeatured, watchCatalog, watchDrafts, watchFeatured,
+  type Catalog, type FeaturedItem,
+} from './data/workspaceStore';
 
 type Listener = () => void;
+type FeaturedCard = { id: string; title: string; meta: string; link: string; isFeatured: boolean };
 
-function stableJson(value: unknown): string | undefined {
-  return JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
-    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]))
-    : item);
+/** Keys from the old local-storage workspace. Shared records now live in Firestore. */
+const LEGACY_KEYS = ['arenahub_matches', 'arenahub_chat', 'arenahub_tournaments', 'arenahub_categories', 'arenahub_games', 'arenahub_featured_highlights', 'arenahub_featured_posts', 'arenahub_published_brackets', 'arenahub_saved_bracket_draft'];
+const LEGACY_DRAFTS_KEY = 'arenahub_saved_bracket_drafts';
+const STAFF_ROLES = ['admin', 'organizer', 'school-admin', 'moderator'];
+
+const matchContentFingerprint = (bracket: BracketDraft) => fingerprint(toTournamentDoc(bracket, 0).matches);
+
+function tournamentFormat(format: string): TournamentFormat {
+  const value = format.toLowerCase();
+  return value.includes('double') ? 'double-elimination' : value.includes('round') ? 'round-robin' : 'single-elimination';
 }
 
 class FirestoreService {
-  private tournaments: Tournament[] = [...INITIAL_TOURNAMENTS];
-  private matches: Match[] = [...INITIAL_MATCHES];
-  private colleges: College[] = [...INITIAL_COLLEGES];
-  private teams: Team[] = [...INITIAL_TEAMS];
+  private published: BracketDraft[] = [];
+  /** Last state confirmed by the server, per tournament id. */
+  private cloud = new Map<string, { revision: number; fingerprint: string }>();
+  private featuredTournaments = new Set<string>();
+  private previous: BracketDraft[] = [];
+  private drafts: BracketDraft[] = [];
+  private catalog: Catalog | null = null;
+  private featured: FeaturedItem[] = [];
   private users: User[] = [];
   private reports: ContentReport[] = [];
-  private auditLogs: AuditLogItem[] = [...INITIAL_AUDIT_LOGS];
-  private games: GameTitle[] = [...INITIAL_GAMES];
-  private categories: string[] = ['MOBA', 'Tactical FPS', 'Intramurals', 'Freshman Cup', 'Scrims'];
-  private chatMessages: ChatMessage[] = [...INITIAL_CHAT_MESSAGES];
-  private publishedBrackets: BracketDraft[] = [];
-  private savedBracketDraft: BracketDraft | null = null;
-  private savedBracketDrafts: BracketDraft[] = [];
+  private auditLogs: AuditLogItem[] = [];
   private bracketWritePending = false;
-  private previousPublishedBrackets: BracketDraft[] = [];
-  private publicationRevision = 0;
+  private pendingSnapshot: LiveTournament[] | null = null;
   private sharedError = '';
-  private featuredHighlights: Array<{ id: string; title: string; meta: string; isFeatured: boolean }> = [
-    { id: 'h1', title: "Riley's Lord steal vs COE", meta: '0:42 · 2.1k views', isFeatured: false },
-    { id: 'h2', title: "CN Pulse 1v3 clutch on Ascent", meta: '0:31 · 1.4k views', isFeatured: false },
-  ];
-  private featuredPosts: Array<{ id: string; title: string; meta: string; isFeatured: boolean }> = [
-    { id: 'p1', title: 'Upper bracket final is tonight — 11:15 PM', meta: 'by Palaro Committee · 312 reactions', isFeatured: false },
-  ];
-
   private listeners: Listener[] = [];
 
   constructor() {
-    this.loadState();
-    this.replaceLiveBrackets(this.publishedBrackets);
-    if (isFirebaseConfigured) {
-      let stopUsersListener: (() => void) | undefined;
-      onAuthStateChanged(auth, async (user) => {
-        stopUsersListener?.();
-        this.users = [];
-        this.reports = []; this.auditLogs = [];
-        this.listeners.forEach(l => l());
-        if (!user) return;
-        try {
-          const token = await user.getIdTokenResult();
-          if (token.claims.admin === true && auth.currentUser?.uid === user.uid) {
-            stopUsersListener = onSnapshot(collection(db, 'users'), snapshot => {
-              this.users = snapshot.docs.map(d => { const profile = d.data(); return { id: d.id, name: profile.name || 'Campus member', email: profile.email || '', role: profile.role || 'user', spectatorInviteApproved: profile.spectatorInviteApproved === true, status: profile.status || 'active', collegeId: '', collegeName: profile.collegeName || '', avatarInitials: profile.avatarInitials || 'U', joinedDate: profile.joinedAt?.toDate?.().toLocaleDateString() || '—' } as User; });
-              this.listeners.forEach(l => l());
-            }, () => { this.users = []; this.listeners.forEach(l => l()); });
-          }
-        } catch {}
-      });
-    }
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', (event) => {
-        if (event.key && event.key.startsWith('arenahub_')) {
-          this.loadState();
-          this.replaceLiveBrackets(this.publishedBrackets);
-          this.listeners.forEach((l) => l());
+    try { LEGACY_KEYS.forEach(key => localStorage.removeItem(key)); } catch { /* storage unavailable */ }
+    if (!isFirebaseConfigured) return;
+    let stopUsersListener: (() => void) | undefined;
+    onAuthStateChanged(auth, async user => {
+      stopUsersListener?.();
+      this.users = []; this.reports = []; this.auditLogs = []; this.drafts = []; this.previous = [];
+      this.emit();
+      if (!user) return;
+      try {
+        const token = await user.getIdTokenResult();
+        if (token.claims.admin === true && auth.currentUser?.uid === user.uid) {
+          stopUsersListener = onSnapshot(collection(db, 'users'), snapshot => {
+            this.users = snapshot.docs.map(d => { const profile = d.data(); return { id: d.id, name: profile.name || 'Campus member', email: profile.email || '', role: profile.role || 'user', spectatorInviteApproved: profile.spectatorInviteApproved === true, status: profile.status || 'active', collegeId: '', collegeName: profile.collegeName || '', avatarInitials: profile.avatarInitials || 'U', joinedDate: profile.joinedAt?.toDate?.().toLocaleDateString() || '—' } as User; });
+            this.emit();
+          }, () => { this.users = []; this.emit(); });
         }
-      });
-    }
+      } catch { /* claims unavailable */ }
+    });
   }
 
+  // --- Subscriptions ---
+  public subscribe(listener: Listener): () => void {
+    this.listeners.push(listener);
+    return () => { this.listeners = this.listeners.filter(l => l !== listener); };
+  }
+  private emit() { this.listeners.forEach(l => l()); }
+  private fail(message: string) { this.sharedError = message; this.emit(); }
+  public getSharedError() { return this.sharedError; }
+
+  /** Published tournaments for every admitted viewer. */
   public watchLiveBrackets(): () => void {
     if (!isFirebaseConfigured) return () => {};
-    return onSnapshot(doc(db, 'arenahub', 'brackets'), snapshot => {
-      if (this.bracketWritePending) return;
-      if (!snapshot.exists()) { this.replaceLiveBrackets([]); this.previousPublishedBrackets = []; this.publicationRevision = 0; this.notify(); return; }
-      const data = snapshot.data();
-      this.replaceLiveBrackets(Array.isArray(data.publishedBrackets) ? data.publishedBrackets : [], data.savedBracketDraft || null);
-      this.previousPublishedBrackets = Array.isArray(data.previousPublishedBrackets) ? data.previousPublishedBrackets : [];
-      this.publicationRevision = Number(data.publicationRevision) || 0;
-      this.notify();
-    }, error => console.warn('[ArenaHub] Bracket live updates unavailable:', error));
+    return watchPublishedTournaments(items => {
+      // While a write is in flight, keep the newest snapshot and apply it when the write finishes.
+      if (this.bracketWritePending) { this.pendingSnapshot = items; return; }
+      this.applySnapshot(items);
+    }, () => this.fail('Live tournament updates are unavailable. Check your connection and refresh.'));
   }
 
-  public getSharedError() { return this.sharedError; }
+  private applySnapshot(items: LiveTournament[]) {
+    this.published = items.map(item => item.bracket);
+    this.cloud = new Map(items.map(item => [item.bracket.id, { revision: item.revision, fingerprint: matchContentFingerprint(item.bracket) }]));
+    this.featuredTournaments = new Set(items.filter(item => item.featured).map(item => item.bracket.id));
+    this.emit();
+  }
+
+  /** Catalog and spotlight for everyone; reports, audit log, drafts and restore points for staff. */
   public watchSharedWorkspace(staff: boolean): () => void {
+    if (!isFirebaseConfigured) return () => {};
     let active = true;
-    const fail = () => { if (active) { this.sharedError = 'Shared workspace updates are unavailable. Check your connection and database permissions.'; this.listeners.forEach(l => l()); } };
-    const stops = [onSnapshot(doc(db, 'arenahub', 'workspace'), snap => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      this.games = data.games; this.categories = data.categories; this.featuredHighlights = data.featuredHighlights; this.featuredPosts = data.featuredPosts; this.tournaments = data.tournaments;
-      this.sharedError = ''; this.notify();
-    }, fail)];
-    if (staff) stops.push(watchCommunityReports(reports => { this.reports = reports; this.listeners.forEach(l => l()); }, fail));
-    if (staff) stops.push(onSnapshot(query(collection(db, 'auditEvents'), orderBy('createdAt', 'desc'), limit(50)), snap => {
-      this.auditLogs = snap.docs.map(item => ({ id: item.id, actor: item.data().actorId, action: item.data().action, timestamp: item.data().createdAt?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) || 'Just now' }));
-      this.listeners.forEach(l => l());
-    }, fail));
+    const fail = () => { if (active) this.fail('Shared workspace updates are unavailable. Check your connection and database permissions.'); };
+    const stops = [
+      watchCatalog(catalog => { this.catalog = catalog; this.emit(); }, fail),
+      watchFeatured(items => { this.featured = items; this.emit(); }, fail),
+    ];
+    const uid = auth.currentUser?.uid;
+    if (staff) {
+      stops.push(watchCommunityReports(reports => { this.reports = reports; this.emit(); }, fail));
+      stops.push(onSnapshot(query(collection(db, 'auditEvents'), orderBy('createdAt', 'desc'), limit(50)), snap => {
+        this.auditLogs = snap.docs.map(item => ({ id: item.id, actor: item.data().actorId, action: item.data().action, timestamp: item.data().createdAt?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) || 'Just now' }));
+        this.emit();
+      }, fail));
+      stops.push(watchPreviousVersions(items => { this.previous = items; this.emit(); }, fail));
+      if (uid) {
+        stops.push(watchDrafts(uid, drafts => { this.drafts = drafts; this.emit(); }, fail));
+        void this.migrateLocalDrafts(uid);
+      }
+    }
     return () => { active = false; stops.forEach(stop => stop()); };
   }
 
-  private async mutateWorkspace(change: (data: any) => void): Promise<void> {
-    if (!auth.currentUser) throw new Error('Sign in as tournament staff to save shared settings.');
-    const ref = doc(db, 'arenahub', 'workspace');
-    const data = await runTransaction(db, async tx => {
-      const snap = await tx.get(ref);
-      const next = snap.exists() ? snap.data() : { games: INITIAL_GAMES, categories: ['MOBA', 'Tactical FPS', 'Intramurals', 'Freshman Cup', 'Scrims'], featuredHighlights: this.featuredHighlights.map(item => ({ ...item, isFeatured: false })), featuredPosts: this.featuredPosts.map(item => ({ ...item, isFeatured: false })), tournaments: INITIAL_TOURNAMENTS };
-      const clean = JSON.parse(JSON.stringify(next));
-      clean.games = gameCatalog(clean.games, INITIAL_GAMES);
-      change(clean);
-      if (new Blob([JSON.stringify(clean)]).size > 850000) throw new Error('Shared settings are too large. Use an image link or a smaller banner.');
-      tx.set(ref, { ...clean, updatedAt: serverTimestamp() });
-      return clean;
-    });
-    this.games = data.games; this.categories = data.categories; this.featuredHighlights = data.featuredHighlights; this.featuredPosts = data.featuredPosts; this.tournaments = data.tournaments; this.sharedError = ''; this.notify();
-  }
-
-  private loadState() {
+  /** One-time move of drafts saved by the old version of the app from this browser into the organizer's account. */
+  private async migrateLocalDrafts(uid: string) {
+    let local: BracketDraft[] = [];
+    try { local = JSON.parse(localStorage.getItem(LEGACY_DRAFTS_KEY) || '[]'); } catch { return; }
+    if (!Array.isArray(local) || !local.length) { try { localStorage.removeItem(LEGACY_DRAFTS_KEY); } catch {} return; }
     try {
-      const savedMatches = localStorage.getItem('arenahub_matches');
-      if (savedMatches) {
-        this.matches = JSON.parse(savedMatches);
-        this.matches.forEach((m) => {
-          m.team1 = hydrateSampleRoster(m.team1, INITIAL_TEAMS);
-          m.team2 = hydrateSampleRoster(m.team2, INITIAL_TEAMS);
-          if (m.streamUrl && m.streamUrl.includes('wmsu-palaro-2026-stream')) {
-            m.streamUrl = 'https://www.youtube.com/embed/P5E3LDzWTRg?autoplay=1&rel=0&modestbranding=1';
-          }
-        });
-      }
-
-      const savedChat = localStorage.getItem('arenahub_chat');
-      if (savedChat) this.chatMessages = JSON.parse(savedChat);
-      const savedTournaments = localStorage.getItem('arenahub_tournaments');
-      if (savedTournaments) this.tournaments = JSON.parse(savedTournaments);
-
-
-
-
-      const savedCategories = localStorage.getItem('arenahub_categories');
-      if (savedCategories) this.categories = JSON.parse(savedCategories);
-
-      const savedGames = localStorage.getItem('arenahub_games');
-      if (savedGames) this.games = JSON.parse(savedGames);
-      const savedHighlights = localStorage.getItem('arenahub_featured_highlights');
-      if (savedHighlights) this.featuredHighlights = JSON.parse(savedHighlights);
-      const savedPosts = localStorage.getItem('arenahub_featured_posts');
-      if (savedPosts) this.featuredPosts = JSON.parse(savedPosts);
-
-      const savedBrackets = localStorage.getItem('arenahub_published_brackets');
-      if (savedBrackets) this.publishedBrackets = JSON.parse(savedBrackets);
-
-      const savedDraft = localStorage.getItem('arenahub_saved_bracket_draft');
-      this.savedBracketDraft = savedDraft ? JSON.parse(savedDraft) : null;
-      const drafts = JSON.parse(localStorage.getItem('arenahub_saved_bracket_drafts') || '[]');
-      if (Array.isArray(drafts)) this.savedBracketDrafts = drafts;
-    } catch {
-      // storage unavailable
-    }
+      for (const draft of local) await saveDraft(uid, { ...draft, status: 'saved' });
+      localStorage.removeItem(LEGACY_DRAFTS_KEY);
+    } catch { this.fail('Drafts saved in this browser could not be moved to your account yet. They are still on this device.'); }
   }
 
-  private saveState() {
-    try {
-      localStorage.setItem('arenahub_chat', JSON.stringify(this.chatMessages));
-      localStorage.setItem('arenahub_tournaments', JSON.stringify(this.tournaments));
-      localStorage.setItem('arenahub_matches', JSON.stringify(this.matches));
-  
-      localStorage.setItem('arenahub_categories', JSON.stringify(this.categories));
-      localStorage.setItem('arenahub_games', JSON.stringify(this.games));
-      localStorage.setItem('arenahub_featured_highlights', JSON.stringify(this.featuredHighlights));
-      localStorage.setItem('arenahub_featured_posts', JSON.stringify(this.featuredPosts));
-      localStorage.setItem('arenahub_published_brackets', JSON.stringify(this.publishedBrackets));
-      localStorage.setItem('arenahub_saved_bracket_drafts', JSON.stringify(this.getSavedBracketDrafts()));
-      if (this.savedBracketDraft) {
-        localStorage.setItem('arenahub_saved_bracket_draft', JSON.stringify(this.savedBracketDraft));
-      } else {
-        localStorage.removeItem('arenahub_saved_bracket_draft');
-      }
-    } catch {
-      // storage unavailable
-    }
-  }
-
-  public subscribe(listener: Listener): () => void {
-    this.listeners.push(listener);
-    return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
-    };
-  }
-
-  private notify() {
-    this.saveState();
-    this.listeners.forEach((l) => l());
-  }
-
-  private replaceLiveBrackets(brackets: BracketDraft[], oldCloudDraft: BracketDraft | null = null): void {
-    const staleMatches = new Set([
-      ...this.publishedBrackets, this.savedBracketDraft, oldCloudDraft,
-    ].flatMap(bracket => bracket?.matches.map(match => match.id) ?? []));
-    const live = new Map(brackets.flatMap(bracket => bracket.matches).map(match => [match.id, match]));
-    this.matches = [...this.matches.filter(match => !staleMatches.has(match.id) && !live.has(match.id)), ...live.values()];
-    this.publishedBrackets = brackets;
-  }
-
-  private serializeBracketPayload(payload: object) {
-    const serialized = JSON.stringify(payload);
-    if (new Blob([serialized]).size > 950_000) {
-      throw new Error('The bracket and its previous versions exceed the cloud storage limit.');
-    }
-    return JSON.parse(serialized);
-  }
-
-  public async syncBracketsToCloud(): Promise<void> {
-    if (!isFirebaseConfigured || !auth.currentUser) throw new Error('Sign in to sync brackets.');
-    if (this.bracketWritePending) throw new Error('Another bracket update is in progress. Try again.');
-    const ref = doc(db, 'arenahub', 'brackets');
-    const revision = this.publicationRevision;
-    const publishedBrackets = this.publishedBrackets.map(publicBracket);
-    this.bracketWritePending = true;
-    try {
-      await runTransaction(db, async transaction => {
-        const data = (await transaction.get(ref)).data();
-        if ((Number(data?.publicationRevision) || 0) !== revision) {
-          throw new Error('A newer bracket was published. Reload before applying this change.');
-        }
-        const payload = this.serializeBracketPayload({
-          publishedBrackets,
-          previousPublishedBrackets: data?.previousPublishedBrackets ?? [],
-          publicationRevision: revision + 1,
-          savedBracketDraft: null,
-          updatedAt: new Date().toISOString(),
-        });
-        transaction.set(ref, payload, { merge: true });
-        const before = new Map<string, Match>((data?.publishedBrackets || []).flatMap((b: BracketDraft) => b.matches).map((match: Match) => [match.id, match]));
-        for (const match of publishedBrackets.flatMap(b => b.matches)) {
-          const prior = before.get(match.id);
-          if (!prior) continue;
-          const scheduleChanged = prior.scheduledDate !== match.scheduledDate || prior.scheduledTime !== match.scheduledTime;
-          const resultChanged = match.status === 'completed' && (prior.status !== match.status || stableJson(prior.score) !== stableJson(match.score));
-          const started = match.status === 'live' && prior.status !== 'live';
-          if (!scheduleChanged && !resultChanged && !started) continue;
-          transaction.set(doc(collection(db, 'arenaAnnouncements')), notificationRecord(scheduleChanged ? 'schedule' : resultChanged ? 'result' : 'live', scheduleChanged ? 'Match schedule updated' : resultChanged ? 'Match result published' : 'A match is live', `${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'} · ${scheduleChanged ? `${match.scheduledDate}, ${match.scheduledTime}` : resultChanged ? `${match.score.team1Score}–${match.score.team2Score}` : match.roundName}`, scheduleChanged || resultChanged ? 'schedule' : 'current-live', match.id));
-        }
-      });
-      this.publicationRevision = revision + 1;
-    } finally {
-      this.bracketWritePending = false;
-    }
-  }
-
-  // --- Tournaments ---
+  // --- Tournaments (derived from published brackets) ---
   public getTournaments(): Tournament[] {
-    return this.tournaments.filter(t => !isRetiredGame(t));
+    return this.getPublishedBrackets().map(bracket => {
+      const matches = bracket.matches.filter(m => !m.inactive && !m.team1?.isBye && !m.team2?.isBye);
+      const dates = matches.map(m => m.scheduledDate).filter(Boolean);
+      const next = matches.find(m => m.status !== 'completed');
+      const colleges = new Set(matches.flatMap(m => [m.team1?.collegeCode, m.team2?.collegeCode]).filter(Boolean));
+      return {
+        id: bracket.id, title: bracket.title, subtitle: `${bracket.format} · ${bracket.matchFormat}`,
+        gameId: bracket.gameId || '', gameName: bracket.gameName, format: tournamentFormat(bracket.format),
+        matchFormat: (bracket.matchFormat as MatchFormat) || 'Bo3',
+        status: matches.some(m => m.status === 'live') ? 'live' : matches.length && matches.every(m => m.status === 'completed') ? 'completed' : 'upcoming',
+        startDate: dates[0] || '', endDate: dates.at(-1) || '', collegesCount: colleges.size,
+        bannerImage: this.getGames().find(g => g.id === bracket.gameId)?.bannerImage || '',
+        isFeatured: this.featuredTournaments.has(bracket.id), currentStage: next?.roundName || 'Completed',
+      };
+    });
   }
 
   public getTournamentById(id: string): Tournament | undefined {
-    return this.tournaments.find((t) => t.id === id);
+    return this.getTournaments().find(t => t.id === id);
   }
 
   // --- Matches ---
   public getMatches(): Match[] {
-    return this.matches.filter(m => !isRetiredGame(m));
+    return this.getPublishedBrackets().flatMap(b => b.matches).filter(m => !isRetiredGame(m));
   }
 
   public getMatchById(id: string): Match | undefined {
-    return this.matches.find((m) => m.id === id);
+    return this.getMatches().find(m => m.id === id);
   }
 
-  /**
-   * Update match score. If instantAdvance is true, automatically updates winner and next match.
-   * TODO: Wire up Firestore transaction:
-   * await runTransaction(db, async (transaction) => { ... })
-   */
-  public updateMatchScore(
-    matchId: string,
-    team1Score: number,
-    team2Score: number,
-    instantAdvance: boolean = true,
-    newStatus?: Match['status']
-  ): void {
-    const matchIndex = this.matches.findIndex((m) => m.id === matchId);
-    if (matchIndex === -1) return;
+  /** Applies a change to the published bracket that contains the match. Callers then call syncBracketsToCloud(). */
+  private updateBracketOf(matchId: string, change: (matches: Match[], match: Match) => Match[]): Match | undefined {
+    let found: Match | undefined;
+    this.published = this.published.map(bracket => {
+      const match = bracket.matches.find(m => m.id === matchId);
+      if (!match) return bracket;
+      const matches = change(bracket.matches, match);
+      found = matches.find(m => m.id === matchId);
+      return { ...bracket, matches };
+    });
+    return found;
+  }
 
-    const currentMatch = this.matches[matchIndex];
-    validateScore(currentMatch.matchFormat, team1Score, team2Score, newStatus === 'completed');
-    const updatedMatch: Match = {
-      ...currentMatch,
-      score: {
-        ...currentMatch.score,
-        team1Score,
-        team2Score,
-      },
-      status: newStatus || (currentMatch.status === 'completed' ? 'upcoming' : currentMatch.status),
-      winnerId: undefined,
-    };
+  private updateMatch(matchId: string, updater: (match: Match) => Match) {
+    return this.updateBracketOf(matchId, matches => matches.map(m => m.id === matchId ? updater(m) : m));
+  }
 
-    // Calculate winner if finished
-    const targetWins = seriesWinsNeeded(currentMatch.matchFormat);
-    if (team1Score >= targetWins) {
-      updatedMatch.winnerId = updatedMatch.team1?.id;
-      updatedMatch.status = 'completed';
-    } else if (team2Score >= targetWins) {
-      updatedMatch.winnerId = updatedMatch.team2?.id;
-      updatedMatch.status = 'completed';
-    }
-
-    this.matches = instantAdvance
-      ? updateMatchAndAdvance(this.matches, updatedMatch)
-      : this.matches.map((match) => match.id === matchId ? updatedMatch : match);
-
-    // Keep every saved/published copy aligned with the canonical match graph.
-    const currentMatches = new Map(this.matches.map((match) => [match.id, match]));
-    this.publishedBrackets = this.publishedBrackets.map((bracket) => ({
-      ...bracket,
-      matches: bracket.matches.map((match) => currentMatches.get(match.id) || match),
-    }));
-    if (this.savedBracketDraft) {
-      this.savedBracketDraft = {
-        ...this.savedBracketDraft,
-        matches: this.savedBracketDraft.matches.map((match) => currentMatches.get(match.id) || match),
+  public updateMatchScore(matchId: string, team1Score: number, team2Score: number, instantAdvance = true, newStatus?: Match['status']): void {
+    const updated = this.updateBracketOf(matchId, (matches, current) => {
+      validateScore(current.matchFormat, team1Score, team2Score, newStatus === 'completed');
+      const next: Match = {
+        ...current, score: { ...current.score, team1Score, team2Score },
+        status: newStatus || (current.status === 'completed' ? 'upcoming' : current.status), winnerId: undefined,
       };
-    }
-
-    // Add audit log
-    this.addAuditLog('Score updated for match ' + updatedMatch.matchNumber);
-    this.notify();
-  }
-
-  public addMatch(match: Match): void {
-    this.matches.push(match);
-    this.notify();
+      const target = seriesWinsNeeded(current.matchFormat);
+      if (team1Score >= target) { next.winnerId = next.team1?.id; next.status = 'completed'; }
+      else if (team2Score >= target) { next.winnerId = next.team2?.id; next.status = 'completed'; }
+      return instantAdvance ? updateMatchAndAdvance(matches, next) : matches.map(m => m.id === matchId ? next : m);
+    });
+    if (!updated) return;
+    this.addAuditLog('Score updated for match ' + updated.matchNumber);
+    this.emit();
   }
 
   public updateMatchSchedules(updates: MatchScheduleUpdate[]): void {
     const schedules = new Map(updates.map(update => [update.id, update]));
-    const current = new Map(this.matches.map(match => [match.id, match]));
     for (const { id } of updates) {
-      const match = current.get(id);
-      if (!match || match.status === 'live' || match.status === 'completed') {
-        throw new Error('A selected match has started or is no longer available. Review the schedule again.');
-      }
+      const match = this.getMatchById(id);
+      if (!match || match.status === 'live' || match.status === 'completed') throw new Error('A selected match has started or is no longer available. Review the schedule again.');
     }
-
-    const updateMatch = (match: Match) => {
-      const schedule = schedules.get(match.id);
-      return schedule ? { ...match, scheduledDate: schedule.scheduledDate, scheduledTime: schedule.scheduledTime } : match;
-    };
-    this.matches = this.matches.map(updateMatch);
-    this.publishedBrackets = this.publishedBrackets.map(bracket => ({
+    this.published = this.published.map(bracket => ({
       ...bracket,
-      matches: bracket.matches.map(updateMatch),
+      matches: bracket.matches.map(match => {
+        const schedule = schedules.get(match.id);
+        return schedule ? { ...match, scheduledDate: schedule.scheduledDate, scheduledTime: schedule.scheduledTime } : match;
+      }),
     }));
-    if (this.savedBracketDraft) {
-      this.savedBracketDraft = { ...this.savedBracketDraft, matches: this.savedBracketDraft.matches.map(updateMatch) };
-    }
     this.addAuditLog(`Updated schedule for ${updates.length} matches`);
+    this.emit();
   }
 
-  public updateMatchStream(matchId: string, streamUrl: string, setLive: boolean = true, streamTitle?: string): void {
-    const match = this.matches.find((m) => m.id === matchId);
-    if (match) {
-      match.streamUrl = streamUrl;
-      const platform=detectPlatform(streamUrl),watch=streamWatchUrl(streamUrl);
-      if(platform!=='other' && watch)match.broadcastLinks=[...matchBroadcasts(match).filter(link=>link.platform!==platform).map(({platform,url})=>({platform,url})),{platform,url:watch}];
-      if (streamTitle) match.streamTitle = streamTitle;
-      if (setLive) {
-        match.status = 'live';
-      }
-      this.updateBracketMatchCopies(matchId, (bracketMatch) => ({
-        ...bracketMatch,
-        streamUrl,
-        ...(match.broadcastLinks?{broadcastLinks:match.broadcastLinks}:{}),
-        ...(streamTitle ? { streamTitle } : {}),
-        status: setLive ? 'live' : bracketMatch.status,
-      }));
-      this.addAuditLog(`Live stream connected to match ${match.matchNumber}`);
-      this.notify();
-    }
+  public updateMatchStream(matchId: string, streamUrl: string, setLive = true, streamTitle?: string): void {
+    const updated = this.updateMatch(matchId, match => {
+      const next: Match = { ...match, streamUrl };
+      const platform = detectPlatform(streamUrl), watch = streamWatchUrl(streamUrl);
+      if (platform !== 'other' && watch) next.broadcastLinks = [...matchBroadcasts(match).filter(link => link.platform !== platform).map(({ platform, url }) => ({ platform, url })), { platform, url: watch }];
+      if (streamTitle) next.streamTitle = streamTitle;
+      if (setLive) next.status = 'live';
+      return next;
+    });
+    if (!updated) return;
+    this.addAuditLog(`Live stream connected to match ${updated.matchNumber}`);
+    this.emit();
   }
 
   public removeMatchStream(matchId: string): void {
-    const match = this.matches.find((m) => m.id === matchId);
-    if (match) {
-      delete match.streamUrl;
-      delete match.broadcastLinks;
-      this.updateBracketMatchCopies(matchId, (bracketMatch) => {
-        const updated = { ...bracketMatch };
-        delete updated.streamUrl;
-        delete updated.broadcastLinks;
-        return updated;
-      });
-      this.addAuditLog(`Live stream disconnected from match ${match.matchNumber}`);
-      this.notify();
-    }
+    const updated = this.updateMatch(matchId, match => { const next = { ...match }; delete next.streamUrl; delete next.broadcastLinks; return next; });
+    if (!updated) return;
+    this.addAuditLog(`Live stream disconnected from match ${updated.matchNumber}`);
+    this.emit();
   }
 
-  /** Read the latest cloud bracket and change one match; parallel matches remain independent. */
-  public async saveMatchBroadcastLinks(matchId:string,links:BroadcastLink[],primary?:BroadcastPlatform):Promise<void> {
-    if(!isFirebaseConfigured || !auth.currentUser)throw new Error('Sign in as tournament staff to save broadcast links.');
-    validateBroadcastLinks(links,primary);
-    if(this.bracketWritePending)throw new Error('Another bracket update is in progress. Try again.');
-    this.bracketWritePending=true;
-    try {
-      const result=await runTransaction(db,async tx=>{
-        const ref=doc(db,'arenahub','brackets'),snapshot=await tx.get(ref);
-        if(!snapshot.exists())throw new Error('Publish the bracket before saving broadcast links.');
-        const data=snapshot.data();
-        const publishedBrackets=updateBroadcastLinks(data.publishedBrackets || [],matchId,links,primary).map(publicBracket);
-        const payload=this.serializeBracketPayload({...data,publishedBrackets,publicationRevision:(Number(data.publicationRevision)||0)+1,updatedAt:new Date().toISOString()});
-        tx.set(ref,payload);return payload;
-      });
-      this.replaceLiveBrackets(result.publishedBrackets,result.savedBracketDraft || null);
-      this.previousPublishedBrackets=result.previousPublishedBrackets || [];
-      this.publicationRevision=result.publicationRevision;
-      this.notify();
-    } finally {this.bracketWritePending=false;}
+  /** Saves one match's public watch links straight to its tournament. */
+  public async saveMatchBroadcastLinks(matchId: string, links: BroadcastLink[], primary?: BroadcastPlatform): Promise<void> {
+    if (!isFirebaseConfigured || !auth.currentUser) throw new Error('Sign in as tournament staff to save broadcast links.');
+    validateBroadcastLinks(links, primary);
+    const bracket = this.published.find(b => b.matches.some(m => m.id === matchId));
+    const cloud = bracket && this.cloud.get(bracket.id);
+    if (!bracket || !cloud) throw new Error('Publish the bracket before saving broadcast links.');
+    const [updated] = updateBroadcastLinks([bracket], matchId, links, primary);
+    await this.writeTournament(updated, cloud.revision);
   }
 
   public setMatchStatus(matchId: string, status: Match['status']): void {
-    const match = this.matches.find((m) => m.id === matchId);
-    if (match) {
-      match.status = status;
-      this.updateBracketMatchCopies(matchId, (bracketMatch) => ({ ...bracketMatch, status }));
-      this.addAuditLog(`Match ${match.matchNumber} status updated to ${status}`);
-      this.notify();
-    }
+    const updated = this.updateMatch(matchId, match => ({ ...match, status }));
+    if (!updated) return;
+    this.addAuditLog(`Match ${updated.matchNumber} status updated to ${status}`);
+    this.emit();
   }
 
-  private updateBracketMatchCopies(matchId: string, updater: (match: Match) => Match): void {
-    this.publishedBrackets = this.publishedBrackets.map((bracket) => ({
-      ...bracket,
-      matches: bracket.matches.map((match) => match.id === matchId ? updater(match) : match),
-    }));
-    if (this.savedBracketDraft) {
-      this.savedBracketDraft = {
-        ...this.savedBracketDraft,
-        matches: this.savedBracketDraft.matches.map((match) => match.id === matchId ? updater(match) : match),
-      };
-    }
+  public saveMatchPlayerStats(matchId: string, stats: NonNullable<Match['playerStats']>, gameNumber = '1', notes = ''): void {
+    const updated = this.updateMatch(matchId, match => ({ ...match, playerStats: stats, statGames: { ...match.statGames, [gameNumber]: { playerStats: stats, notes } } }));
+    if (!updated) throw new Error('Match not found.');
+    this.addAuditLog(`Player stats saved for ${updated.matchNumber}`);
+    this.emit();
   }
 
-  // --- Saved & Published Brackets ---
-  public getSavedBracketDraft(): BracketDraft | null {
-    return this.getSavedBracketDrafts()[0] ?? null;
-  }
-
-  public getSavedBracketDrafts(): BracketDraft[] {
-    const latest = this.savedBracketDraft;
-    if (!latest || latest.status === 'published') return this.savedBracketDrafts;
-    return [latest, ...this.savedBracketDrafts.filter(draft => draft.id !== latest.id)];
-  }
+  // --- Drafts (per organizer, in Firestore) ---
+  public getSavedBracketDraft(): BracketDraft | null { return this.drafts[0] ?? null; }
+  public getSavedBracketDrafts(): BracketDraft[] { return this.drafts; }
 
   public saveBracketDraft(draft: BracketDraft): BracketDraft {
-    const saved: BracketDraft = {
-      ...draft,
-      status: 'saved',
-      createdAt: draft.createdAt || new Date().toLocaleDateString(),
-    };
-    this.savedBracketDrafts = this.getSavedBracketDrafts().filter(entry => entry.id !== saved.id);
-    this.savedBracketDraft = saved;
-
+    const uid = auth.currentUser?.uid;
+    if (!uid) throw new Error('Sign in as tournament staff to save drafts.');
+    const saved: BracketDraft = { ...draft, status: 'saved', createdAt: draft.createdAt || new Date().toLocaleDateString() };
+    this.drafts = [saved, ...this.drafts.filter(entry => entry.id !== saved.id)];
+    saveDraft(uid, saved).catch(error => this.fail(error instanceof Error ? error.message : 'The draft could not be saved to your account.'));
     this.addAuditLog(`Saved bracket draft: "${saved.title}" (${saved.teamsCount} teams)`);
+    this.emit();
     return saved;
   }
 
   public deleteSavedBracketDraft(id: string): void {
-    const drafts = this.getSavedBracketDrafts();
-    const deleted = drafts.find(draft => draft.id === id);
-    if (!deleted) return;
-    const remaining = drafts.filter(draft => draft.id !== id);
-    const latest = this.savedBracketDraft;
-    const clearLatest = latest?.id === id && latest.status !== 'published';
-    try {
-      localStorage.setItem('arenahub_saved_bracket_drafts', JSON.stringify(remaining));
-      if (clearLatest) localStorage.removeItem('arenahub_saved_bracket_draft');
-    } catch {
-      throw new Error('The draft could not be deleted from browser storage.');
-    }
-    this.savedBracketDrafts = remaining;
-    if (clearLatest) this.savedBracketDraft = null;
+    const uid = auth.currentUser?.uid;
+    const deleted = this.drafts.find(draft => draft.id === id);
+    if (!uid || !deleted) return;
+    this.drafts = this.drafts.filter(draft => draft.id !== id);
+    deleteDraft(uid, id).catch(() => this.fail('The draft could not be deleted. Check your connection and try again.'));
     this.addAuditLog(`Deleted saved bracket draft: "${deleted.title}"`);
+    this.emit();
   }
 
-  public getPublishedBrackets(): BracketDraft[] {
-    return this.publishedBrackets.filter(b => !isRetiredGame(b));
-  }
+  // --- Published brackets ---
+  public getPublishedBrackets(): BracketDraft[] { return this.published.filter(b => !isRetiredGame(b)); }
+  public getPublishedBracketById(id: string): BracketDraft | undefined { return this.published.find(b => b.id === id); }
+  public getPreviousPublishedBrackets(): BracketDraft[] { return this.previous; }
 
-  public getPublishedBracketById(id: string): BracketDraft | undefined {
-    return this.publishedBrackets.find((b) => b.id === id);
-  }
-
-  public getPublishedBracketByGame(gameName: string): BracketDraft | undefined {
-    return this.publishedBrackets.find(
-      (b) => b.gameName.toLowerCase() === gameName.toLowerCase()
-    );
-  }
-
-  public getPreviousPublishedBrackets(): BracketDraft[] {
-    return this.previousPublishedBrackets;
-  }
-
-  public publishBracket(draft: BracketDraft, gameName: string, gameId?: string): Promise<BracketDraft> {
+  public async publishBracket(draft: BracketDraft, gameName: string, gameId?: string): Promise<BracketDraft> {
+    this.requireSignedIn('publish or restore brackets');
     const published: BracketDraft = {
-      ...draft,
-      gameName,
-      ...(gameId ? { gameId } : {}),
+      ...draft, gameName, ...(gameId ? { gameId } : {}),
       matches: gameId && gameId !== 'game-custom'
         ? draft.matches.map(({ gameMode: _mode, ...match }) => ({
-          ...match,
-          gameId,
+          ...match, gameId,
           ...(gameId === 'game-codm-mp' ? { gameMode: 'mp' as const } : {}),
           ...(gameId === 'game-codm-br' ? { gameMode: 'br' as const } : {}),
         }))
         : draft.matches,
-      status: 'published',
-      createdAt: new Date().toLocaleDateString(),
+      status: 'published', createdAt: new Date().toLocaleDateString(),
     };
-    return this.commitPublication(published, gameName);
+    await this.guarded(() => publishTournament(published));
+    this.addAuditLog(`Published bracket "${published.title}" (${gameName})`);
+    return published;
   }
 
-  public restorePublishedBracket(previous: BracketDraft): Promise<BracketDraft> {
-    return this.commitPublication(null, previous.gameName, previous);
+  public async restorePublishedBracket(previous: BracketDraft): Promise<BracketDraft> {
+    this.requireSignedIn('publish or restore brackets');
+    const restored = await this.guarded(() => restoreTournament(previous));
+    this.addAuditLog(`Restored bracket "${restored.title}" (${restored.gameName})`);
+    return restored;
   }
 
-  private async commitPublication(next: BracketDraft | null, gameName: string, expectedPrevious?: BracketDraft): Promise<BracketDraft> {
-    if (!isFirebaseConfigured || !auth.currentUser) throw new Error('Sign in to publish or restore brackets.');
-    if (this.bracketWritePending) throw new Error('Another bracket update is in progress. Try again.');
-    const ref = doc(db, 'arenahub', 'brackets');
-    this.bracketWritePending = true;
-    try {
-      const result = await runTransaction(db, async transaction => {
-        const data = (await transaction.get(ref)).data();
-        const published: BracketDraft[] = Array.isArray(data?.publishedBrackets) ? data.publishedBrackets : [];
-        const previous: BracketDraft[] = Array.isArray(data?.previousPublishedBrackets) ? data.previousPublishedBrackets : [];
-        const restore = expectedPrevious && previous.find(bracket => publicationGameKey(bracket) === publicationGameKey(expectedPrevious));
-        if (expectedPrevious && stableJson(restore) !== stableJson(expectedPrevious)) {
-          throw new Error('The previous version changed. Reopen Bracket Studio before restoring.');
-        }
-        const incoming = next ?? restore;
-        if (!incoming) throw new Error('There is no previous published version for this game.');
-        const versions = replacePublishedBracket(published, previous, publicBracket(incoming));
-        const revision = (Number(data?.publicationRevision) || 0) + 1;
-        const payload = this.serializeBracketPayload({
-          publishedBrackets: versions.published.map(publicBracket),
-          previousPublishedBrackets: versions.previous.map(publicBracket),
-          savedBracketDraft: null,
-          publicationRevision: revision,
-          updatedAt: new Date().toISOString(),
-        });
-        transaction.set(ref, payload, { merge: true });
-        transaction.set(doc(collection(db, 'arenaAnnouncements')), notificationRecord('bracket', next ? 'Tournament bracket published' : 'Tournament bracket restored', `${incoming.gameName} · ${incoming.title}`, 'brackets', incoming.id));
-        return {
-          published: payload.publishedBrackets as BracketDraft[],
-          previous: payload.previousPublishedBrackets as BracketDraft[],
-          revision, incoming, oldCloudDraft: data?.savedBracketDraft || null,
-        };
-      });
-      this.replaceLiveBrackets(result.published, result.oldCloudDraft);
-      this.previousPublishedBrackets = result.previous;
-      this.publicationRevision = result.revision;
-      this.addAuditLog(`${next ? 'Published' : 'Restored'} bracket "${result.incoming.title}" (${gameName})`);
-      return result.incoming;
-    } finally {
-      this.bracketWritePending = false;
-    }
-  }
-
+  /** Removes a bracket locally; syncBracketsToCloud() then unpublishes it. */
   public deletePublishedBracket(bracketId: string): void {
-    const bracket = this.publishedBrackets.find((b) => b.id === bracketId);
-    this.publishedBrackets = this.publishedBrackets.filter((b) => b.id !== bracketId);
-    if (bracket) {
-      this.addAuditLog(`Unpublished bracket "${bracket.title}"`);
+    const bracket = this.published.find(b => b.id === bracketId);
+    this.published = this.published.filter(b => b.id !== bracketId);
+    if (bracket) this.addAuditLog(`Unpublished bracket "${bracket.title}"`);
+    this.emit();
+  }
+
+  /** Writes every locally edited tournament, and unpublishes removed ones, each in its own transaction. */
+  public async syncBracketsToCloud(): Promise<void> {
+    this.requireSignedIn('sync brackets');
+    if (this.bracketWritePending) throw new Error('Another bracket update is in progress. Try again.');
+    const changed = this.published.filter(b => { const cloud = this.cloud.get(b.id); return cloud && cloud.fingerprint !== matchContentFingerprint(b); });
+    const removed = [...this.cloud.entries()].filter(([id]) => !this.published.some(b => b.id === id));
+    await this.guarded(async () => {
+      for (const bracket of changed) await this.writeTournament(bracket, this.cloud.get(bracket.id)!.revision, false);
+      for (const [id, { revision }] of removed) { await unpublishTournament(id, revision); this.cloud.delete(id); }
+    });
+  }
+
+  private async writeTournament(bracket: BracketDraft, revision: number, guard = true) {
+    const write = async () => {
+      const next = await saveTournament(bracket, revision);
+      this.cloud.set(bracket.id, { revision: next, fingerprint: matchContentFingerprint(bracket) });
+    };
+    if (guard) await this.guarded(write); else await write();
+  }
+
+  private async guarded<T>(work: () => Promise<T>): Promise<T> {
+    if (this.bracketWritePending) throw new Error('Another bracket update is in progress. Try again.');
+    this.bracketWritePending = true;
+    try { return await work(); } finally {
+      this.bracketWritePending = false;
+      const pending = this.pendingSnapshot;
+      this.pendingSnapshot = null;
+      if (pending) this.applySnapshot(pending);
     }
-    this.notify();
   }
 
-  // --- Colleges & Teams ---
-  public getColleges(): College[] {
-    return this.colleges;
+  private requireSignedIn(action: string) {
+    if (!isFirebaseConfigured || !auth.currentUser) throw new Error(`Sign in to ${action}.`);
   }
 
-  public getCollegeById(id: string): College | undefined {
-    return this.colleges.find((c) => c.id === id);
-  }
-
-  public getTeams(): Team[] {
-    return directoryTeams(this.teams,this.getPublishedBrackets());
-  }
-
-  public getTeamsByGame(gameId: string): Team[] {
-    return this.getTeams().filter((t) => t.gameId === gameId);
-  }
+  // --- Colleges and teams (computed from published records) ---
+  public getColleges(): College[] { return collegeStandings(this.getPublishedBrackets()); }
+  public getTeams(): Team[] { return directoryTeams([], this.getPublishedBrackets()); }
 
   // --- Users ---
-  public getUsers(): User[] {
-    return this.users;
-  }
-
-  public updateUserRole(userId: string, role: UserRole): void {
-    const user = this.users.find((u) => u.id === userId);
-    if (user) {
-      user.role = role;
-      this.addAuditLog(`Role of ${user.name} changed to ${role}`);
-      this.notify();
-    }
-  }
+  public getUsers(): User[] { return this.users; }
 
   public async updateUserStatus(userId: string, status: UserStatus, durationText?: string): Promise<void> {
     if (!auth.currentUser) throw new Error('Sign in as an administrator.');
@@ -657,172 +384,96 @@ class FirestoreService {
     const token = await auth.currentUser.getIdTokenResult();
     if (token.claims.admin !== true) throw new Error('Only a project administrator can change account status.');
     await updateDoc(doc(db, 'users', userId), { status });
-    const user = this.users.find((u) => u.id === userId);
+    const user = this.users.find(u => u.id === userId);
     if (user) {
       user.status = status;
-      if (durationText) {
-        user.suspendedUntil = durationText;
-      } else {
-        user.suspendedUntil = undefined;
-      }
+      user.suspendedUntil = durationText || undefined;
       this.addAuditLog(`${user.name} marked as ${status}`);
-      this.notify();
+      this.emit();
     }
   }
 
-  // --- Reports & Moderation ---
-  public getReports(): ContentReport[] {
-    return this.reports;
-  }
-
+  // --- Reports ---
+  public getReports(): ContentReport[] { return this.reports; }
   public async resolveReport(reportId: string, action: 'remove' | 'remove_and_ban' | 'dismiss'): Promise<void> {
-    if (this.reports.some(report => report.id === reportId && report.shared)) { await resolveCommunityReport(reportId, action); return; }
-    const rep = this.reports.find((r) => r.id === reportId);
-    if (rep) {
-      if (action === 'remove_and_ban') {
-        const source = this.chatMessages.find(m => m.id === rep.sourceMessageId);
-        if (!source) throw new Error('This sample report has no registered account attached. Use Remove or Dismiss.');
-        await this.updateUserStatus(source.userId, 'banned');
-      }
-      rep.status = 'resolved';
-      if (action !== 'dismiss' && rep.sourceMessageId) {
-        this.chatMessages = this.chatMessages.map(m => m.id === rep.sourceMessageId ? { ...m, isMuted: true } : m);
-      }
-      if (action === 'remove_and_ban') {
-        const offendingUser = this.users.find((u) => u.id === this.chatMessages.find(m => m.id === rep.sourceMessageId)?.userId);
-        if (offendingUser) {
-          offendingUser.status = 'banned';
-        }
-        this.addAuditLog(`Report ${rep.id} resolved: content removed & ${rep.postedBy} banned`);
-      } else if (action === 'remove') {
-        this.addAuditLog(`Report ${rep.id} resolved: content removed`);
-      } else {
-        this.addAuditLog(`Report ${rep.id} dismissed`);
-      }
-      this.notify();
-    }
+    await resolveCommunityReport(reportId, action);
   }
 
-  // --- Games & Categories ---
+  // --- Games and categories ---
+  private catalogOrDefaults(): Catalog { return this.catalog ?? { games: DEFAULT_GAMES, categories: DEFAULT_CATEGORIES }; }
+
   public getGames(): GameTitle[] {
-    return gameCatalog(this.games, INITIAL_GAMES);
+    const teamCounts = new Map<string, number>();
+    for (const team of this.getTeams()) teamCounts.set(team.gameId, (teamCounts.get(team.gameId) || 0) + 1);
+    return gameCatalog(this.catalogOrDefaults().games, DEFAULT_GAMES).map(game => ({ ...game, registeredTeams: teamCounts.get(game.id) || 0 }));
+  }
+
+  private async changeCatalog(change: (catalog: Catalog) => void) {
+    this.requireSignedIn('save shared settings');
+    this.catalog = await mutateCatalog(this.catalogOrDefaults(), change);
+    this.emit();
   }
 
   public async addGame(game: GameTitle): Promise<void> {
-    await this.mutateWorkspace(data => { if (data.games.some((g: GameTitle) => g.id === game.id || g.name.toLowerCase() === game.name.toLowerCase())) throw new Error('This game already exists.'); data.games.push(game); });
+    await this.changeCatalog(c => { if (c.games.some(g => g.id === game.id || g.name.toLowerCase() === game.name.toLowerCase())) throw new Error('This game already exists.'); c.games.push({ ...game, registeredTeams: 0 }); });
     this.addAuditLog(`Added new game title: ${game.name}`);
-    this.notify();
   }
 
   public async removeGame(gameId: string): Promise<void> {
-    const game = this.getGames().find((g) => g.id === gameId);
-    await this.mutateWorkspace(data => { data.games = data.games.filter((g: GameTitle) => g.id !== gameId); });
-    if (game) {
-      this.addAuditLog(`Removed game title: ${game.name}`);
-    }
-    this.notify();
+    const game = this.getGames().find(g => g.id === gameId);
+    await this.changeCatalog(c => { c.games = c.games.filter(g => g.id !== gameId); });
+    if (game) this.addAuditLog(`Removed game title: ${game.name}`);
   }
 
   public async updateGame(updatedGame: GameTitle): Promise<void> {
-    await this.mutateWorkspace(data => { data.games = data.games.map((g: GameTitle) => g.id === updatedGame.id ? updatedGame : g); });
-    this.notify();
+    await this.changeCatalog(c => { c.games = c.games.map(g => g.id === updatedGame.id ? { ...updatedGame, registeredTeams: 0 } : g); });
   }
 
-  public getCategories(): string[] {
-    return this.categories;
-  }
-
-  public async addCategory(cat: string): Promise<void> {
-    await this.mutateWorkspace(data => { if (!data.categories.includes(cat.trim())) data.categories.push(cat.trim()); });
-  }
-
-  public async removeCategory(cat: string): Promise<void> {
-    await this.mutateWorkspace(data => { data.categories = data.categories.filter((c: string) => c !== cat); });
-  }
+  public getCategories(): string[] { return this.catalogOrDefaults().categories; }
+  public async addCategory(cat: string): Promise<void> { await this.changeCatalog(c => { if (!c.categories.includes(cat.trim())) c.categories.push(cat.trim()); }); }
+  public async removeCategory(cat: string): Promise<void> { await this.changeCatalog(c => { c.categories = c.categories.filter(x => x !== cat); }); }
 
   // --- Featured ---
-  public getFeaturedHighlights() {
-    return this.featuredHighlights;
+  private featuredCards(kind: FeaturedItem['kind']): FeaturedCard[] {
+    return this.featured.filter(item => item.kind === kind).map(item => ({
+      id: item.id, title: item.title, link: item.link, isFeatured: item.isFeatured,
+      meta: `by ${item.author}${item.createdAt ? ` · ${new Date(item.createdAt).toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' })}` : ''}`,
+    }));
   }
+  public getFeaturedHighlights(): FeaturedCard[] { return this.featuredCards('highlight'); }
+  public getFeaturedPosts(): FeaturedCard[] { return this.featuredCards('post'); }
 
-  public getFeaturedPosts() {
-    return this.featuredPosts;
+  public async addFeaturedItem(kind: FeaturedItem['kind'], input: { title: string; link: string; author: string }) {
+    this.requireSignedIn('add spotlight items');
+    await addFeatured(kind, input);
+    this.addAuditLog(`Added ${kind}: ${input.title.trim()}`);
   }
-
+  public async removeFeaturedItem(id: string) {
+    await removeFeatured(id);
+    this.addAuditLog(`Removed spotlight item ${id}`);
+  }
   public async toggleFeatureTournament(id: string): Promise<void> {
-    await this.mutateWorkspace(data => { const t = data.tournaments.find((item: Tournament) => item.id === id); if (t) t.isFeatured = !t.isFeatured; });
+    await setTournamentFeatured(id, !this.featuredTournaments.has(id));
     this.addAuditLog(`Updated tournament spotlight: ${id}`);
   }
-
   public async toggleFeatureHighlight(id: string): Promise<void> {
-    await this.mutateWorkspace(data => { const h = data.featuredHighlights.find((item: any) => item.id === id); if (h) h.isFeatured = !h.isFeatured; });
+    const item = this.featured.find(f => f.id === id);
+    if (item) await setFeatured(id, !item.isFeatured);
     this.addAuditLog(`Updated highlight spotlight: ${id}`);
   }
+  public async toggleFeaturePost(id: string): Promise<void> { await this.toggleFeatureHighlight(id); }
 
-  public async toggleFeaturePost(id: string): Promise<void> {
-    await this.mutateWorkspace(data => { const p = data.featuredPosts.find((item: any) => item.id === id); if (p) p.isFeatured = !p.isFeatured; });
-    this.addAuditLog(`Updated post spotlight: ${id}`);
-  }
+  // --- Audit log ---
+  public getAuditLogs(): AuditLogItem[] { return this.auditLogs; }
 
-  // --- Chat Messages ---
-  public getChatMessages(matchId: string): ChatMessage[] {
-    return this.chatMessages.filter((m) => m.matchId === matchId && !m.isMuted);
-  }
-
-  public reportChatMessage(messageId: string, reporter: string): void {
-    const message = this.chatMessages.find(item => item.id === messageId);
-    if (!message) throw new Error('Message not found.');
-    const existing = this.reports.find(report => report.sourceMessageId === messageId && report.status === 'open');
-    if (existing) return;
-    this.reports.unshift({ id: `report-${crypto.randomUUID()}`, type: 'HARASSMENT', contentType: 'Chat message', contentSnippet: message.text, reportedBy: reporter, postedBy: message.userName, timeAgo: 'Just now', flagCount: 1, status: 'open', sourceMessageId: messageId });
-    this.notify();
-  }
-
-  public saveMatchPlayerStats(matchId: string, stats: NonNullable<Match['playerStats']>, gameNumber = '1', notes = ''): void {
-    const match = this.matches.find(m => m.id === matchId);
-    if (!match) throw new Error('Match not found.');
-    match.playerStats = stats;
-    match.statGames = { ...match.statGames, [gameNumber]: { playerStats: stats, notes } };
-    this.updateBracketMatchCopies(matchId, m => ({ ...m, playerStats: stats, statGames: match.statGames }));
-    this.addAuditLog(`Player stats saved for ${match.matchNumber}`);
-    this.notify();
-  }
-
-  public sendChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): void {
-    const text = msg.text.trim();
-    if (!text || text.length > 500) throw new Error('Messages must contain 1–500 characters.');
-    const last = this.chatMessages.filter(m => m.userId === msg.userId).at(-1);
-    if (last?.sentAt && Date.now() - last.sentAt < 3000) throw new Error('Wait a moment before sending another message.');
-    const newMsg: ChatMessage = {
-      sentAt: Date.now(),
-      ...msg,
-      text,
-      id: `chat-${crypto.randomUUID()}`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-    this.chatMessages.push(newMsg);
-    this.notify();
-  }
-
-  // --- Audit Logs ---
-  public getAuditLogs(): AuditLogItem[] {
-    return this.auditLogs;
-  }
-
-  public addAuditLog(actionText: string, actor: string = auth.currentUser?.displayName || auth.currentUser?.email || 'Local organizer'): void {
-    this.auditLogs.unshift({
-      id: `audit-${Date.now()}`,
-      actor,
-      action: actionText,
-      timestamp: 'Just now',
-    });
-    if (this.auditLogs.length > 20) this.auditLogs.pop();
-    this.notify();
+  public addAuditLog(actionText: string, actor: string = auth.currentUser?.displayName || auth.currentUser?.email || 'Organizer'): void {
+    this.auditLogs = [{ id: `audit-${Date.now()}`, actor, action: actionText, timestamp: 'Just now' }, ...this.auditLogs].slice(0, 50);
+    this.emit();
     const user = auth.currentUser;
     if (user) void user.getIdTokenResult().then(token => {
-      if (token.claims.admin !== true && !['admin', 'organizer', 'school-admin', 'moderator'].includes(String(token.claims.role))) return;
+      if (token.claims.admin !== true && !STAFF_ROLES.includes(String(token.claims.role))) return;
       return addDoc(collection(db, 'auditEvents'), { actorId: user.uid, action: actionText.slice(0, 1500), createdAt: serverTimestamp() });
-    }).catch(() => { this.sharedError = 'The change completed, but its shared activity entry could not be saved.'; this.listeners.forEach(l => l()); });
+    }).catch(() => this.fail('The change completed, but its shared activity entry could not be saved.'));
   }
 }
 
