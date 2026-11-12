@@ -192,20 +192,20 @@ class AIService {
           const matchesList = (b.matches || []).slice(0, 10).map(m => {
             const t1 = m.team1?.name || 'TBD';
             const t2 = m.team2?.name || 'TBD';
-            const statusLabel = m.status === 'live' ? '🔴 LIVE' : m.status === 'completed' ? 'Final' : 'Upcoming';
+            const statusLabel = m.status === 'live' ? 'LIVE' : m.status === 'completed' ? 'Final' : 'Upcoming';
             const scoreLabel = `${m.score?.team1Score ?? 0}–${m.score?.team2Score ?? 0}`;
             const timeInfo = m.scheduledTime ? ` · ${m.scheduledTime}` : '';
             return `  • [${m.roundName}] ${m.matchNumber}: ${t1} vs ${t2} (${scoreLabel}) · ${statusLabel}${timeInfo}`;
           }).join('\n');
 
-          return `🏆 **${b.title}** (${b.gameName})\n` +
+          return `**${b.title}** (${b.gameName})\n` +
                  `• **Format**: ${b.format} (${b.matchFormat}) · ${b.teamsCount} teams\n` +
                  `• **Enrolled Teams**: ${teamNames || 'Roster enrolled'}\n` +
                  `• **Matchups & Bracket Schedule**:\n${matchesList || '  (Schedule will appear when matches commence)'}`;
         });
 
         return answer(`Here are the published brackets currently active in ArenaHub:\n\n` + sections.join('\n\n') +
-          `\n\n💡 *Tip: Organizers can publish or edit brackets in real time via the Admin Bracket Studio.*`);
+          `\n\n*Tip: Organizers can publish or edit brackets in real time via the Admin Bracket Studio.*`);
       }
 
       if (gameNameFilter) {
@@ -222,14 +222,14 @@ class AIService {
       const parts: string[] = [];
 
       if (liveMatches.length > 0) {
-        parts.push(`🔴 **LIVE NOW ON STAGE:**`);
+        parts.push(`**LIVE NOW ON STAGE:**`);
         liveMatches.forEach(m => {
           parts.push(`• **${m.matchNumber} (${m.roundName})**: ${m.team1?.name || 'TBD'} vs ${m.team2?.name || 'TBD'} · Score: ${m.score.team1Score}–${m.score.team2Score}${m.streamTitle ? ` [${m.streamTitle}]` : ''}`);
         });
       }
 
       if (upcomingMatches.length > 0) {
-        parts.push(`\n⏳ **UPCOMING MATCHES:**`);
+        parts.push(`\n**UPCOMING MATCHES:**`);
         upcomingMatches.slice(0, 6).forEach(m => {
           const time = m.scheduledTime ? `${m.scheduledDate || 'Today'} ${m.scheduledTime}` : 'Schedule TBA';
           parts.push(`• **${m.matchNumber} (${m.roundName})**: ${m.team1?.name || 'TBD'} vs ${m.team2?.name || 'TBD'} · ${time}`);
@@ -252,7 +252,7 @@ class AIService {
       if (matchedTeams.length > 0) {
         const text = matchedTeams.slice(0, 4).map(t => {
           const players = t.players.map(p => `${p.ign} (${p.role || 'Member'})`).join(', ');
-          return `🛡️ **${t.name}** [${t.collegeCode}] — Seed #${t.seed}\n• Roster: ${players}\n• Win Rate: ${(t.winRate * 100).toFixed(0)}% (Record: ${t.record})`;
+          return `**${t.name}** [${t.collegeCode}] — Seed #${t.seed}\n• Roster: ${players}\n• Win Rate: ${(t.winRate * 100).toFixed(0)}% (Record: ${t.record})`;
         }).join('\n\n');
         return answer(`Here are the matching team rosters from our tournament database:\n\n${text}`);
       }
@@ -260,14 +260,14 @@ class AIService {
       // If general team question, summarize colleges and top teams
       const colleges = firestoreService.getColleges();
       const summary = colleges.map(c => `• **${c.code}** (${c.name}): ${c.teamsCount} rosters registered · ${c.stats.wins}W - ${c.stats.losses}L`).join('\n');
-      return answer(`Here are the participating colleges and teams in ArenaHub:\n\n${summary}\n\n💡 *Select **Teams** in the sidebar to view full player cards and career highs.*`);
+      return answer(`Here are the participating colleges and teams in ArenaHub:\n\n${summary}\n\n*Select **Teams** in the sidebar to view full player cards and career highs.*`);
     }
 
     // Standings
     if (/standing|leads|leader|winning|rank|points/.test(q)) {
       const colleges = [...firestoreService.getColleges()].sort((a,b) => b.stats.wins - a.stats.wins);
       const rows = colleges.map((c, i) => `${i + 1}. **${c.code}** (${c.name}): ${c.stats.wins} Wins, ${c.stats.losses} Losses [${c.stats.status || 'Active'}]`).join('\n');
-      return answer(`🏆 **Current Campus Standings (WMSU Palaro):**\n\n${rows}`);
+      return answer(`**Current Campus Standings (WMSU Palaro):**\n\n${rows}`);
     }
 
     return answer('Welcome to ArenaHub! I am your real-time tournament intelligence assistant.\n\n' +

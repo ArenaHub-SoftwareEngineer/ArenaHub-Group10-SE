@@ -4,7 +4,7 @@ import { Modal } from '../ui/Modal';
 import { ArenaScene } from '../spectator/ArenaScene';
 import { pendingSpectatorInvite } from '../../lib/campusAccess';
 import { AuthScreen } from './AuthScreen';
-import { KeyRound, QrCode } from '../ui/Icons';
+import { ArrowUpRight, KeyRound, QrCode } from '../ui/Icons';
 
 /** The welcome page is public; application modules mount only after authentication. */
 export function AuthEntry() {
@@ -56,7 +56,7 @@ export function AuthEntry() {
             >
               <KeyRound className="w-4 h-4" />
               <span>Sign in to ArenaHub</span>
-              <span aria-hidden="true">↗</span>
+              <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
             </button>
 
             <button

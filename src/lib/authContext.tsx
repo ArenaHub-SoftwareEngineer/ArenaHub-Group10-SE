@@ -139,7 +139,6 @@ export interface AHUser {
   avatarInitials: string;
   emailVerified: boolean;
   joinedAt: unknown;
-  eventPassCode?: string;
   isDomainVerified?: boolean;
   spectatorInviteApproved?: boolean;
 }
