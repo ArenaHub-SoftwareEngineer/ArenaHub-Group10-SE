@@ -47,7 +47,10 @@ function demoBracket(gameId: string, gameName: string, format: string, matchForm
     matches = updateMatchAndAdvance(matches, { ...first, score: { team1Score: wins, team2Score: wins - 1 }, status: 'completed', winnerId: first.team1!.id });
   }
   const live = playable()[0];
-  if (live) matches = matches.map(m => m.id === live.id ? { ...m, status: 'live', score: { team1Score: 1, team2Score: 0 }, streamTitle: `${m.team1!.name} vs ${m.team2!.name}` } : m);
+  if (live) matches = matches.map(m => m.id === live.id ? { ...m, status: 'live', score: { team1Score: 1, team2Score: 0 }, streamTitle: `${m.team1!.name} vs ${m.team2!.name}`,
+    // The MLBB demo match carries a public sample broadcast so the watch page can be shown; the others stay
+    // live without a broadcast, which is how Match center shows 'Starting soon'.
+    ...(gameId === 'game-mlbb' ? { streamUrl: 'https://www.youtube.com/live/m4zQpYzzM0g' } : {}) } : m);
   return { ...draft, gameId, gameName, matches, status: 'published', demo: true };
 }
 

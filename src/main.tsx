@@ -9,6 +9,8 @@ import './interactions.css';
 // Design system last: it is the single source of truth for tokens, type and motion (see the file header).
 import './design.css';
 import './shell.css';
+import './illustrations.css';
+import './watch.css';
 
 try { document.documentElement.dataset.motion = localStorage.getItem('arenahub_reduced_motion') === 'true' ? 'reduced' : 'full'; document.documentElement.dataset.density = localStorage.getItem('arenahub_compact_layout') === 'true' ? 'compact' : 'comfortable'; } catch {}
 

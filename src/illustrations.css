@@ -1,0 +1,37 @@
+/* ArenaHub illustrations (components/ui/Illustrations.tsx). Colours follow the theme tokens. */
+.ah-illo { width: 100%; max-width: 240px; height: auto; display: block; overflow: visible; }
+.ah-illo-shadow { fill: var(--text-primary); opacity: .06; }
+.ah-illo-frame { fill: var(--surface); stroke: var(--border-strong); stroke-width: 2; }
+.ah-illo-screen { fill: var(--surface-elevated); }
+.ah-illo-screen-line { fill: var(--brand-soft); stroke: var(--brand-ink); stroke-width: 2; }
+.ah-illo-play { fill: var(--brand); }
+.ah-illo-dot { fill: #e53935; }
+.ah-illo-cup { fill: var(--brand); }
+.ah-illo-cup-line { stroke: var(--brand-ink); stroke-width: 3; stroke-linecap: round; }
+.ah-illo-waves path { stroke: var(--brand); stroke-width: 3; opacity: 0; animation: ah-wave 2.4s var(--ease) infinite; }
+.ah-illo-waves path:nth-child(3n+2) { animation-delay: .3s; }
+.ah-illo-waves path:nth-child(3n) { animation-delay: .6s; }
+.ah-illo-sparkles path { fill: var(--warning); transform-box: fill-box; transform-origin: center; animation: ah-twinkle 2.2s var(--ease) infinite; }
+.ah-illo-sparkles path:nth-child(2) { animation-delay: .5s; }
+.ah-illo-sparkles path:nth-child(3) { animation-delay: 1s; }
+.ah-illo-float { animation: ah-float 4s ease-in-out infinite; }
+.ah-illo-left { animation: ah-nudge-right 2.6s ease-in-out infinite; }
+.ah-illo-right { animation: ah-nudge-left 2.6s ease-in-out infinite; }
+.ah-illo-vs { font: 700 22px var(--font-arena); fill: var(--text-primary); }
+.ah-illo-hand { transform-box: view-box; transform-origin: 172px 112px; animation: ah-tick 6s steps(12) infinite; }
+@keyframes ah-wave { 0% { opacity: 0; } 30% { opacity: .9; } 100% { opacity: 0; } }
+@keyframes ah-twinkle { 0%, 100% { transform: scale(.6); opacity: .4; } 50% { transform: scale(1.1); opacity: 1; } }
+@keyframes ah-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes ah-nudge-right { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(4px); } }
+@keyframes ah-nudge-left { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-4px); } }
+@keyframes ah-tick { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ah-illo * { animation: none !important; } .ah-illo-waves path { opacity: .7; } }
+html[data-motion=reduced] .ah-illo * { animation: none !important; }
+html[data-motion=reduced] .ah-illo-waves path { opacity: .7; }
+
+/* Empty states: illustration, a short line of text, and one action */
+.ah-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 40px 16px; }
+.ah-empty .ah-illo { max-width: 200px; margin-bottom: 8px; }
+.ah-empty h3 { font-size: 16px; font-weight: 600; }
+.ah-empty p { color: var(--text-secondary); max-width: 44ch; }
+.ah-empty .arena-outline, .ah-empty .arena-primary { margin-top: 8px; }

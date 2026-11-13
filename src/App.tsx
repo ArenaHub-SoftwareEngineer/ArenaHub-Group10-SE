@@ -25,6 +25,7 @@ import { SpectatorLayout } from './components/spectator/SpectatorLayout';
 import { HomeScreen } from './components/spectator/HomeScreen';
 const LiveMatchView = lazy(() => import('./components/spectator/LiveMatchView').then(m => ({ default: m.LiveMatchView })));
 import { CurrentLiveView } from './components/spectator/CurrentLiveView';
+import { upNext, watchGames } from './lib/watchCards';
 import { ChooseTournamentView } from './components/spectator/ChooseTournamentView';
 import { BracketsView } from './components/spectator/BracketsView';
 const TeamsView = lazy(() => import('./components/spectator/TeamsView').then(m => ({ default: m.TeamsView })));
@@ -305,6 +306,9 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               key={activeMatch.id}
               match={activeMatch}
               gameName={activeMatchBracket?.gameName}
+              gameImage={watchGames(publishedBrackets).find(game => game.cards.some(card => card.match.id === activeMatch.id))?.image}
+              upNext={upNext(publishedBrackets, activeMatch.id)}
+              onOpenCard={card => card.state === 'live' ? setSpectatorTab('live', { match: card.match.id, game: card.gameId }) : setSpectatorTab('current-live', { game: card.gameId })}
               readOnly={publicMode}
               currentUser={currentUser}
               onBack={openMatchCenter}
