@@ -11,6 +11,7 @@ import './design.css';
 import './shell.css';
 import './illustrations.css';
 import './watch.css';
+import './desk.css';
 
 try { document.documentElement.dataset.motion = localStorage.getItem('arenahub_reduced_motion') === 'true' ? 'reduced' : 'full'; document.documentElement.dataset.density = localStorage.getItem('arenahub_compact_layout') === 'true' ? 'compact' : 'comfortable'; } catch {}
 

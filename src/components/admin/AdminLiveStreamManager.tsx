@@ -19,7 +19,8 @@ import { publicationGameKey } from '../../lib/bracketPublication';
 import { manilaToday, scheduleDate, timeOrder } from '../../lib/calendar';
 import { BroadcastSetupGuide } from '../common/BroadcastSetupGuide';
 import { BroadcastDestinationsDialog } from './BroadcastDestinationsDialog';
-import { PlatformLogo } from '../ui/PlatformLogo';
+import { BroadcastPlayer } from '../common/BroadcastPlayer';
+import { BroadcastIllustration } from '../ui/Illustrations';
 import { Req } from '../ui/Req';
 import {
   Video,
@@ -396,356 +397,149 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
     }
   }
 
+  // Queue order: live first, then paused, then upcoming by schedule, then the rest.
+  const statusRank = (m: Match) => m.status === 'live' ? 0 : m.status === 'pre-match' ? 1 : m.status === 'upcoming' ? 2 : 3;
+  const queue = [...gameMatches].filter(m => m.team1 && m.team2).sort((a, b) => statusRank(a) - statusRank(b)
+    || (scheduleDate(a.scheduledDate || '') ?? '9999').localeCompare(scheduleDate(b.scheduledDate || '') ?? '9999') || timeOrder(a.scheduledTime || '') - timeOrder(b.scheduledTime || ''));
+  const totalLive = availableMatches.filter(m => m.status === 'live').length;
+  const onAir = (m: Match) => m.status === 'live' ? (m.streamUrl ? 'On air' : 'Live · no broadcast') : m.status === 'pre-match' ? 'Paused' : m.status === 'completed' ? 'Ended' : 'Off air';
+  const pill = (m: Match) => m.status === 'live' ? (m.streamUrl ? 'is-live' : 'is-warn') : m.status === 'pre-match' ? 'is-paused' : 'is-off';
+  const guide = PLATFORM_GUIDE[selectedGuide];
+
   return (
-    <div className="space-y-6">
-      <header className="dashboard-page-heading">
-        <h1>Broadcast desk</h1>
-        <p>Manage simultaneous matches and the platforms carrying each broadcast.</p>
+    <div className="desk">
+      <header className="desk-head">
+        <div>
+          <h1>Broadcast desk</h1>
+          <p className={`watch-live-summary${totalLive ? ' is-live' : ''}`}><i aria-hidden="true" />{totalLive ? `${totalLive} ${totalLive === 1 ? 'match' : 'matches'} live across all games` : 'Nothing live right now'}</p>
+        </div>
+        <div className="desk-head-actions">
+          <button type="button" className="arena-outline" aria-haspopup="dialog" onClick={() => setSetupOpen(true)}><Radio size={16} />Setup guide</button>
+          {selectedMatch && <button type="button" className="arena-primary" aria-haspopup="dialog" onClick={() => setDestinationsOpen(true)}><Link2 size={16} />Match platforms</button>}
+        </div>
       </header>
-      <section className="broadcast-desk-tools"><div><h2>One match. Multiple destinations.</h2><p>Keep each match’s watch links together. Run independent feeds for matches playing at the same time.</p></div><div className="broadcast-desk-actions"><button type="button" className="arena-outline" aria-haspopup="dialog" onClick={()=>setSetupOpen(true)}><Radio size={15}/>Broadcast setup</button>{selectedMatch && <button type="button" className="arena-primary" aria-haspopup="dialog" onClick={()=>setDestinationsOpen(true)}><Link2 size={15}/>Match platforms</button>}</div></section>
-      <BroadcastSetupGuide open={setupOpen} onClose={()=>setSetupOpen(false)}/>
-      {selectedMatch && <BroadcastDestinationsDialog key={selectedMatch.id} open={destinationsOpen} match={selectedMatch} onClose={()=>setDestinationsOpen(false)} onSaved={()=>showToast('Watch links saved for this match. Its status is unchanged.','success')}/>}
+      <BroadcastSetupGuide open={setupOpen} onClose={() => setSetupOpen(false)} />
+      {selectedMatch && <BroadcastDestinationsDialog key={selectedMatch.id} open={destinationsOpen} match={selectedMatch} onClose={() => setDestinationsOpen(false)} onSaved={() => showToast('Watch links saved for this match. Its status is unchanged.', 'success')} />}
 
-      <section aria-label="Choose a game" className="stream-game-grid">
-        {STREAM_GAMES.map(game => {
-          const brackets = publishedBrackets.filter(bracket => bracketGame(bracket)?.id === game.id);
-          const bracketIds = new Set(brackets.flatMap(bracket => bracket.matches.map(match => match.id)));
-          const matches = availableMatches.filter(match => bracketIds.has(match.id) || (!publishedIds.has(match.id) && matchesStreamGame(match, game)));
-          const liveCount = matches.filter(match => match.status === 'live').length;
-          const next = nextScheduledMatch(matches);
-          return (
-            <button type="button" key={game.id} className="stream-game-card" aria-pressed={activeGame?.id === game.id}
-              onClick={() => handleSelectScope(brackets[0]?.id ?? game.id, game.id)}>
-              <img src={game.image} alt="" />
-              <span className="stream-game-card-body">
-                <strong>{game.title}</strong>
-                <span className="studio-muted">{liveCount ? `${liveCount} live · ` : ''}{matches.length} {matches.length === 1 ? 'match' : 'matches'}</span>
-                <span className="stream-schedule"><Calendar size={15} /> {next ? `Next: ${matchSchedule(next)}` : 'No upcoming time set'}</span>
-              </span>
-            </button>
-          );
-        })}
-      </section>
-
-      <section className="arena-panel stream-bracket-panel">
-        <header className="stream-bracket-header">
-          <div>
-            <h2><Trophy size={18} /> {activeGameTitle}</h2>
-            <p className="studio-muted">Select a match to manage its broadcast. Times follow the event schedule.</p>
-          </div>
-          {gameMatches.length > 0 && <a className="arena-outline" href="#stream-match-schedule" onClick={event => {
-            event.preventDefault();
-            document.getElementById('stream-match-schedule')?.scrollIntoView({ block: 'start' });
-          }}><Calendar size={16} /> Edit schedule</a>}
-          {(gameBrackets.length > 0 || publishedBrackets.some(bracket => !bracketGame(bracket))) && (
-            <label className="stream-bracket-picker">Bracket
-              <select value={activeScope} onChange={event => handleSelectScope(event.target.value)}>
-                {activeGame && <option value={activeGame.id}>Other {activeGame.title} matches</option>}
-                {gameBrackets.map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.title}</option>)}
-                {publishedBrackets.filter(bracket => !bracketGame(bracket)).map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.title}</option>)}
-              </select>
-            </label>
-          )}
-        </header>
-
-        {roundBuckets.length > 0 ? (
-          <div className="stream-connected-board studio-board dashboard-media">
-            <TournamentBracketCanvas
-              key={activeScope}
-              rounds={roundBuckets}
-              broadcast={{ selectedMatchId: activeMatchId, schedule: matchSchedule }}
-              onSelectMatch={match => { setMatchToSelect(match); setRawUrl(''); setUrlError(null); }}
-            />
-          </div>
-        ) : (
-          <p className="p-6 studio-muted">No matches to broadcast for {activeGameTitle}. Published matches will appear here.</p>
+      <div className="desk-filters">
+        <div className="ah-chips" role="toolbar" aria-label="Choose a game">
+          {STREAM_GAMES.map(game => {
+            const brackets = publishedBrackets.filter(bracket => bracketGame(bracket)?.id === game.id);
+            const bracketIds = new Set(brackets.flatMap(bracket => bracket.matches.map(match => match.id)));
+            const matches = availableMatches.filter(match => bracketIds.has(match.id) || (!publishedIds.has(match.id) && matchesStreamGame(match, game)));
+            const live = matches.filter(match => match.status === 'live').length;
+            return <button type="button" key={game.id} className="ah-chip" aria-pressed={activeGame?.id === game.id} onClick={() => handleSelectScope(brackets[0]?.id ?? game.id, game.id)}
+              title={`${matches.length} ${matches.length === 1 ? 'match' : 'matches'}`}>
+              <img src={game.image} alt="" className="ah-chip-img" />{game.title}{live > 0 && <span className="desk-chip-live">{live}</span>}
+            </button>;
+          })}
+        </div>
+        {(gameBrackets.length > 0 || publishedBrackets.some(bracket => !bracketGame(bracket))) && (
+          <label className="desk-bracket-picker"><span className="sr-only">Bracket</span>
+            <select value={activeScope} onChange={event => handleSelectScope(event.target.value)} aria-label="Bracket">
+              {activeGame && <option value={activeGame.id}>Other {activeGame.title} matches</option>}
+              {gameBrackets.map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.title}</option>)}
+              {publishedBrackets.filter(bracket => !bracketGame(bracket)).map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.title}</option>)}
+            </select>
+          </label>
         )}
-      </section>
+      </div>
 
-      <StreamScheduleEditor key={activeScope} matches={gameMatches} publishedIds={publishedIds} />
-
-      {/* ── Step 2: Stream Connect Panel ── */}
-      {selectedMatch && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Guide */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) overflow-hidden">
-            <div className="px-4 py-3 border-b border-(--border) flex items-center justify-between">
-              <span className="text-xs font-bold text-(--text-muted)">Step-by-step guide</span>
-              <span className="text-xs text-(--text-muted)">How to get URL</span>
+      <div className="desk-grid">
+        <section className="desk-main" aria-label="Control room">
+          {selectedMatch ? <>
+            <div className="desk-preview">
+              {activeStream ? <BroadcastPlayer match={selectedMatch} /> : <div className="desk-preview-empty stage">
+                <BroadcastIllustration />
+                <strong>No broadcast connected</strong>
+                <p>Paste the match's YouTube Live or Facebook Live link below, then press Connect.</p>
+              </div>}
             </div>
 
-            {/* Platform Selector */}
-            <div className="flex border-b border-(--border)">
-              {(['youtube', 'facebook', 'other'] as Platform[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setSelectedGuide(p)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
-                    selectedGuide === p
-                      ? 'text-(--text-primary) border-b-2'
-                      : 'text-(--text-muted) hover:text-(--text-secondary)'
-                  }`}
-                  style={selectedGuide === p ? { borderBottomColor: platformColor(p) } : {}}
-                >
-                  <span style={{ color: selectedGuide === p ? platformColor(p) : undefined }}>
-                    {PLATFORM_GUIDE[p].icon}
-                  </span>
-                  <span>{p === 'other' ? 'Other' : PLATFORM_GUIDE[p].title}</span>
-                </button>
-              ))}
+            <div className="desk-titlebar">
+              <div className="desk-title">
+                <span className={`desk-pill ${pill(selectedMatch)}`}><i aria-hidden="true" />{onAir(selectedMatch)}</span>
+                <h2>{selectedMatch.team1?.name || 'TBD'} <span>vs</span> {selectedMatch.team2?.name || 'TBD'}</h2>
+                <p>{[selectedMatch.matchNumber, selectedMatch.roundName, selectedMatch.matchFormat, matchSchedule(selectedMatch)].filter(Boolean).join(' · ')}</p>
+              </div>
+              <div className="desk-score" aria-label={`Score ${selectedMatch.score.team1Score} to ${selectedMatch.score.team2Score}`}>{selectedMatch.score.team1Score}<span>–</span>{selectedMatch.score.team2Score}</div>
             </div>
 
-            {/* Steps */}
-            <div className="p-4 space-y-3">
-              {PLATFORM_GUIDE[selectedGuide].steps.map((step, i) => (
-                <div key={i} className="flex gap-3 text-xs">
-                  <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
-                    style={{
-                      backgroundColor: `${platformColor(selectedGuide)}18`,
-                      border: `1px solid ${platformColor(selectedGuide)}40`,
-                      color: 'var(--text-primary)',
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                  <p className="text-(--text-secondary) leading-relaxed">{step}</p>
+            <div className="desk-controls" role="toolbar" aria-label="Broadcast controls">
+              {selectedMatch.status !== 'live' && selectedMatch.status !== 'completed' && selectedMatch.status !== 'pre-match' &&
+                <button type="button" className="desk-control is-live" onClick={() => void handleConfirmSelectMatch(selectedMatch, true)}><i className="desk-dot" aria-hidden="true" />Go live</button>}
+              {selectedMatch.status === 'live' && activeStream && <button type="button" className="desk-control is-warn" onClick={() => setPauseConfirmStep(1)} title="Needs two confirmations"><PauseCircle size={18} />Pause</button>}
+              {selectedMatch.status === 'pre-match' && <button type="button" className="desk-control is-ok" onClick={handleResumeLive}><Play size={18} />Resume</button>}
+              {selectedMatch.status === 'live' && activeStream && <button type="button" className="desk-control is-danger" onClick={() => setEndConfirmStep(1)} title="Needs two confirmations"><XCircle size={18} />End broadcast</button>}
+              {activeStream && <>
+                <button type="button" className="desk-control" onClick={() => setShowPreviewModal(true)}><Eye size={18} />Preview</button>
+                <button type="button" className="desk-control" onClick={() => void handleCopyEmbed(activeStream)}><Copy size={18} />Copy embed link</button>
+                <button type="button" className="desk-control is-subtle-danger" onClick={() => setStreamToDisconnect(activeStream)}><Link2 size={18} />Disconnect</button>
+              </>}
+              <button type="button" className="desk-control" onClick={() => setMatchToSelect(selectedMatch)}><Info size={18} />Match details</button>
+            </div>
+
+            <section className="desk-card" aria-labelledby="desk-source-title">
+              <header><h3 id="desk-source-title">Stream source</h3>
+                {activeStream && <span className="desk-linked"><CheckCircle2 size={16} />Linked {activeStream.connectedAt}</span>}
+              </header>
+              <label className="desk-field"><span className="field-label">Broadcast title</span>
+                <input id="broadcast-title" type="text" value={streamTitle} onChange={e => setStreamTitle(e.target.value)} placeholder="e.g. MPL Philippines, MLBB playoffs day 1" />
+              </label>
+              <div className="desk-field">
+                <label htmlFor="broadcast-url"><Req>Live link (YouTube Live or Facebook Live)</Req></label>
+                <div className="desk-url-row">
+                  <span className="desk-url-input"><Link2 size={16} aria-hidden="true" />
+                    <input id="broadcast-url" aria-required="true" aria-invalid={!!urlError} aria-describedby={urlError ? 'broadcast-url-error' : 'broadcast-url-help'} type="url" value={rawUrl}
+                      onChange={e => { setRawUrl(e.target.value); setUrlError(null); }} onKeyDown={e => e.key === 'Enter' && handleConnect()}
+                      placeholder="https://www.youtube.com/live/…" /></span>
+                  <button type="button" onClick={handleConnect} className="arena-primary"><Zap size={16} />Connect</button>
                 </div>
-              ))}
-            </div>
+                {urlError ? <p id="broadcast-url-error" role="alert" className="desk-error"><XCircle size={14} />{urlError}</p>
+                  : <p id="broadcast-url-help" className="field-hint">Viewers watch it inside ArenaHub. <button type="button" className="desk-link" onClick={() => {
+                    setStreamTitle('MPL Philippines — Mobile Legends: Bang Bang Live');
+                    setRawUrl('https://www.youtube.com/live/m4zQpYzzM0g?si=pNrl1Ja7Ot13PwFu'); setUrlError(null);
+                  }}>Use the sample MPL stream</button></p>}
+              </div>
+              <details className="desk-howto">
+                <summary><Info size={16} />How to get the live link</summary>
+                <div className="desk-howto-tabs" role="tablist" aria-label="Platform">
+                  {(['youtube', 'facebook', 'other'] as Platform[]).map(p => <button key={p} type="button" role="tab" aria-selected={selectedGuide === p} onClick={() => setSelectedGuide(p)}>{p === 'other' ? 'Other' : PLATFORM_GUIDE[p].title}</button>)}
+                </div>
+                <ol>{guide.steps.map((step, i) => <li key={i}>{step}</li>)}</ol>
+                {selectedGuide === 'facebook' && <p className="desk-note">The Facebook video must be set to <strong>Public</strong>, or it will not play inside ArenaHub.</p>}
+              </details>
+            </section>
+          </> : <div className="ah-empty desk-empty"><BroadcastIllustration /><h3>Choose a match</h3><p>Pick a match from the queue to connect its broadcast and run it from here.</p></div>}
+        </section>
 
-            {selectedGuide === 'facebook' && (
-              <div className="mx-4 mb-4 p-3 rounded-[8px] bg-[var(--info-soft)] border border-[var(--info-border)] text-sm text-[var(--info)] leading-relaxed">
-                <strong className="text-[var(--info)]"><PlatformLogo platform="facebook" size={15}/> Facebook Live notice:</strong> The video must be set to{' '}
-                <strong>Public</strong> on Facebook. Private or group-restricted streams will not render in the iframe embed.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right: URL Input & Active Embed Preview */}
-        <div className="lg:col-span-8 space-y-4">
-          {/* Target Match Banner */}
-          <div className="stream-selected-match">
-            <div>
-              <div className="text-xs font-bold text-(--brand-ink)">
-                Selected match
-              </div>
-              <div className="text-sm font-bold text-(--text-primary) mt-0.5">
-                {selectedMatch?.matchNumber} — {selectedMatch?.team1?.collegeCode || 'TBD'} vs{' '}
-                {selectedMatch?.team2?.collegeCode || 'TBD'}
-              </div>
-              <div className="text-xs text-(--text-muted)">
-                {selectedMatch.roundName} · {selectedMatch.matchFormat} · {matchSchedule(selectedMatch)}
-              </div>
-            </div>
-
-            <button
-              onClick={() => setMatchToSelect(selectedMatch)}
-              className="arena-outline"
-            >
-              Match settings
+        <aside className="desk-queue" aria-labelledby="desk-queue-title">
+          <header><h2 id="desk-queue-title">Match queue</h2><span>{queue.length}</span></header>
+          {queue.length ? <ul>{queue.map(m => <li key={m.id}>
+            <button type="button" aria-pressed={m.id === activeMatchId} className={`desk-queue-item${m.id === activeMatchId ? ' is-selected' : ''}`}
+              onClick={() => { setSelectedMatchId(m.id); setRawUrl(''); setUrlError(null); }}>
+              <span className={`desk-queue-dot ${pill(m)}`} aria-hidden="true" />
+              <span className="desk-queue-text"><strong>{m.team1?.collegeCode || m.team1?.name || 'TBD'} vs {m.team2?.collegeCode || m.team2?.name || 'TBD'}</strong>
+                <small>{[m.matchNumber, m.roundName].filter(Boolean).join(' · ')}</small>
+                <small>{m.status === 'live' || m.status === 'pre-match' ? onAir(m) : matchSchedule(m)}</small></span>
+              {(m.status === 'live' || m.status === 'completed') && <span className="desk-queue-score">{m.score.team1Score}–{m.score.team2Score}</span>}
             </button>
-          </div>
+          </li>)}</ul> : <p className="field-hint desk-queue-empty">No matches for {activeGameTitle} yet. Published matches appear here.</p>}
+        </aside>
+      </div>
 
-          {/* Broadcast Configuration: Title & Stream URL Input */}
-          <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-5 space-y-4">
-            <div className="space-y-3">
-              {/* Title Input */}
-              <div>
-                <label htmlFor="broadcast-title" className="text-xs font-bold text-(--text-muted) block mb-1.5">
-                  Broadcast Title / Stream Name
-                </label>
-                <input
-                  id="broadcast-title"
-                  type="text"
-                  value={streamTitle}
-                  onChange={(e) => setStreamTitle(e.target.value)}
-                  placeholder="e.g. MPL Philippines — Mobile Legends: Bang Bang Live"
-                  className="w-full bg-(--surface) border border-(--border) focus:border-(--brand)/60 rounded-[4px] px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) outline-none transition-colors"
-                />
-              </div>
+      <details className="desk-section" open={!selectedMatch}>
+        <summary><Trophy size={18} /><span><strong>{activeGameTitle}</strong><small>Bracket view. Click a match to select it or mark it live.</small></span></summary>
+        {roundBuckets.length > 0 ? <div className="stream-connected-board studio-board dashboard-media">
+          <TournamentBracketCanvas key={activeScope} rounds={roundBuckets} broadcast={{ selectedMatchId: activeMatchId, schedule: matchSchedule }}
+            onSelectMatch={match => { setMatchToSelect(match); setRawUrl(''); setUrlError(null); }} />
+        </div> : <p className="field-hint">No matches to broadcast for {activeGameTitle}. Published matches will appear here.</p>}
+      </details>
 
-              {/* URL Input & Sample Button */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="broadcast-url" className="text-xs font-bold text-(--text-muted)">
-                    Stream URL (YouTube Live / Facebook Live)<Req />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStreamTitle('MPL Philippines — Mobile Legends: Bang Bang Live');
-                      setRawUrl('https://www.youtube.com/live/m4zQpYzzM0g?si=pNrl1Ja7Ot13PwFu');
-                      setUrlError(null);
-                    }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-(--brand-ink) hover:text-(--brand-ink) transition-colors cursor-pointer"
-                    title="Paste sample MPL live stream for MLBB"
-                  >
-                    <Radio className="w-3 h-3 animate-pulse" />
-                    <span>Paste Sample MPL Live (MLBB)</span>
-                  </button>
-                </div>
-
-                <div className="broadcast-connect-row flex gap-2">
-                  <div className="flex-1 relative min-w-0">
-                    <Link2 className="w-4 h-4 text-(--text-muted) absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      id="broadcast-url" aria-required="true" aria-invalid={!!urlError} aria-describedby={urlError ? "broadcast-url-error" : undefined}
-                      type="url"
-                      value={rawUrl}
-                      onChange={(e) => {
-                        setRawUrl(e.target.value);
-                        setUrlError(null);
-                      }}
-                      onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
-                      placeholder="https://www.youtube.com/live/m4zQpYzzM0g?si=... or https://youtube.com/watch?v=…"
-                      className={`w-full bg-(--surface) border rounded-[4px] pl-9 pr-3 py-2.5 text-sm text-(--text-primary) placeholder-(--text-muted) outline-none transition-colors ${
-                        urlError ? 'border-(--danger)/60' : 'border-(--border) focus:border-(--brand)/60'
-                      }`}
-                    />
-                  </div>
-                  <button
-                    onClick={handleConnect}
-                    className="arena-primary shrink-0"
-                  >
-                    <Zap className="w-4 h-4" />
-                    Connect broadcast
-                  </button>
-                </div>
-
-                {urlError && (
-                  <div id="broadcast-url-error" role="alert" className="flex items-center gap-2 mt-2 text-xs text-(--danger)">
-                    <XCircle className="w-3.5 h-3.5 shrink-0" />
-                    {urlError}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Active Stream Preview or Empty Placeholder */}
-          {activeStream ? (
-            <div className="rounded-[4px] bg-(--surface-soft) border border-(--success)/30 overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-(--border) flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-(--success) animate-pulse" />
-                  <span className="text-sm font-heading font-bold text-(--success)">
-                    Broadcast linked — {activeStream.title || selectedMatch?.streamTitle || selectedMatch?.matchNumber}
-                  </span>
-                  <span
-                    className="px-2 py-0.5 rounded-[3px] text-xs font-bold"
-                    style={{
-                      backgroundColor: `${platformColor(activeStream.platform)}15`,
-                      color: platformColor(activeStream.platform),
-                      border: `1px solid ${platformColor(activeStream.platform)}35`,
-                    }}
-                  >
-                    {activeStream.platform}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {/* Live Stream Status Control Buttons with 2-Step Confirmation */}
-                  {selectedMatch?.status === 'live' ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setPauseConfirmStep(1)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--warning-soft) hover:bg-(--warning-soft) border border-(--brand) text-xs font-semibold text-(--warning) transition-colors cursor-pointer"
-                        title="Pause the live stream for timeouts/breaks (Requires 2 confirmations)"
-                      >
-                        <PauseCircle className="w-3.5 h-3.5 text-(--warning)" />
-                        <span>Pause Live</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setEndConfirmStep(1)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--danger-soft) hover:bg-(--danger-soft) border border-(--danger) text-xs font-semibold text-(--danger) transition-colors cursor-pointer"
-                        title="Conclude and finalize live broadcast (Requires 2 confirmations)"
-                      >
-                        <XCircle className="w-3.5 h-3.5 text-(--danger)" />
-                        <span>End Live</span>
-                      </button>
-                    </>
-                  ) : selectedMatch?.status === 'pre-match' ? (
-                    <button
-                      type="button"
-                      onClick={handleResumeLive}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--success-soft) hover:bg-(--success-soft) border border-(--success-border) text-xs font-semibold text-(--success) transition-colors cursor-pointer"
-                      title="Resume live broadcast transmission"
-                    >
-                      <Play className="w-3.5 h-3.5 text-(--success)" />
-                      <span>Resume Live</span>
-                    </button>
-                  ) : null}
-
-                  <button
-                    onClick={() => setShowPreviewModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-primary) transition-colors cursor-pointer"
-                  >
-                    <Play className="w-3 h-3 text-(--brand-ink)" />
-                    Preview embed
-                  </button>
-                  <button
-                    onClick={() => setStreamToDisconnect(activeStream)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--danger-border) text-xs font-semibold text-(--danger) transition-colors cursor-pointer"
-                  >
-                    <XCircle className="w-3 h-3" />
-                    Disconnect
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-5 space-y-4">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                  {[
-                    { label: 'Status', value: 'LINK SAVED', color: '#3DD68C' },
-                    { label: 'Platform', value: activeStream.platform.toUpperCase(), color: platformColor(activeStream.platform) },
-                    { label: 'Connected at', value: activeStream.connectedAt, color: '#FFFFFF' },
-                    { label: 'Spectator View', value: 'PLAYER LINKED', color: '#ff6600' },
-                  ].map((s) => (
-                    <div key={s.label} className="bg-(--surface) border border-(--border) rounded-[4px] p-2.5">
-                      <div className="text-xs text-(--text-muted)">{s.label}</div>
-                      <div className="tabular-nums font-bold text-xs mt-0.5" style={{ color: s.color }}>
-                        {s.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-(--text-muted)">Embed URL</span>
-                    <button
-                      onClick={() => handleCopyEmbed(activeStream)}
-                      className="flex items-center gap-1 text-xs text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer"
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy
-                    </button>
-                  </div>
-                  <div className="bg-(--bg-base) border border-(--border) rounded-[4px] px-3 py-2 tabular-nums text-xs text-(--text-muted) break-all">
-                    {activeStream.embedUrl}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-[4px] bg-(--surface) border border-(--border) border-dashed p-8 flex flex-col items-center justify-center gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-(--surface-soft) border border-(--border) flex items-center justify-center">
-                <Radio className="w-6 h-6 text-(--text-muted)" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-(--text-muted)">No active stream for {selectedMatch?.matchNumber}</div>
-                <div className="text-xs text-(--text-muted) mt-1">
-                  Paste the YouTube Live or Facebook Live URL above and click "Connect broadcast".
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>}
+      <details className="desk-section" id="stream-match-schedule">
+        <summary><Calendar size={18} /><span><strong>Schedule</strong><small>Set match times from a CSV or plain instructions.</small></span></summary>
+        <StreamScheduleEditor key={activeScope} matches={gameMatches} publishedIds={publishedIds} />
+      </details>
 
       {/* ── POPUP MODAL: Match Click in Bracket (Requested by User) ── */}
       {matchToSelect && (
