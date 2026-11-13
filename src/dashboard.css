@@ -95,18 +95,7 @@
 .dashboard-overview table :is(td:nth-child(1), td:nth-child(4)) { white-space: nowrap; }
 
 /* Keep white lettering and a dark backdrop where text sits on game artwork. */
-.app-shell .dashboard-media {
-  --surface: #242424;
-  --surface-soft: #1c1c1c;
-  --surface-elevated: #333;
-  --border: #474747;
-  --text-primary: #f8f6f4;
-  --text-secondary: #ded9d4;
-  --text-muted: #bdb6af;
-  --brand-ink: #ffab73;
-  color-scheme: dark;
-  color: var(--text-primary);
-}
+/* .dashboard-media is a dark stage: its tokens live in design.css. */
 
 /* Older dashboard components still use literal utility colors. Translate the
    shared neutral and status shades here while leaving artwork colors intact. */
@@ -657,13 +646,6 @@
   .spectator-shell .arena-chat { padding-bottom: 0; }
 }
 
-.spectator-shell main:has(.arena-chat),
-.app-shell main:has(.arena-chat) {
-  height: calc(100vh - 4rem);
-  height: calc(100dvh - 4rem);
-  max-height: calc(100dvh - 4rem);
-  overflow: hidden;
-}
 
 .live-chat-panel { display: flex; flex-direction: column; min-width: 0; padding: 0; height: clamp(360px, 70vh, 700px); overflow: hidden; }
 .live-chat-panel header, .live-chat-form, .live-chat-readonly { padding: 14px 16px; background: var(--surface-soft); }

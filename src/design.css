@@ -46,7 +46,7 @@
 }
 
 /* ---------- Dark stages: brackets, stream player, 3D arena ---------- */
-.stage, .stage-board, .broadcast-player-shell, .monitor3d, .multi-video-grid {
+.stage, .stage-board, .dashboard-media, .arena-hero, .broadcast-player-shell, .monitor3d, .multi-video-grid {
   color-scheme: dark;
   --bg-base: #0f1114;
   --surface: #17191d;
@@ -71,7 +71,7 @@
   --shadow-2: 0 4px 16px rgba(0, 0, 0, .45);
   color: var(--text-primary);
 }
-.stage, .stage-board { background-color: var(--surface); }
+.stage, .stage-board, .dashboard-media { background-color: var(--surface); }
 
 /* ---------- Typography ---------- */
 .app-shell, .auth-entry, .auth-entry-dialog, .auth-status-screen, .stage {
