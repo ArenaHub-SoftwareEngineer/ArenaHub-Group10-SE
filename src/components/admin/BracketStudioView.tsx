@@ -12,6 +12,7 @@ import { publicationGameKey } from '../../lib/bracketPublication';
 import { scheduleDate, timeOrder } from '../../lib/calendar';
 import { SuccessDialog } from '../ui/SuccessDialog';
 import { useToast } from '../ui/Toast';
+import { Req } from '../ui/Req';
 import {
   BracketGenerationFeedbackModal,
   GenerationFeedbackData,
@@ -383,7 +384,7 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-[11px] font-semibold text-[#888888] uppercase tracking-wider">
-                Number of Teams
+                Number of Teams<Req />
               </label>
               <span className="text-[10px] text-[#3DD68C] font-semibold">
                 Choose any whole number from 2 to {MAX_BRACKET_TEAMS}
@@ -392,6 +393,7 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
 
             <input
               id="manual-team-count"
+              aria-required="true"
               type="number"
               min={2}
               max={formatTeamLimit}
@@ -547,8 +549,8 @@ const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
             </div>
 
             {codmSelected && <div className="module-form mt-3">
-              <label>CODM mode
-                <select value={codmMode?.id || ''} onChange={event => setSelectedGameId(event.target.value || 'codm')}>
+              <label><Req>CODM mode</Req>
+                <select aria-required="true" value={codmMode?.id || ''} onChange={event => setSelectedGameId(event.target.value || 'codm')}>
                   <option value="">Choose a mode</option>
                   {CODM_MODES.map(mode => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
                 </select>
@@ -573,6 +575,7 @@ const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
                 <input
                   type="text"
                   aria-label="Custom game title"
+                  aria-required="true"
                   maxLength={100}
                   value={customGameName}
                   onChange={(e) => setCustomGameName(e.target.value)}
@@ -1740,11 +1743,12 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
             <div className="studio-prompt-layout">
               <div>
                 <label htmlFor="bracket-prompt" className="studio-label">
-                  Tournament prompt
+                  Tournament prompt<Req />
                 </label>
                 <div className="studio-composer">
                   <textarea
                     id="bracket-prompt"
+                    aria-required="true"
                     rows={4}
                     value={promptText}
                     onChange={(e) => setPromptText(e.target.value)}
@@ -1937,8 +1941,8 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                 }}>Try the sample roster</button>
               </div>
               {showCsvPaste && <div className="module-form roster-paste">
-                <label>Roster CSV
-                  <textarea value={csvRawText} onChange={event => setCsvRawText(event.target.value)} rows={5}
+                <label><Req>Roster CSV</Req>
+                  <textarea aria-required="true" value={csvRawText} onChange={event => setCsvRawText(event.target.value)} rows={5}
                     placeholder={'Team Name,College,Seed\nCCS Alpha,Computing Studies,1\nCOE Titans,Engineering,2'} />
                 </label>
                 <button type="button" className="arena-primary" disabled={!csvRawText.trim()} onClick={() => {

@@ -2,6 +2,7 @@ package ph.edu.wmsu.arenahub.companion
 
 import android.content.Context
 import android.hardware.display.DisplayManager
+import android.net.ConnectivityManager
 import android.hardware.display.VirtualDisplay
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
@@ -11,8 +12,10 @@ import android.os.HandlerThread
 import java.io.File
 
 /**
- * Records the screen in 30-second MP4 segments (720p, 24 fps, no audio) and hands each finished file to
- * [onSegment]. Android 14 allows only one virtual display per projection, so the display is created
+ * Records the screen in 30-second MP4 segments (no audio) and hands each finished file to [onSegment].
+ * On Wi-Fi: 720p, 24 fps, 1.5 Mbit/s (about 11 MB a minute). On mobile data or a metered hotspot:
+ * 480p, 20 fps, 0.6 Mbit/s (about 4.5 MB a minute), so players on their own load are not drained.
+ * The video size is fixed when recording starts; the bitrate is re-checked for every segment. Android 14 allows only one virtual display per projection, so the display is created
  * once and pointed at each new MediaRecorder's surface.
  */
 class ScreenRecorder(
@@ -34,7 +37,7 @@ class ScreenRecorder(
 
     init {
         val metrics = context.resources.displayMetrics
-        val scale = 1280.0 / maxOf(metrics.widthPixels, metrics.heightPixels)
+        val scale = (if (metered()) 854.0 else 1280.0) / maxOf(metrics.widthPixels, metrics.heightPixels)
         val factor = if (scale < 1) scale else 1.0
         width = ((metrics.widthPixels * factor).toInt() / 2) * 2
         height = ((metrics.heightPixels * factor).toInt() / 2) * 2
@@ -70,9 +73,10 @@ class ScreenRecorder(
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setVideoEncoder(MediaRecorder.VideoEncoder.H264)
             setVideoSize(width, height)
-            // 24 fps at 1.5 Mbit/s keeps the phone's video chip lightly loaded and halves upload size.
-            setVideoFrameRate(24)
-            setVideoEncodingBitRate(1_500_000)
+            // Low frame rates and bitrates keep the phone's video chip lightly loaded and uploads small.
+            val saver = metered()
+            setVideoFrameRate(if (saver) 20 else 24)
+            setVideoEncodingBitRate(if (saver) 600_000 else 1_500_000)
             setOutputFile(file.absolutePath)
             prepare()
         }.also { current = file }
@@ -106,6 +110,9 @@ class ScreenRecorder(
         rec.release()
         if (file != null && file.length() > 0) onSegment(file)
     }
+
+    /** Mobile data and metered hotspots count as metered; unknown networks are treated as metered to be safe. */
+    private fun metered(): Boolean = try { context.getSystemService(ConnectivityManager::class.java)?.isActiveNetworkMetered ?: true } catch (_: Exception) { true }
 
     companion object { const val SEGMENT_MS = 30_000L }
 }

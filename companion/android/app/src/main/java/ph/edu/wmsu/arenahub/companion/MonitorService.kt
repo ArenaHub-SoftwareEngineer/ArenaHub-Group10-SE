@@ -107,13 +107,13 @@ class MonitorService : Service() {
                 else -> MonitorState.status = result.error("The referee laptop rejected a report (${result.code}).")
             }
         } catch (_: Exception) {
-            MonitorState.status = "Cannot reach the referee laptop. Check the Wi-Fi. Retrying..."
+            MonitorState.status = "Cannot reach the referee laptop. Check your Wi-Fi or mobile data. Retrying..."
         }
     }
 
     private fun enqueue(file: File) {
         queue.add(file)
-        // Keep at most about 20 minutes of unsent video on the phone if the Wi-Fi drops.
+        // Keep at most about 20 minutes of unsent video on the phone if the connection drops.
         while (queue.size > 40) queue.pollFirst()?.delete()
         MonitorState.pendingUploads = queue.size
         // The last segment can finish after shutdown began; shutdown's own drain sends what it can.

@@ -856,8 +856,6 @@ html[data-motion=reduced] :is(.feedback-note, .arena-chat button) { transform: n
 .auth-entry-media { position: relative; aspect-ratio: 16 / 9; background: #171717; }
 .auth-entry-media .arena-video-shade { display: none; }
 .auth-entry-media :is(.arena-hero-video, .arena-video-poster) { object-position: center; }
-.auth-entry-dialog { max-width: 440px; }
-.auth-entry-dialog .dialog-panel { padding: 24px; }
 .auth-compact-content h2 { font-size: 24px; font-weight: 600; }
 .auth-compact { color: var(--text-primary); }
 .auth-compact :is(input, select, button[type=submit]) { min-height: 44px; border-radius: 10px; }
@@ -869,7 +867,6 @@ html[data-motion=reduced] :is(.feedback-note, .arena-chat button) { transform: n
 @media (max-width: 640px) {
   .auth-entry-header { min-height: 64px; padding-inline: 20px; }
   .auth-entry-hero { padding-inline: 20px; }
-  .auth-entry-dialog .dialog-panel { padding: 20px; }
   .auth-compact :is(input, select) { font-size: 16px; }
 }
 
@@ -1006,3 +1003,7 @@ html[data-motion=reduced] :is(.feedback-note, .arena-chat button) { transform: n
   background: var(--bg-surface, transparent);
   color: inherit;
 }
+
+/* Red asterisk after the label of a field that must be filled in (components/ui/Req.tsx). */
+.required-mark { color: var(--danger, #b42d26); margin-left: 3px; font-weight: 700; }
+.required-legend { font-size: 12px; color: var(--text-muted); }

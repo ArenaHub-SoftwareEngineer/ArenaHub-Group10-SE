@@ -20,6 +20,7 @@ import { manilaToday, scheduleDate, timeOrder } from '../../lib/calendar';
 import { BroadcastSetupGuide } from '../common/BroadcastSetupGuide';
 import { BroadcastDestinationsDialog } from './BroadcastDestinationsDialog';
 import { PlatformLogo } from '../ui/PlatformLogo';
+import { Req } from '../ui/Req';
 import {
   Video,
   Link2,
@@ -569,7 +570,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label htmlFor="broadcast-url" className="text-[10px] font-bold text-[#888888] uppercase tracking-wider">
-                    Stream URL (YouTube Live / Facebook Live)
+                    Stream URL (YouTube Live / Facebook Live)<Req />
                   </label>
                   <button
                     type="button"
@@ -590,7 +591,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                   <div className="flex-1 relative min-w-0">
                     <Link2 className="w-4 h-4 text-[#666666] absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
-                      id="broadcast-url" aria-invalid={!!urlError} aria-describedby={urlError ? "broadcast-url-error" : undefined}
+                      id="broadcast-url" aria-required="true" aria-invalid={!!urlError} aria-describedby={urlError ? "broadcast-url-error" : undefined}
                       type="url"
                       value={rawUrl}
                       onChange={(e) => {

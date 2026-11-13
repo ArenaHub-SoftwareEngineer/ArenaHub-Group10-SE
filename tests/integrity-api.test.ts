@@ -238,3 +238,40 @@ test('join page info, decline, and the per-match recording switch', async t => {
 function fetchChunk(call: any, token: string, id: string, index: number, total: number, raw: Buffer) {
   return call('/device/upload', { token, raw, type: 'application/octet-stream', headers: { 'X-Upload-Id': id, 'X-Chunk-Index': String(index), 'X-Chunk-Total': String(total) } }) as Promise<Response>;
 }
+
+test('online mode: the public tunnel reaches only player routes, and rate limits use the player address', async t => {
+  const { publicAccessGuard, playerPathAllowed } = await import('../server/publicAccess');
+  const dir = mkdtempSync(join(tmpdir(), 'arenahub-online-'));
+  const store = new IntegrityStore(dir);
+  const env = { INTEGRITY_PUBLIC_URL: 'https://quiet-river.trycloudflare.com' };
+  const app = express(); app.set('trust proxy', 'loopback'); app.use(publicAccessGuard(env));
+  app.use('/api/integrity', createIntegrityRouter(env, { store, verifyStaff: async () => 'staff-uid' }));
+  app.get('/join.html', (_q, r) => { r.send('join'); });
+  app.get('*', (_q, r) => { r.send('site'); });
+  const server = app.listen(0, '127.0.0.1'); await new Promise<void>(r => server.on('listening', r));
+  t.after(async () => { await new Promise<void>(r => server.close(() => r())); store.close(); removeTree(dir); });
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const viaTunnel = (path: string, ip = '203.0.113.7', init: RequestInit = {}) => fetch(base + path, { redirect: 'manual', ...init, headers: { 'CF-Ray': 'abc', 'CF-Connecting-IP': ip, ...(init.headers as Record<string, string> || {}) } });
+
+  // Staff pages, staff API, recordings and other APIs are closed through the tunnel...
+  for (const path of ['/index.html', '/dashboard', '/api/integrity/sessions', '/api/integrity/server-info', '/api/integrity/media/x', '/api/ai/chat', '/api/fair-play/x', '/api/integrity/device/../sessions'])
+    assert.equal((await viaTunnel(path)).status, 404, path);
+  // ...the bare address sends players to the join page...
+  const root = await viaTunnel('/');
+  assert.equal(root.status, 302); assert.equal(root.headers.get('location'), '/join.html');
+  assert.equal(await (await viaTunnel('/join.html')).text(), 'join');
+  assert.equal((await viaTunnel('/api/integrity/device/pairing/ABCD2345', '192.0.2.1')).status, 404); // allowed route, unknown code
+  // ...and the laptop itself still reaches everything.
+  assert.equal(await (await fetch(base + '/dashboard')).text(), 'site');
+  const info = await (await fetch(base + '/api/integrity/server-info', { headers: { Authorization: 'Bearer x' } })).json();
+  assert.deepEqual(info.urls, ['https://quiet-river.trycloudflare.com']); assert.equal(info.publicUrl, 'https://quiet-river.trycloudflare.com');
+
+  // Two players behind the same tunnel get separate limits; one player bursting is still stopped.
+  for (let i = 0; i < 10; i++) assert.equal((await viaTunnel('/api/integrity/device/pairing/ABCD2345', '203.0.113.7')).status, 404);
+  assert.equal((await viaTunnel('/api/integrity/device/pairing/ABCD2345', '203.0.113.7')).status, 429);
+  assert.equal((await viaTunnel('/api/integrity/device/pairing/ABCD2345', '198.51.100.9')).status, 404);
+
+  assert.equal(playerPathAllowed('/api/integrity/downloads/arenahub-companion.apk'), true);
+  assert.equal(playerPathAllowed('/api/integrity/dota/gsi'), true);
+  assert.equal(playerPathAllowed('/api/integrity/sessions/abc/end'), false);
+});

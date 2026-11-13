@@ -52,7 +52,7 @@ class MainActivity : Activity() {
 
         column.addView(text("ArenaHub Match Monitor", 22f))
         column.addView(text("Ask the referee for the pairing QR code. Scanning it with your camera opens this app with everything filled in."))
-        serverField = EditText(this).apply { hint = "Laptop address, e.g. http://192.168.1.5:3000"; inputType = InputType.TYPE_TEXT_VARIATION_URI; isSingleLine = true }
+        serverField = EditText(this).apply { hint = "Address from the referee, e.g. https://....trycloudflare.com"; inputType = InputType.TYPE_TEXT_VARIATION_URI; isSingleLine = true }
         codeField = EditText(this).apply { hint = "8-character pairing code"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; isSingleLine = true }
         column.addView(serverField)
         column.addView(codeField)
@@ -115,7 +115,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 startButton.isEnabled = true
                 when {
-                    result == null -> show("Cannot reach $server. Join the event Wi-Fi and check the address.")
+                    result == null -> show("Cannot reach $server. Check your internet connection and the address.")
                     !result.ok -> show(result.error("Pairing failed (${result.code})."))
                     else -> {
                         claim = result.json(); claimServer = server
@@ -150,7 +150,7 @@ class MainActivity : Activity() {
                     runOnUiThread {
                         declineButton.isEnabled = true
                         when {
-                            result == null -> show("Cannot reach $server. Join the event Wi-Fi and try again.")
+                            result == null -> show("Cannot reach $server. Check your internet connection and try again.")
                             !result.ok -> show(result.error("Could not send your answer (${result.code})."))
                             else -> { codeField.setText(""); show("You declined. The referee has been told. Please go to the referee desk before your match.") }
                         }

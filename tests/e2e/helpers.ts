@@ -22,7 +22,7 @@ export async function signIn(page: Page, email: string) {
   await page.goto('/');
   await page.getByRole('button', { name: /sign in to arenahub/i }).first().click();
   await page.getByLabel('Email address').fill(email);
-  await page.getByLabel('Password', { exact: true }).fill(QA_PASSWORD);
+  await page.getByRole('textbox', { name: 'Password', exact: true }).fill(QA_PASSWORD);
   await page.locator('button.auth-submit').click();
   await expect(page.locator('button.auth-submit')).toHaveCount(0, { timeout: 20_000 });
 }

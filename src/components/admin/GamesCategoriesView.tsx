@@ -7,6 +7,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { DEFAULT_GAMES } from '../../lib/catalogDefaults';
 const DEFAULT_BANNER = DEFAULT_GAMES[0].bannerImage;
 import { RANK_GAMES } from '../../lib/gameRanks';
+import { Req } from '../ui/Req';
 import {
   Plus,
   Image as ImageIcon,
@@ -249,7 +250,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
               {/* Game Name */}
               <div>
                 <label htmlFor="game-name" className="block text-xs font-semibold text-[#CCCCCC] uppercase tracking-wider mb-2">
-                  Game Name <span className="text-[#ff6600]">*</span>
+                  Game Name<Req />
                 </label>
                 <input
                   id="game-name" type="text" minLength={2} maxLength={80}

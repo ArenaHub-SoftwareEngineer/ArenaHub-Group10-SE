@@ -117,3 +117,5 @@
 .monitor-summary { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 640px) { .monitor-summary { grid-template-columns: repeat(2, 1fr); } }
 .monitor-conn.declined { color: var(--danger); }
+
+.monitor-online { color: var(--success, #16724d); font-weight: 600; }

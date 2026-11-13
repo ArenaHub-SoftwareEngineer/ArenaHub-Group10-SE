@@ -9,6 +9,8 @@ import { validateEmail, validateProfile } from '../../lib/profileValidation';
 import { hasCampusEmail } from '../../lib/campusAccess';
 import { StudentInviteCard } from './StudentInviteCard';
 import { Modal } from '../ui/Modal';
+import { Req } from '../ui/Req';
+import { sendWithReturn } from '../../lib/emailLinks';
 
 type Editor = 'profile' | 'email' | 'password' | 'appearance' | null;
 function read(key: string) { try { return localStorage.getItem(key) === 'true'; } catch { return false; } }
@@ -61,11 +63,11 @@ export function PreferencesPage({ user, onSignIn, inDialog = false }: { user: Us
           if (!password) { setError('Enter your current password to confirm this change.'); return; }
           await reauthenticateWithCredential(firebaseUser, EmailAuthProvider.credential(firebaseUser.email!, password));
         }
-        await verifyBeforeUpdateEmail(firebaseUser, email.trim().toLowerCase());
+        const address = email.trim().toLowerCase(); await sendWithReturn(settings => verifyBeforeUpdateEmail(firebaseUser, address, settings), 'email-changed');
         setNotice('Verification sent to your new address. Follow the link, then sign in again to complete the change.');
       } else if (editor === 'password') {
         if (!firebaseUser.email) throw new Error('missing-email');
-        await sendPasswordResetEmail(auth, firebaseUser.email);
+        const address = firebaseUser.email; await sendWithReturn(settings => sendPasswordResetEmail(auth, address, settings), 'password-reset');
         setNotice('Password reset email sent. Use the secure link in your inbox to choose your new password.');
       }
       setEditor(null); setPassword('');
@@ -117,8 +119,8 @@ export function PreferencesPage({ user, onSignIn, inDialog = false }: { user: Us
       title={editor === 'profile' ? 'Edit your profile' : editor === 'email' ? 'Change email address' : editor === 'password' ? 'Reset your password' : 'Make it comfortable'}
       description={editor === 'profile' ? 'Your name and campus appear across your arena workspace.' : editor === 'email' ? 'Verify your new address before it replaces your current sign-in email.' : editor === 'password' ? 'We’ll send a secure reset link to your account email.' : 'These preferences stay in this browser.'}>
       <form className="module-form" onSubmit={save}>
-        {editor === 'profile' && <><label>Display name<input autoFocus required minLength={2} maxLength={80} autoComplete="name" value={name} onChange={e => setName(e.target.value)} /></label><label>Campus affiliation<input required minLength={2} maxLength={160} value={campus} onChange={e => setCampus(e.target.value)} /></label></>}
-        {editor === 'email' && <><label>New email address<input autoFocus required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} /></label>{passwordAccount && <label>Current password<input required type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label>}</>}
+        {editor === 'profile' && <><label><Req>Display name</Req><input autoFocus required minLength={2} maxLength={80} autoComplete="name" value={name} onChange={e => setName(e.target.value)} /></label><label><Req>Campus affiliation</Req><input required minLength={2} maxLength={160} value={campus} onChange={e => setCampus(e.target.value)} /></label></>}
+        {editor === 'email' && <><label><Req>New email address</Req><input autoFocus required type="email" maxLength={254} autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} /></label>{passwordAccount && <label><Req>Current password</Req><input required type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></label>}</>}
         {editor === 'password' && <div className="module-notice">Send the reset link to <strong>{user.email}</strong>.</div>}
         {editor === 'appearance' && <><label className="settings-toggle"><span><strong>Reduce motion</strong><small>Pause decorative effects and simplify transitions. Your device preference is always respected.</small></span><input type="checkbox" checked={reduced} onChange={e => setReduced(e.target.checked)} /></label><label className="settings-toggle"><span><strong>Compact layout</strong><small>Fit more navigation and workspace content on screen.</small></span><input type="checkbox" checked={compact} onChange={e => setCompact(e.target.checked)} /></label><div className="palette-preview"><i /><i /><i /><i /><span>ArenaHub orange · #FF6600</span></div></>}
         {error && <p className="module-error" role="alert">{error}</p>}

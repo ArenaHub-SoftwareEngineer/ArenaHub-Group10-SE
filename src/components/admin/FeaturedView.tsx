@@ -3,6 +3,7 @@ import { Tournament } from '../../lib/types';
 import { firestoreService } from '../../lib/firestore';
 import { useToast } from '../ui/Toast';
 import { Link as LinkIcon, Plus, Star, Trash2 as Trash } from '../ui/Icons';
+import { Req } from '../ui/Req';
 
 interface FeaturedViewProps {
   tournaments: Tournament[];
@@ -72,13 +73,13 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
               <option value="highlight">Clip</option><option value="post">Post</option>
             </select>
           </label>
-          <label className="text-xs text-[#AAAAAA] flex flex-col gap-1">Title
+          <label className="text-xs text-[#AAAAAA] flex flex-col gap-1"><Req>Title</Req>
             <input required minLength={3} maxLength={120} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-[4px] px-2 py-2 text-white text-sm" />
           </label>
-          <label className="text-xs text-[#AAAAAA] flex flex-col gap-1">Link (https)
+          <label className="text-xs text-[#AAAAAA] flex flex-col gap-1"><Req>Link (https)</Req>
             <input required type="url" value={form.link} onChange={e => setForm({ ...form, link: e.target.value })} placeholder="https://" className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-[4px] px-2 py-2 text-white text-sm" />
           </label>
-          <label className="text-xs text-[#AAAAAA] flex flex-col gap-1">Made or posted by
+          <label className="text-xs text-[#AAAAAA] flex flex-col gap-1"><Req>Made or posted by</Req>
             <input required minLength={2} maxLength={80} value={form.author} onChange={e => setForm({ ...form, author: e.target.value })} className="bg-[#1A1A1A] border border-[#3A3A3A] rounded-[4px] px-2 py-2 text-white text-sm" />
           </label>
           <button type="submit" disabled={busy} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] text-xs font-semibold bg-white text-black disabled:opacity-60">

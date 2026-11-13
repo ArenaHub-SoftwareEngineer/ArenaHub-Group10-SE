@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFORMS, MONITOR_GAMES, SEVERITIES, SIGNAL_CATEGORY, pairingLink, parseGsi, statOutliers, steamIdToAccountId, SIGNAL_CATALOG, type MonitorGame } from '../src/lib/integrityRisk.ts';
 import { HEARTBEAT_SECONDS, IntegrityStore, type SessionRow } from './integrityStore.ts';
 import { AuthError, verifyStaffToken } from './staffAuth.ts';
+import { clientAddress } from './publicAccess.ts';
 
 // Player downloads, served from dist-agent/ by exact name only.
 export const DOWNLOADS: Record<string, string> = { 'arenahub-companion.apk': 'application/vnd.android.package-archive', 'arenahub-agent.exe': 'application/octet-stream' };
@@ -89,7 +90,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   };
   router.post('/device/claim', express.json({ limit: '8kb' }), (req, res) => {
     const input = claimInput.safeParse(req.body);
-    if (tooFast(`claim:${req.ip}`, 1500)) { res.status(429).json({ error: 'Wait a second before trying the code again.' }); return; }
+    if (tooFast(`claim:${clientAddress(req)}`, 1500)) { res.status(429).json({ error: 'Wait a second before trying the code again.' }); return; }
     if (!input.success) { res.status(400).json({ error: 'Enter the 8-character pairing code from the referee screen.' }); return; }
     const claimed = store.claim(input.data.code, input.data.device);
     if (!claimed) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
@@ -99,7 +100,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   // The join page reads what a code is for (device type, game, player) before the player decides. The code stays unused.
   router.get('/device/pairing/:code', (req, res) => {
     res.set('Cache-Control', 'no-store');
-    if (tooManyLookups(String(req.ip))) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
+    if (tooManyLookups(clientAddress(req))) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
     const code = String(req.params.code);
     const row = /^[A-Za-z0-9]{8}$/.test(code) ? store.pending(code) : undefined;
     if (!row) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
@@ -107,7 +108,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   });
   router.post('/device/decline', express.json({ limit: '2kb' }), (req, res) => {
     const code = typeof req.body?.code === 'string' ? req.body.code : '';
-    if (tooFast(`claim:${req.ip}`, 1500)) { res.status(429).json({ error: 'Wait a second and try again.' }); return; }
+    if (tooFast(`claim:${clientAddress(req)}`, 1500)) { res.status(429).json({ error: 'Wait a second and try again.' }); return; }
     const row = /^[A-Za-z0-9]{8}$/.test(code) ? store.decline(code) : undefined;
     if (!row) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
     res.json({ declined: true });
@@ -194,7 +195,10 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
 
   staff.get('/server-info', (req, res) => {
     const port = req.socket.localPort || Number(env.PORT || 3210);
-    res.json({ urls: env.INTEGRITY_PUBLIC_URL ? [env.INTEGRITY_PUBLIC_URL] : lanUrls(port), signals: SIGNAL_CATALOG, downloads: available() });
+    // The online address comes first: it works on any Wi-Fi or mobile data. Wi-Fi addresses stay as a fallback.
+    // Wi-Fi addresses are listed only when the server listens beyond this laptop (LAN mode, HOST=0.0.0.0).
+    const publicUrl = env.INTEGRITY_PUBLIC_URL || '', lan = !!env.HOST && !/^(127\.|localhost$|::1$)/.test(env.HOST);
+    res.json({ urls: [...(publicUrl ? [publicUrl] : []), ...(lan ? lanUrls(port) : [])], publicUrl, signals: SIGNAL_CATALOG, downloads: available() });
   });
   staff.get('/config', (_req, res) => { res.json(store.config()); });
   staff.put('/config', (req, res) => {

@@ -3,13 +3,24 @@ import { Brand } from '../ui/Brand';
 import { Modal } from '../ui/Modal';
 import { ArenaScene } from '../spectator/ArenaScene';
 import { pendingSpectatorInvite } from '../../lib/campusAccess';
-import { AuthScreen } from './AuthScreen';
-import { ArrowUpRight, KeyRound, QrCode } from '../ui/Icons';
+import { AuthScreen, type AuthTab } from './AuthScreen';
+import { QrCode } from '../ui/Icons';
+import { ACCOUNT_RETURN_MESSAGE, takeAccountReturn } from '../../lib/emailLinks';
+
+const DIALOG_TITLE: Record<AuthTab, string> = {
+  signin: 'Welcome back',
+  signup: 'Create your account',
+  qr: 'Scan a QR invitation',
+  reset: 'Reset your password',
+};
 
 /** The welcome page is public; application modules mount only after authentication. */
 export function AuthEntry() {
-  const [open, setOpen] = useState(() => Boolean(pendingSpectatorInvite()));
-  const [authTab, setAuthTab] = useState<'signin' | 'signup' | 'qr'>(() => pendingSpectatorInvite() ? 'qr' : 'signin');
+  // Coming back from a verification, password-reset or email-change link opens sign-in with a message.
+  const [accountReturn, setAccountReturn] = useState(takeAccountReturn);
+  const [open, setOpen] = useState(() => Boolean(pendingSpectatorInvite() || accountReturn));
+  const [authTab, setAuthTab] = useState<'signin' | 'signup' | 'qr'>(() => pendingSpectatorInvite() && !accountReturn ? 'qr' : 'signin');
+  const [shownTab, setShownTab] = useState<AuthTab>(authTab);
 
   const handleOpenAuth = (tab: 'signin' | 'signup' | 'qr') => {
     setAuthTab(tab);
@@ -50,13 +61,8 @@ export function AuthEntry() {
           </p>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
-              className="arena-primary flex items-center gap-2"
-              onClick={() => handleOpenAuth('signin')}
-            >
-              <KeyRound className="w-4 h-4" />
-              <span>Sign in to ArenaHub</span>
-              <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
+            <button className="arena-primary" onClick={() => handleOpenAuth('signin')}>
+              Sign in to ArenaHub
             </button>
 
             <button
@@ -82,11 +88,12 @@ export function AuthEntry() {
 
       <Modal
         open={open}
-        title="Welcome to ArenaHub"
-        onClose={() => setOpen(false)}
-        className="auth-entry-dialog max-w-md w-full"
+        title={DIALOG_TITLE[shownTab]}
+        icon={<img src="/arenahub-logo.svg" alt="" width="424" height="508" />}
+        onClose={() => { setOpen(false); setAccountReturn(null); }}
+        className="auth-entry-dialog"
       >
-        {open && <AuthScreen initialTab={authTab} onSuccess={() => setOpen(false)} />}
+        {open && <AuthScreen initialTab={authTab} initialNotice={accountReturn ? ACCOUNT_RETURN_MESSAGE[accountReturn] : ''} onTabChange={setShownTab} onSuccess={() => setOpen(false)} />}
       </Modal>
     </div>
   );

@@ -4,6 +4,7 @@ import { firestoreService } from '../../lib/firestore';
 import type { Match } from '../../lib/types';
 import { DraftScheduleCalendar } from './DraftScheduleCalendar';
 import { Calendar, Upload } from '../ui/Icons';
+import { Req } from '../ui/Req';
 
 export function StreamScheduleEditor({ matches, publishedIds, onApplyDraft }: {
   matches: Match[];
@@ -91,8 +92,8 @@ export function StreamScheduleEditor({ matches, publishedIds, onApplyDraft }: {
             event.target.value = '';
           }} />
         </label>
-        <label className="stream-schedule-source">Schedule instructions or CSV
-          <textarea rows={4} value={source} disabled={busy} maxLength={100_000}
+        <label className="stream-schedule-source"><Req>Schedule instructions or CSV</Req>
+          <textarea aria-required="true" rows={4} value={source} disabled={busy} maxLength={100_000}
             placeholder={`Schedule ${example} on 2026-12-04 at 7:30 PM`}
             onChange={event => updateSource(event.target.value)} />
         </label>

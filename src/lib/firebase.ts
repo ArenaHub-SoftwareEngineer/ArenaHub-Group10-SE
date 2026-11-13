@@ -62,7 +62,9 @@ try {
   db = getFirestore(app);
 }
 
-if (import.meta.env.DEV && import.meta.env.VITE_FIREBASE_EMULATORS === 'true' && rawProjectId === 'demo-arenahub') {
+// Emulators: the dev server, or a site built with --mode test (npm run demo, served from dist-demo/ only).
+// The production build is mode "production" with the real project, so it can never reach this.
+if ((import.meta.env.DEV || import.meta.env.MODE === 'test') && import.meta.env.VITE_FIREBASE_EMULATORS === 'true' && rawProjectId === 'demo-arenahub') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9098', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8085);
 }

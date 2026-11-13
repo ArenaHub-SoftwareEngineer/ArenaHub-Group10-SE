@@ -82,7 +82,7 @@
     <p class="muted">Tip: turn on Do Not Disturb so private notifications do not pop up during the match.</p>
     <details id="uploadBox">
       <summary>The referee asked for my own screen recording</summary>
-      <p class="muted" style="margin-top:8px">Only if the referee asks. Record with Control Center, then choose the video here. Stay on the event Wi-Fi until it finishes.</p>
+      <p class="muted" style="margin-top:8px">Only if the referee asks. Record with Control Center, then choose the video here. Keep this page open until it finishes. On mobile data a full match can use several hundred MB.</p>
       <input id="file" type="file" accept="video/mp4,video/quicktime,video/*">
       <button id="upload" type="button" disabled>Upload recording</button>
       <progress id="progress" max="100" value="0" hidden></progress>
@@ -152,7 +152,7 @@
       show('ios', true);
       if (!isApple) say('This code is for an iPhone. Open it on the player\'s iPhone.', 'error');
     }
-  }).catch(function () { say('Cannot reach the referee laptop. Join the event Wi-Fi and scan again.', 'error'); });
+  }).catch(function () { say('Cannot reach the referee laptop. Check your internet connection and scan again. If it still fails, ask the referee for a new code.', 'error'); });
 
   $('copy').addEventListener('click', function () {
     navigator.clipboard.writeText($('command').textContent).then(function () { say('Command copied.', 'ok'); }, function () { say('Copy failed. Select the command and copy it.', 'error'); });
@@ -179,7 +179,7 @@
       try { localStorage.setItem(KEY, JSON.stringify(session)); } catch (e) {}
       history.replaceState(null, '', location.pathname);
       iosCheckedIn();
-    }).catch(function () { $('agree').disabled = false; say('Cannot reach the referee laptop. Join the event Wi-Fi and try again.', 'error'); });
+    }).catch(function () { $('agree').disabled = false; say('Cannot reach the referee laptop. Check your internet connection and try again.', 'error'); });
   });
 
   function iosCheckedIn() {
@@ -213,7 +213,7 @@
           bar.value = result.body.next / total * 100; send(result.body.next);
         })
         .catch(function () {
-          if (++retries > 20) return done('The connection dropped. Check the Wi-Fi and press Upload again.', 'error');
+          if (++retries > 20) return done('The connection dropped. Check your internet connection and press Upload again.', 'error');
           say('Connection lost. Retrying...'); setTimeout(function () { send(index); }, 3000);
         });
     }

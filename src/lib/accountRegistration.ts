@@ -4,6 +4,7 @@ import { auth, db, isFirebaseConfigured } from './firebase';
 import { CAMPUS_NAME, hasCampusEmail, pendingSpectatorInvite, checkSpectatorInvite } from './campusAccess';
 import { CAMPUS_SHORT_NAME } from './institution';
 import { validateAuthFields } from './authValidation';
+import { sendWithReturn } from './emailLinks';
 
 export async function registerEmailAccount(email: string, password: string, name: string, college = '') {
   const normalizedEmail = email.trim().toLowerCase(), school = hasCampusEmail(normalizedEmail) ? college.trim() || CAMPUS_NAME : 'Spectator';
@@ -25,6 +26,6 @@ export async function registerEmailAccount(email: string, password: string, name
     else tx.set(profile, { ...fields, uid: user.uid, role: 'user', status: 'active', joinedAt: serverTimestamp() });
   });
   let verificationSent = false;
-  try { await sendEmailVerification(user); verificationSent = true; } catch { /* The account exists. The verification screen offers a real resend. */ }
+  try { await sendWithReturn(settings => sendEmailVerification(user, settings), 'verified'); verificationSent = true; } catch { /* The account exists. The verification screen offers a real resend. */ }
   return { user, verificationSent };
 }

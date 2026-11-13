@@ -4,6 +4,7 @@ import { parseStreamSchedule, type MatchScheduleUpdate } from '../../lib/streamS
 import type { Match } from '../../lib/types';
 import { calendarMonth, dayLabel, MatchCalendar, scheduledMatchesByDay } from '../common/MatchCalendar';
 import { Modal } from '../ui/Modal';
+import { Req } from '../ui/Req';
 
 export function DraftScheduleCalendar({ matches, onApply }: {
   matches: Match[];
@@ -60,7 +61,7 @@ export function DraftScheduleCalendar({ matches, onApply }: {
           </li>)}
         </ul>}
         {editable.length ? <>
-          <label>Match
+          <label><Req>Match</Req>
             <select value={editor.matchId} required onChange={event => selectMatch(event.target.value)}>
               <option value="">Choose a match</option>
               {editable.map(match => <option key={match.id} value={match.id}>
@@ -69,8 +70,8 @@ export function DraftScheduleCalendar({ matches, onApply }: {
             </select>
           </label>
           <div className="draft-calendar-fields">
-            <label>Date<input type="date" required value={editor.date} onChange={event => setEditor({ ...editor, date: event.target.value })} /></label>
-            <label>Time<input type="time" required value={editor.time} onChange={event => setEditor({ ...editor, time: event.target.value })} /></label>
+            <label><Req>Date</Req><input type="date" required value={editor.date} onChange={event => setEditor({ ...editor, date: event.target.value })} /></label>
+            <label><Req>Time</Req><input type="time" required value={editor.time} onChange={event => setEditor({ ...editor, time: event.target.value })} /></label>
           </div>
           {error && <p className="module-error" role="alert">{error}</p>}
         </> : <p className="studio-muted">All matches in this draft have already started or finished.</p>}

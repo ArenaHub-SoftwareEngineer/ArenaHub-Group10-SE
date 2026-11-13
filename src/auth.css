@@ -50,8 +50,10 @@
 .auth-camera video { width: 100%; max-height: 280px; border-radius: 5px; background: #151515; }
 .auth-camera p { font-size: 11px; margin: 9px 0 0; color: var(--text-muted); }
 .auth-qr-reader>.auth-flow-hint { margin-top: 16px; }
-.auth-qr-next { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border); }
-.auth-qr-next .arena-primary { justify-content: center; }
+.auth-qr-next { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border); }
+.auth-qr-next>p { font-size: 13px; color: var(--text-secondary); text-align: center; margin-bottom: 12px; }
+.auth-qr-next>div { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.auth-qr-next button { width: 100%; min-height: 48px; }
 .auth-status-screen { min-height: 100dvh; background: var(--bg-base); padding: 32px 18px; display: flex; align-items: center; justify-content: center; }
 .auth-status-card { max-width: 440px; width: 100%; padding: 28px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); text-align: center; }
 .auth-status-card>.brand { justify-content: center; margin-bottom: 24px; }
@@ -70,3 +72,53 @@
 .auth-flow-tabs { position: sticky; top: 0; z-index: 2; }
 
 .auth-google-domain { margin-top: 10px; text-align: center; }
+
+/* Sign-in dialog sizing: roomier on desktop, a full-screen sheet on phones. */
+.arena-dialog.auth-entry-dialog { max-width: 540px; }
+.auth-entry-dialog .dialog-panel { padding: 32px 36px; border-radius: 20px; }
+.auth-entry-dialog .dialog-header { align-items: center; gap: 14px; margin-bottom: 24px; }
+.auth-entry-dialog .dialog-icon { flex: none; display: grid; place-items: center; width: 48px; height: 48px; }
+.auth-entry-dialog .dialog-icon img { width: 100%; height: 100%; object-fit: contain; }
+.auth-entry-dialog .dialog-heading { flex: 1; min-width: 0; }
+.auth-entry-dialog .dialog-header h2 { font-size: 26px; font-weight: 650; letter-spacing: -.03em; line-height: 1.15; }
+.auth-entry-dialog .dialog-close { width: 40px; height: 40px; display: grid; place-items: center; }
+.auth-entry-dialog .auth-flow-tabs button { min-height: 46px; font-size: 15px; }
+.auth-entry-dialog .auth-flow-intro { font-size: 15px; }
+.auth-entry-dialog .auth-flow-form label,
+.auth-entry-dialog .auth-password-label label { font-size: 14px; }
+.auth-entry-dialog .auth-flow-form :is(input,select) { min-height: 50px; font-size: 15px; padding-inline: 14px; }
+.auth-entry-dialog .auth-flow-form input::placeholder { font-size: 15px; }
+.auth-entry-dialog .auth-flow-text { font-size: 13px; }
+.auth-entry-dialog :is(.auth-flow-hint,.auth-flow-footnote,.auth-qr-intro p,.auth-flow-error,.auth-flow-success) { font-size: 13px; }
+.auth-entry-dialog .auth-flow-divider { font-size: 12px; }
+.auth-entry-dialog :is(.auth-submit,.auth-google-button) { min-height: 52px; font-size: 15px; }
+.auth-entry-dialog .auth-qr-intro h3 { font-size: 19px; }
+.auth-entry-dialog .auth-qr-actions .arena-outline { min-height: 50px; font-size: 14px; }
+.auth-entry-dialog .auth-qr-reader .auth-flow-form .arena-outline { min-height: 48px; }
+.auth-entry-dialog .auth-qr-reader .auth-flow-form .arena-outline:disabled { opacity: 1; color: var(--text-muted); background: var(--surface-soft); border-color: var(--border); }
+
+/* Outline buttons default to light text for dark pages; the welcome page is light. */
+.auth-entry .arena-outline { color: var(--text-primary, #211e1b); background: #fff; border-color: #cdc6be; }
+.auth-entry .arena-outline:hover { color: #a63f00; background: #fff0e5; border-color: #b94700; }
+
+@media (max-width: 560px) {
+  .arena-dialog.auth-entry-dialog { max-width: none; width: 100%; height: 100dvh; max-height: 100dvh; padding: 0; margin: 0; }
+  .auth-entry-dialog .dialog-panel { height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); }
+  .auth-entry-dialog .dialog-header { margin-bottom: 18px; }
+  .auth-entry-dialog .dialog-icon { width: 40px; height: 40px; }
+  .auth-entry-dialog .dialog-header h2 { font-size: 22px; }
+  .auth-entry-dialog .auth-flow-tabs button { font-size: 14px; padding-inline: 4px; }
+  .auth-entry-dialog .auth-flow-form :is(input,select) { font-size: 16px; }
+}
+@media (max-width: 360px) {
+  .auth-entry-dialog .auth-qr-actions { flex-direction: column; }
+}
+
+/* Local demo only (DemoLogin.tsx): one-click test accounts. */
+.demo-login { margin-bottom: 18px; padding: 12px; border: 1px dashed var(--brand-ink); border-radius: 12px; background: var(--brand-soft); }
+.demo-login>p { font-size: 13px; color: var(--text-secondary); margin-bottom: 10px; }
+.demo-login>div { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.demo-login button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 56px; border-radius: 10px; padding: 8px 12px; text-align: left; }
+.demo-login button small { font-size: 11px; font-weight: 500; color: var(--text-muted); }
+.demo-login .auth-flow-error { margin: 10px 0 0; }
+@media (max-width: 400px) { .demo-login>div { grid-template-columns: 1fr; } }

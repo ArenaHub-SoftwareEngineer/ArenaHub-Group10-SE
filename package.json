@@ -29,7 +29,10 @@
     "test:integrity-api": "tsx --test tests/integrity-api.test.ts",
     "agent": "tsx tools/integrity-agent/agent.ts",
     "build:agent": "node scripts/build-agent.mjs",
-    "build:companion": "node scripts/build-companion.mjs"
+    "build:companion": "node scripts/build-companion.mjs",
+    "online": "node scripts/online.mjs",
+    "demo": "node scripts/demo.mjs",
+    "postbuild": "node scripts/check-production-build.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

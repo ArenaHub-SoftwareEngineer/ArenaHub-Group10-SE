@@ -7,6 +7,7 @@ import { CHEAT_CATALOG, LAYER_LABEL } from '../../lib/cheatCatalog';
 import { MatchArena } from './MatchArena';
 import { Modal } from '../ui/Modal';
 import { Copy, QrCode, RefreshCw, ShieldAlert, ShieldCheck } from '../ui/Icons';
+import { Req } from '../ui/Req';
 import '../../monitor.css';
 
 interface SessionView {
@@ -134,14 +135,14 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
           <ul>{cheat.tells.map(tell => <li key={tell}>{tell}</li>)}</ul></details>)}</div>
         <form className="module-form" onSubmit={e => { e.preventDefault(); void act(async () => { await call(`/sessions/${id}/observations`, { body: { cheatId, severity: seenLevel, note: seenNote } }); setSeenNote(''); setCheatId(''); }, 'Observation recorded. It now counts in the Behaviour category.'); }}>
           <div className="monitor-inline">
-            <label>I saw signs of<select required value={cheatId} onChange={e => setCheatId(e.target.value)}><option value="">Choose a cheat type</option>{CHEAT_CATALOG[detail.game].map(cheat => <option key={cheat.id} value={cheat.id}>{cheat.name}</option>)}</select></label>
+            <label><Req>I saw signs of</Req><select required value={cheatId} onChange={e => setCheatId(e.target.value)}><option value="">Choose a cheat type</option>{CHEAT_CATALOG[detail.game].map(cheat => <option key={cheat.id} value={cheat.id}>{cheat.name}</option>)}</select></label>
             <label>How strong is it?<select value={seenLevel} onChange={e => setSeenLevel(e.target.value as Severity)}><option value="low">Low: worth a note</option><option value="medium">Medium: needs a second look</option><option value="high">High: clear in the evidence</option></select></label>
           </div>
-          <label>What you saw and when<input required minLength={10} maxLength={150} value={seenNote} onChange={e => setSeenNote(e.target.value)} placeholder="e.g. Crosshair followed an enemy behind the wall at 12:40" /></label>
+          <label><Req>What you saw and when</Req><input required minLength={10} maxLength={150} value={seenNote} onChange={e => setSeenNote(e.target.value)} placeholder="e.g. Crosshair followed an enemy behind the wall at 12:40" /></label>
           <div className="feature-dialog-actions"><button className="arena-outline" disabled={busy}>Record observation</button></div>
         </form>
         <div className="module-form case-decision">
-          <label>Referee note<textarea value={note} maxLength={2000} onChange={e => setNote(e.target.value)} placeholder="What you checked and what you concluded." /></label>
+          <label><Req>Referee note</Req><textarea aria-required="true" value={note} maxLength={2000} onChange={e => setNote(e.target.value)} placeholder="What you checked and what you concluded." /></label>
           <label className="settings-toggle">Keep this evidence past 30 days (attached to a case)<input type="checkbox" checked={hold} onChange={e => setHold(e.target.checked)} /></label>
           <div className="feature-dialog-actions">
             <button type="button" className="arena-outline" disabled={busy} onClick={() => void navigator.clipboard.writeText(caseSummary(detail)).then(() => setNotice('Case summary copied. Paste it into a Fair play report.'), () => setError('Copy failed. Select the text manually.'))}><Copy size={15} /> Copy case summary</button>
@@ -177,7 +178,7 @@ function SettingsPanel() {
 }
 
 export function MatchMonitorView({ matches }: { matches: Match[] }) {
-  const [sessions, setSessions] = useState<SessionView[]>([]), [urls, setUrls] = useState<string[]>([]), [error, setError] = useState(''), [downloads, setDownloads] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<SessionView[]>([]), [urls, setUrls] = useState<string[]>([]), [error, setError] = useState(''), [downloads, setDownloads] = useState<string[]>([]), [publicUrl, setPublicUrl] = useState('');
   const [matchId, setMatchId] = useState(''), [customLabel, setCustomLabel] = useState(''), [game, setGame] = useState<MonitorGame>('mlbb');
   const [player, setPlayer] = useState(''), [steamId, setSteamId] = useState(''), [hours, setHours] = useState(4), [server, setServer] = useState('');
   const [platform, setPlatform] = useState<MonitorPlatform>('android'), [team, setTeam] = useState(''), [record, setRecord] = useState(true);
@@ -192,7 +193,7 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
   useEffect(() => { setTeam(''); }, [matchId]);
   const refresh = useCallback(() => call<SessionView[]>(`/sessions${filter ? `?matchId=${encodeURIComponent(filter)}` : ''}`).then(s => { setSessions(s); setError(''); }).catch(e => setError(e.message)), [filter]);
   useEffect(() => { void refresh(); const timer = setInterval(() => void refresh(), 5000); return () => clearInterval(timer); }, [refresh]);
-  useEffect(() => { call<{ urls: string[]; downloads?: string[] }>('/server-info').then(info => { setUrls(info.urls); setDownloads(info.downloads || []); setServer(s => s || info.urls[0] || ''); }).catch(() => {}); }, []);
+  useEffect(() => { call<{ urls: string[]; downloads?: string[]; publicUrl?: string }>('/server-info').then(info => { setUrls(info.urls); setDownloads(info.downloads || []); setPublicUrl(info.publicUrl || ''); setServer(s => s || info.urls[0] || ''); }).catch(() => {}); }, []);
   useEffect(() => { if (match) { const g = gameOf(match); if (g) setGame(g); } }, [matchId]);
   const alerts = useMemo(() => alertsFor(sessions).filter(a => !dismissed.includes(a.key)), [sessions, dismissed]);
   // New alerts pop up as desktop notifications (if allowed) and show a count in the browser tab.
@@ -240,18 +241,20 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
       <div className="operations-section-heading"><QrCode size={20} /><div><h2>Pair a device</h2><p>Every player scans the code with their phone camera (PC players can type the address shown). The page that opens installs or opens the app, checks in iPhones, and lets anyone decline. Codes work once and expire in 5 minutes.</p></div></div>
       <form className="module-form monitor-pair-form" onSubmit={e => void pair(e)}>
         <label>Match<select value={matchId} onChange={e => setMatchId(e.target.value)}><option value="">Scrim or unlisted match</option>{monitorable.map(m => <option key={m.id} value={m.id}>{m.matchNumber} · {m.team1?.name} vs {m.team2?.name}</option>)}</select></label>
-        {!match && <label>Match name<input required maxLength={200} value={customLabel} onChange={e => setCustomLabel(e.target.value)} placeholder="e.g. Practice scrim CCS vs COE" /></label>}
+        {!match && <label><Req>Match name</Req><input required maxLength={200} value={customLabel} onChange={e => setCustomLabel(e.target.value)} placeholder="e.g. Practice scrim CCS vs COE" /></label>}
         <label>Game<select value={game} onChange={e => setGame(e.target.value as MonitorGame)}>{MONITOR_GAMES.map(g => <option key={g} value={g}>{GAME_LABEL[g]}</option>)}</select></label>
         <label>Device<select value={platform} onChange={e => setPlatform(e.target.value as MonitorPlatform)}>{GAME_PLATFORMS[game].map(p => <option key={p} value={p}>{PLATFORM_LABEL[p]}</option>)}</select></label>
         <label>Team{matchTeams.length ? <select value={team} onChange={e => setTeam(e.target.value)}><option value="">Choose team</option>{matchTeams.map(t => <option key={t!.id} value={t!.name}>{t!.name}</option>)}</select> : <input maxLength={80} value={team} onChange={e => setTeam(e.target.value)} placeholder="e.g. CCS Phoenix" />}</label>
-        <label>Player (IGN)<input required maxLength={80} list="monitor-players" value={player} onChange={e => setPlayer(e.target.value)} /><datalist id="monitor-players">{players.map(p => <option key={p} value={p} />)}</datalist></label>
+        <label><Req>Player (IGN)</Req><input required maxLength={80} list="monitor-players" value={player} onChange={e => setPlayer(e.target.value)} /><datalist id="monitor-players">{players.map(p => <option key={p} value={p} />)}</datalist></label>
         {game === 'dota2' && <label>Steam ID (17 digits, optional)<input inputMode="numeric" maxLength={17} value={steamId} onChange={e => setSteamId(e.target.value.replace(/\D/g, ''))} placeholder="7656119..." /></label>}
         {platform !== 'ios' && <label className="settings-toggle">{platform === 'pc' ? 'Take screenshots during the match' : 'Record the screen during the match'}<input type="checkbox" checked={record} onChange={e => setRecord(e.target.checked)} /></label>}
-        {platform !== 'ios' && <p className="field-hint">{record ? 'Uses a little battery and Wi-Fi. Turn it off for casual matches; device checks still run.' : 'Only device checks run. Record from the observer slot if you need video.'}</p>}
+        {platform !== 'ios' && <p className="field-hint">{record ? 'Uses a little battery and data (about 11 MB a minute on Wi-Fi, 4.5 MB on mobile data). Turn it off for casual matches; device checks still run.' : 'Only device checks run. Record from the observer slot if you need video.'}</p>}
         {platform === 'ios' && <p className="field-hint">iPhones only check in. Record this match from an observer slot in the custom room.</p>}
         <label>Monitoring window (hours)<input type="number" min={0.5} max={12} step={0.5} value={hours} onChange={e => setHours(Number(e.target.value))} /></label>
-        <label>Laptop address devices will use<input required list="monitor-urls" value={server} onChange={e => setServer(e.target.value)} placeholder="http://192.168.x.x:3210" /><datalist id="monitor-urls">{urls.map(u => <option key={u} value={u} />)}</datalist></label>
-        {!urls.length && <p className="field-hint">No Wi-Fi address found. Start the server in LAN mode (see docs/INTEGRITY_SETUP.md) and connect this laptop to the event Wi-Fi or hotspot.</p>}
+        <label><Req>Address players will use</Req><input required list="monitor-urls" value={server} onChange={e => setServer(e.target.value)} placeholder="https://....trycloudflare.com" /><datalist id="monitor-urls">{urls.map(u => <option key={u} value={u} />)}</datalist></label>
+        {publicUrl && server === publicUrl ? <p className="field-hint monitor-online">Online: players can join from any Wi-Fi or mobile data.</p>
+          : publicUrl ? <p className="field-hint">This is a Wi-Fi address: only devices on the same network as this laptop can use it. Choose {publicUrl} so players can join from anywhere.</p>
+          : <p className="field-hint">{urls.length ? 'Wi-Fi only: players must be on the same network as this laptop.' : 'Players cannot reach this laptop yet.'} To let players join from their own Wi-Fi or mobile data, stop the server and start it with npm run online.</p>}
         <div className="feature-dialog-actions"><button className="arena-primary" disabled={busy}>{busy ? 'Creating...' : 'Create pairing code'}</button></div>
       </form>
       {pairing && <div className="monitor-pairing" role="status">

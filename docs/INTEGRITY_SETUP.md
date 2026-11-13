@@ -49,17 +49,26 @@ It does three things instead:
 
 ## Event day
 
-1. **Network.** Connect the laptop and every player device to the same network. Many campus Wi-Fi networks block devices from reaching each other ("client isolation"). If phones cannot connect, turn on Windows **Mobile hotspot** on the laptop, or use a cheap router with no internet needed. The games still need internet, so the hotspot must share the laptop's connection.
-2. **Start ArenaHub in LAN mode** from the project folder:
-   ```powershell
-   npm run build
-   $env:HOST = "0.0.0.0"; npm start
-   ```
+1. **Choose how players reach the laptop.**
+   - **Online mode (recommended for Palaro-style events).** Players use their own Wi-Fi or mobile data, anywhere. The laptop only needs internet. From the project folder:
+     ```powershell
+     npm run build
+     npm run online
+     ```
+     The first run downloads `cloudflared`, Cloudflare's free tunnel program, into `%LOCALAPPDATA%\ArenaHubBuild`. It prints an address like `https://quiet-river-1234.trycloudflare.com`. No account, domain or payment is needed. Things to know:
+     - The address **changes every time** `npm run online` starts, so make new QR codes after a restart. Sessions already running stop reporting when the address changes.
+     - Keep the laptop awake, plugged in and online for the whole event. If the laptop sleeps, every device shows "Cannot reach the referee laptop".
+     - Through the online address, **only the player pages work**: the join page, the device API, the two downloads and Dota 2 live data. The staff page, the staff API, recordings and the rest of ArenaHub answer "not found", so a stranger with the link cannot see anything. Staff keep using `http://localhost:3210` on the laptop.
+     - Rate limits use each player's real address (Cloudflare passes it on), so many players joining together do not block each other.
+     - Recording on mobile data: the Android app switches to 480p at about 4.5 MB a minute (11 MB on Wi-Fi). A 20-minute match is about 90 MB of the player's data. Turn recording off for matches where that is too much; device checks use almost no data.
+     - Quick tunnels are Cloudflare's free test service, with no uptime guarantee. For a fixed address that never changes, a named Cloudflare tunnel needs a domain (about PHP 600 a year).
+   - **LAN mode (same Wi-Fi only).** Connect the laptop and every player device to the same network. Many campus Wi-Fi networks block devices from reaching each other ("client isolation"); then use Windows **Mobile hotspot** on the laptop. Start with `npm run build`, then `$env:HOST = "0.0.0.0"; npm start`. You can combine both: `$env:HOST = "0.0.0.0"; npm run online`.
+2. **Check the address.** On the Match monitor page, the pairing form says **Online: players can join from any Wi-Fi or mobile data** when the online address is selected.
 3. On the laptop itself, open `http://localhost:3210`. Sign in with a staff account and go to **Admin > Match monitor**. Use the laptop for the staff page, because Google sign-in only works on `localhost`, not on the Wi-Fi address.
 4. **Pair each player.** For each player:
    1. Choose the match, the game, the device (Android, iPhone or PC), the team and the player.
    2. Choose whether to **record the screen** (Android) or **take screenshots** (PC). Turn it off for casual matches to keep phones light; device checks still run.
-   3. Check the laptop address. It fills itself in, for example `http://192.168.137.1:3210`.
+   3. Check the address players will use. It fills itself in: the online address in online mode, for example `https://quiet-river-1234.trycloudflare.com`, or a Wi-Fi address such as `http://192.168.137.1:3210` in LAN mode.
    4. Press **Create pairing code**. Each code works once and expires after 5 minutes.
 
    The player scans the QR code with their phone camera:
@@ -121,7 +130,8 @@ The observation counts in the Behaviour category and appears in the case summary
 |---|---|
 | The phone shows "Cannot reach ..." | Same network? Firewall rule added? Network set to Private? Try the laptop hotspot. |
 | `localhost:3210` shows a different app | Another project is using the port. Start ArenaHub on a free one: `$env:PORT = "3300"` before `npm start`, and open the firewall for that port. ArenaHub moved off 3000 because FloodSight uses it and its offline cache keeps showing FloodSight at `localhost:3000`. |
-| No laptop address is shown | The server was started without `HOST=0.0.0.0`, or the laptop is not on Wi-Fi. |
+| No address is shown | Start the server with `npm run online` (players anywhere) or with `HOST=0.0.0.0` (same Wi-Fi only). |
+| Players see "Cannot reach the referee laptop" in online mode | The laptop slept, lost internet, or `npm run online` was restarted and the address changed. Make new QR codes. |
 | "That pairing code is wrong, already used or expired" | Create a new code. |
 | Dota 2 live data is empty | The player must restart Dota 2 after pairing. Steam must be installed normally. |
 | Recording stopped | The player stopped screen sharing, or Android ended it. The session shows "Screen recording stopped". Ask the player to pair again. |

@@ -3,8 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from './Icons';
 
 /** Native dialog supplies focus containment, Escape, and an inert background. */
-export function Modal({ open, title, description, onClose, children, busy = false, className = '' }: {
-  open: boolean; title: string; description?: string; onClose: () => void;
+export function Modal({ open, title, description, icon, onClose, children, busy = false, className = '' }: {
+  open: boolean; title: string; description?: string; icon?: React.ReactNode; onClose: () => void;
   children: React.ReactNode; busy?: boolean; className?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -29,7 +29,7 @@ export function Modal({ open, title, description, onClose, children, busy = fals
       {open && <motion.section className="dialog-panel" initial={{ opacity: 0, y: reduced ? 0 : 12, scale: reduced ? 1 : .98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: reduced ? 0 : 6, scale: reduced ? 1 : .99 }}
         transition={{ duration: reduced ? 0 : .18, ease: [.22, 1, .36, 1] }}>
-        <header className="dialog-header"><div><h2 id={titleId}>{title}</h2>
+        <header className="dialog-header">{icon && <span className="dialog-icon" aria-hidden="true">{icon}</span>}<div className="dialog-heading"><h2 id={titleId}>{title}</h2>
           {description && <p id={descriptionId}>{description}</p>}</div>
           <button type="button" className="dialog-close" aria-label="Close dialog" disabled={busy} onClick={onClose}><X size={18} /></button>
         </header>{children}

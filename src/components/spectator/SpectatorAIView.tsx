@@ -7,6 +7,7 @@ import { ArenaCharacter } from '../ui/ArenaCharacter';
 import { Modal } from '../ui/Modal';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useToast } from '../ui/Toast';
+import { Req } from '../ui/Req';
 
 interface SpectatorAIViewProps {
   currentUser?: { id: string; name: string; email: string; role: string; avatarInitials: string; collegeName?: string };
@@ -224,6 +225,6 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
       </form>
     </Modal>
     <ConfirmModal isOpen={toDelete !== null} title={toDelete === 'all' ? 'Delete all conversations?' : 'Delete this conversation?'} description={toDelete === 'all' ? 'All Arena AI conversations saved for this account in this browser will be permanently removed. Your history policy will be kept. Download a copy first if you need one.' : `“${toDelete?.title || ''}” will be permanently removed from this browser’s history.`} confirmLabel={toDelete === 'all' ? 'Delete all chats' : 'Delete conversation'} isDestructive onCancel={() => setToDelete(null)} onConfirm={() => { if (!toDelete) return; const next: ChatHistory = toDelete === 'all' ? { ...data, threads: [], activeThreadId: null } : deleteThread(data, toDelete.id); if (canSave.current || toDelete === 'all') { saveHistory(browserHistoryStorage, userId, next); canSave.current = true; setStorageError(''); } setData(next); setInput(''); setToDelete(null); }} />
-    <Modal open={renameId !== null} title="Rename conversation" onClose={() => setRenameId(null)}><form className="module-form" onSubmit={event => { event.preventDefault(); if (!renameTitle.trim()) return; setData(current => ({ ...current, threads: current.threads.map(thread => thread.id === renameId ? { ...thread, title: renameTitle.trim() } : thread) })); setRenameId(null); }}><label>Conversation name<input autoFocus required maxLength={100} value={renameTitle} onChange={event => setRenameTitle(event.target.value)} /></label><footer className="dialog-actions"><button type="button" className="arena-outline" onClick={() => setRenameId(null)}>Cancel</button><button className="arena-primary" type="submit">Save name</button></footer></form></Modal>
+    <Modal open={renameId !== null} title="Rename conversation" onClose={() => setRenameId(null)}><form className="module-form" onSubmit={event => { event.preventDefault(); if (!renameTitle.trim()) return; setData(current => ({ ...current, threads: current.threads.map(thread => thread.id === renameId ? { ...thread, title: renameTitle.trim() } : thread) })); setRenameId(null); }}><label><Req>Conversation name</Req><input autoFocus required maxLength={100} value={renameTitle} onChange={event => setRenameTitle(event.target.value)} /></label><footer className="dialog-actions"><button type="button" className="arena-outline" onClick={() => setRenameId(null)}>Cancel</button><button className="arena-primary" type="submit">Save name</button></footer></form></Modal>
   </div>;
 };

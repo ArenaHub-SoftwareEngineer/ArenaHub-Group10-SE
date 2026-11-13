@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { checkSpectatorInvite, pendingSpectatorInvite, rememberSpectatorInvite, clearSpectatorInvite } from '../../lib/campusAccess';
 import { parseInviteInput } from '../../lib/inviteInput';
 import { Camera, Upload, QrCode, X, CheckCircle2 } from '../ui/Icons';
+import { Req } from '../ui/Req';
 
 export function SpectatorQRReader({ onVerified, admissionMode = false }: { onVerified?: () => void | Promise<void>; admissionMode?: boolean }) {
   const [input, setInput] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState(''), [ready, setReady] = useState(false), [camera, setCamera] = useState(false), [cameraPending, setCameraPending] = useState(false);
@@ -82,9 +83,9 @@ export function SpectatorQRReader({ onVerified, admissionMode = false }: { onVer
     {busy && <p className="auth-flow-hint" role="status">Checking the invitation…</p>}{error && <p className="auth-flow-error" role="alert">{error}</p>}
     {camera && <div className="auth-camera"><video ref={video} muted playsInline aria-label="Live QR camera preview" /><p>Point your camera at the whole invitation QR.</p></div>}
     <div className="auth-qr-actions">{camera || cameraPending ? <button type="button" className="arena-outline" onClick={stopCamera}><X size={16} /> Stop camera</button> : <button type="button" disabled={busy} className="arena-outline" onClick={() => void startCamera()}><Camera size={16} /> Use camera</button>}
-      <label className={`arena-outline auth-qr-upload ${busy || cameraPending ? 'is-disabled' : ''}`}><Upload size={16} /> Upload QR image<input type="file" aria-label="Upload invitation QR image" accept="image/png,image/jpeg,image/webp" disabled={busy || cameraPending} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void readImage(file); }} /></label>
+      <label className={`arena-outline auth-qr-upload ${busy || cameraPending ? 'is-disabled' : ''}`}><Upload size={16} /> Upload image<input type="file" aria-label="Upload invitation QR image" accept="image/png,image/jpeg,image/webp" disabled={busy || cameraPending} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void readImage(file); }} /></label>
     </div>
-    <form onSubmit={e => { e.preventDefault(); stopCamera(); void accept(input); }} className="auth-flow-form"><label>Invitation link or code<input autoComplete="off" spellCheck={false} value={input} maxLength={2000} disabled={busy} onChange={e => setInput(e.target.value)} placeholder="Paste the invitation link" required /></label><button type="submit" className="arena-outline" disabled={busy || cameraPending || !input.trim()}>Check invitation</button></form>
+    <form onSubmit={e => { e.preventDefault(); stopCamera(); void accept(input); }} className="auth-flow-form"><label><Req>Invitation link or code</Req><input autoComplete="off" spellCheck={false} value={input} maxLength={2000} disabled={busy} onChange={e => setInput(e.target.value)} placeholder="Paste the invitation link" required /></label><button type="submit" className="arena-outline" disabled={busy || cameraPending || !input.trim()}>Check invitation</button></form>
     <p className="auth-flow-hint">QR images are read on your device. Admission is checked with ArenaHub; a QR alone does not sign you in.</p>
   </section>;
 }

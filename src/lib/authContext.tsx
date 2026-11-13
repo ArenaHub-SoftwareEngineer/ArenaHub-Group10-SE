@@ -39,6 +39,7 @@ import { authErrorMessage } from './authMessages';
 import { registerEmailAccount } from './accountRegistration';
 import { institutionalGoogleProvider, enforceGoogleInstitution } from './googleAuth';
 import { GOOGLE_DOMAIN_ERROR } from './institution';
+import { sendWithReturn } from './emailLinks';
 
 export { isFirebaseConfigured };
 
@@ -378,7 +379,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const resendVerificationEmail = useCallback(async () => {
     if (auth.currentUser) {
-      await sendEmailVerification(auth.currentUser);
+      const user = auth.currentUser;
+      await sendWithReturn(settings => sendEmailVerification(user, settings), 'verified');
       setVerificationNotice('');
     }
   }, []);

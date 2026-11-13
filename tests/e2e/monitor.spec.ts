@@ -13,7 +13,7 @@ test('organizer creates a match monitor pairing code', async ({ page }, testInfo
   await page.getByLabel('Match name').fill('E2E scrim CCS vs COE');
   await form.locator('label', { hasText: /^Game/ }).locator('select').selectOption('mlbb');
   await page.getByLabel('Player (IGN)').fill('E2E Ace');
-  await page.getByLabel('Laptop address devices will use').fill('http://192.168.50.10:3000');
+  await page.getByLabel('Address players will use').fill('http://192.168.50.10:3000');
   await page.getByRole('button', { name: 'Create pairing code' }).click();
 
   await expect(page.getByAltText(/pairing qr code for e2e ace/i)).toBeVisible();
