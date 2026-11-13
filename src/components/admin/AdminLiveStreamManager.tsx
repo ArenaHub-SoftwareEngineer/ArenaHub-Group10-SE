@@ -504,7 +504,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                     style={{
                       backgroundColor: `${platformColor(selectedGuide)}18`,
                       border: `1px solid ${platformColor(selectedGuide)}40`,
-                      color: platformColor(selectedGuide),
+                      color: 'var(--text-primary)',
                     }}
                   >
                     {i + 1}

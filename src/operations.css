@@ -162,7 +162,8 @@
 .stage-match-heading small { text-transform: capitalize; }
 .stage-team { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 11px 12px; font-size: 12px; }
 .stage-team+ .stage-team { border-top: 1px solid var(--border); }
-.stage-team.winner { color: var(--brand-ink); background: var(--brand-soft); }
+.stage-team.winner { color: var(--text-primary); background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand); }
+.stage-team.winner small { color: var(--text-primary); opacity: .85; }
 .stage-team>span { min-width: 0; }
 .stage-team>span strong { display: block; overflow-wrap: anywhere; }
 .stage-team input { width: 100%; min-width: 0; padding: 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-primary); font-size: 12px; }

@@ -1,4 +1,4 @@
-.auth-entry,.auth-entry-dialog,.auth-status-screen { color-scheme: light; --bg-base: #fbfaf8; --surface: #fff; --surface-soft: #f6f3ef; --border: #ded8d1; --border-strong: #bdb4aa; --text-primary: #211e1b; --text-secondary: #514b45; --text-muted: #6b6259; --brand-ink: #a63f00; --brand-soft: #fff0e5; --success: #16724d; --danger: #b42d26; color: var(--text-primary); }
+/* Colours come from design.css. */
 .auth-entry-dialog .dialog-panel { background: var(--surface); color: var(--text-primary); border: 1px solid var(--border); border-radius: 18px; }
 .auth-entry-dialog .dialog-header h2 { color: var(--text-primary); font-size: 24px; }
 .auth-entry-dialog .dialog-close { color: var(--text-muted); background: var(--surface-soft); }

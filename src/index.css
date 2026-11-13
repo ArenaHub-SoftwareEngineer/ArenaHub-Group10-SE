@@ -787,7 +787,6 @@ html[data-motion=reduced] :is(.feedback-note, .arena-chat button) { transform: n
 /* Welcome keeps the campaign artwork separate from the sign-in copy. */
 .auth-entry { min-height: 100dvh; background:var(--surface); color:var(--text-primary); }
 .auth-entry-header {
-  --text-primary: #211e1b;
   min-height: 72px;
   padding: 12px max(24px, calc((100% - 1280px) / 2));
   border-bottom:1px solid var(--border);

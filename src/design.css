@@ -49,7 +49,7 @@
 }
 
 /* ---------- Stages: one step deeper (brackets, stream player, 3D arena, hero) ---------- */
-.stage, .stage-board, .dashboard-media, .arena-hero, .broadcast-player-shell, .monitor3d, .multi-video-grid {
+.stage, .stage-board, .dashboard-media, .studio-board, .viewer-bracket-board, .arena-hero, .broadcast-player-shell, .monitor3d, .multi-video-grid {
   color-scheme: dark;
   --bg-base: #08080a;
   --surface: #0f0f12;
@@ -134,3 +134,7 @@ html[data-motion=reduced] .ah-card-interactive:hover { transform: none; }
 
 /* Scrollbars that match the theme */
 .app-shell, .stage { scrollbar-color: var(--border-strong) transparent; }
+
+/* Solid status fills are light in dark mode, so text on them is dark (legible), never white. */
+.app-shell :is([class*="bg-(--danger)"], [class*="bg-(--success)"], [class*="bg-(--warning)"], [class*="bg-(--info)"], [class*="bg-(--brand)"]):not([class*="bg-(--danger)/"], [class*="bg-(--success)/"], [class*="bg-(--warning)/"], [class*="bg-(--info)/"], [class*="bg-(--brand)/"]).text-white,
+.app-shell .shell-badge-count { color: #16080a; }

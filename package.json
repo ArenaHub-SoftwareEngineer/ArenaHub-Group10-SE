@@ -32,6 +32,7 @@
     "build:companion": "node scripts/build-companion.mjs",
     "online": "node scripts/online.mjs",
     "demo": "node scripts/demo.mjs",
+    "audit:contrast": "node scripts/contrast-audit.cjs",
     "postbuild": "node scripts/check-production-build.mjs"
   },
   "dependencies": {

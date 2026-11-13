@@ -1,32 +1,5 @@
 /* ArenaHub workspaces share the welcome page's warm neutral palette. */
-.app-shell {
-  color-scheme: light;
-  --bg-base: #fbfaf8;
-  --sidebar: #fff;
-  --topbar: #fff;
-  --surface: #fff;
-  --surface-soft: #f6f3ef;
-  --surface-elevated: #eeeae5;
-  --border: #ded8d1;
-  --border-strong: #bdb4aa;
-  --text-primary: #211e1b;
-  --text-secondary: #514b45;
-  --text-muted: #6b6259;
-  --brand-ink: #a63f00;
-  --brand-soft: #fff0e5;
-  --success: #16724d;
-  --info: #245ba1;
-  --warning: #815300;
-  --danger: #b42d26;
-  --success-soft: #e9f5ed;
-  --info-soft: #eaf2fd;
-  --warning-soft: #fbf3de;
-  --danger-soft: #fceeea;
-  --success-border: #acd4bd;
-  --info-border: #bacfed;
-  --warning-border: #dfcc9a;
-  --danger-border: #edc1ba;
-}
+
 
 .app-shell .app-topbar { backdrop-filter: none; }
 .app-shell > nav { background: var(--surface); border-color: var(--border); }
@@ -349,16 +322,6 @@
 .studio-prompt-help { display: block; margin-top: 6px; }
 
 .app-shell .studio-board {
-  --surface: #25262b;
-  --surface-soft: #202126;
-  --surface-elevated: #303239;
-  --border: #43454f;
-  --text-primary: #f7f5f2;
-  --text-secondary: #d6d3cf;
-  --text-muted: #bdbac2;
-  --success: #a4e6bd;
-  --danger: #ffada3;
-  --warning: #ffe0a0;
   padding: clamp(14px, 2.5vw, 28px);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -802,12 +765,6 @@ html[data-motion="reduced"] .profile-popover:popover-open { animation: none; }
 .viewer-bracket-artwork { width: 128px; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 8px; }
 .viewer-bracket-selector { max-width: 420px; }
 .viewer-bracket-board {
-  --surface: #24262c;
-  --surface-soft: #30333a;
-  --border: #42464f;
-  --border-strong: #96999f;
-  --text-secondary: #e4e5e9;
-  --text-muted: #bdc0c9;
 }
 .viewer-bracket-board > section { box-shadow: none; }
 .viewer-match-lock-note {

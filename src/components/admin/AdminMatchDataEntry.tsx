@@ -177,7 +177,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
           <div className="flex items-center gap-3">
             <span
               className="px-2.5 py-1 rounded-[3px] font-heading font-bold text-xs"
-              style={{ backgroundColor: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}40` }}
+              style={{ backgroundColor: `${accentColor}30`, color: 'var(--text-primary)', border: `1px solid ${accentColor}80` }}
             >
               {teamCode}
             </span>
