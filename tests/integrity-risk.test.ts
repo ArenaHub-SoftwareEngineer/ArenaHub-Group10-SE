@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DEFAULT_MONITOR_CONFIG, evaluateFacts, evaluateGsi, matchesEntry, monitorConfigSchema, parseGsi, scoreSignals, statOutliers, steamIdToAccountId, type AndroidFacts } from '../src/lib/integrityRisk';
 
 const OFFICIAL = 'a'.repeat(64), MODDED = 'b'.repeat(64);
-const clean = (over: Partial<AndroidFacts> = {}): AndroidFacts => ({ platform: 'android', games: [{ packageName: 'com.mobile.legends', versionName: '1.9.0', certSha256: [OFFICIAL] }], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [], developerOptions: false, usbDebugging: false, recording: true, foregroundPackage: 'com.mobile.legends', ...over });
+const clean = (over: Partial<AndroidFacts> = {}): AndroidFacts => ({ platform: 'android', games: [{ packageName: 'com.mobile.legends', versionName: '1.9.0', certSha256: [OFFICIAL], installer: 'com.android.vending' }], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [], developerOptions: false, usbDebugging: false, recording: true, foregroundPackage: 'com.mobile.legends', ...over });
 const trusted = () => { const c = structuredClone(DEFAULT_MONITOR_CONFIG); c.android.games.mlbb.trustedCertSha256 = [OFFICIAL]; return c; };
 
 test('a clean phone with the trusted game build scores clear', () => {
@@ -85,6 +85,36 @@ test('the Android companion reports exactly the fields the server schema expects
   const collect = kotlin.slice(kotlin.indexOf('fun collect('), kotlin.indexOf('private fun matchesAny'));
   const sent = [...collect.matchAll(/put\("([A-Za-z]+)"/g)].map(m => m[1]).sort();
   assert.deepEqual(sent, Object.keys(androidFactsSchema.shape).sort());
-  const gameKeys = [...kotlin.slice(kotlin.indexOf('private fun gameInfo')).matchAll(/put\("([A-Za-z0-9]+)"/g)].map(m => m[1]).slice(0, 3).sort();
-  assert.deepEqual(gameKeys, ['certSha256', 'packageName', 'versionName']);
+  const gameKeys = [...kotlin.slice(kotlin.indexOf('private fun gameInfo')).matchAll(/put\("([A-Za-z0-9]+)"/g)].map(m => m[1]).slice(0, 4).sort();
+  assert.deepEqual(gameKeys, ['certSha256', 'installer', 'packageName', 'versionName']);
+  assert.deepEqual(Object.keys((androidFactsSchema.shape.games as any).element.shape).sort(), ['certSha256', 'installer', 'packageName', 'versionName']);
+});
+
+test('a game installed from a file or unknown store is flagged; known stores are not', () => {
+  const sideloaded = evaluateFacts(clean({ games: [{ packageName: 'com.mobile.legends', certSha256: [OFFICIAL] }] }), trusted(), 'mlbb');
+  assert.deepEqual(sideloaded.map(s => [s.id, s.severity]), [['game-sideloaded', 'medium']]);
+  assert.match(sideloaded[0].evidence, /unknown source/);
+  const apkSite = evaluateFacts(clean({ games: [{ packageName: 'com.mobile.legends', certSha256: [OFFICIAL], installer: 'com.apkpure.aegon' }] }), trusted(), 'mlbb');
+  assert.match(apkSite[0].evidence, /installed by com\.apkpure\.aegon/);
+  assert.deepEqual(evaluateFacts(clean({ games: [{ packageName: 'com.mobile.legends', certSha256: [OFFICIAL], installer: 'com.huawei.appmarket' }] }), trusted(), 'mlbb'), []);
+});
+
+test('recording is only expected when staff turned it on, and a refusal is reported once', () => {
+  assert.deepEqual(evaluateFacts(clean({ recording: false }), trusted(), 'mlbb', { recordingRequired: false }), []);
+  assert.deepEqual(evaluateFacts(clean({ recording: false }), trusted(), 'mlbb').map(s => s.id), ['recording-stopped']);
+  assert.deepEqual(evaluateFacts(clean({ recording: false, recordingRefused: true }), trusted(), 'mlbb').map(s => s.id), ['recording-refused']);
+  assert.deepEqual(evaluateFacts({ platform: 'pc', processes: [], gameRunning: true, screenshotOk: false }, DEFAULT_MONITOR_CONFIG, 'dota2', { recordingRequired: false }), []);
+});
+
+test('tools that can reach the game folder are on the default blocklist', () => {
+  const found = evaluateFacts(clean({ installedFlagged: ['moe.shizuku.privileged.api', 'com.vmos.pro'] }), trusted(), 'mlbb');
+  assert.deepEqual(found.map(s => [s.id, s.severity]), [['cheat-tool-installed', 'high'], ['cheat-tool-installed', 'high']]);
+  assert.match(found[0].evidence, /Shizuku/);
+});
+
+test('settings saved before trusted installers existed still load with the default stores', () => {
+  const old = structuredClone(DEFAULT_MONITOR_CONFIG) as any;
+  delete old.android.trustedInstallers;
+  const parsed = monitorConfigSchema.parse(old);
+  assert.ok(parsed.android.trustedInstallers.includes('com.android.vending'));
 });

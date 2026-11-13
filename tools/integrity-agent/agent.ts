@@ -32,7 +32,7 @@ console.log(`
 ArenaHub Match Monitor (PC)
 While this window is open and the match is running, ArenaHub will:
   - check running program names against the tournament blocklist (only matches are sent),
-  - take a screenshot every 20 seconds and send it to the referee laptop,
+  - take a screenshot every 20 seconds and send it to the referee laptop, if the referee turned recording on,
   - connect Dota 2's official Game State Integration (hero, match ID, Steam ID).
 It does not read game memory, files, messages, browser history or your webcam.
 Data stays on the referee laptop and is deleted after 30 days unless it is part of a case.
@@ -41,9 +41,18 @@ Close this window or press Ctrl+C to stop. Stopping is logged for the referee.
 async function main() {
   if (args.yes !== true) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const answer = (await rl.question('Type YES to start monitoring: ')).trim();
+    const answer = (await rl.question('Type YES to agree and start, or NO to decline: ')).trim().toUpperCase();
     rl.close();
-    if (answer.toUpperCase() !== 'YES') { console.log('Monitoring not started.'); process.exit(0); }
+    if (answer !== 'YES') {
+      // Anything but YES is a decline. The referee is told, so they can arrange another way to play.
+      if (answer === 'NO') {
+        try {
+          const declined = await api('/device/decline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+          console.log(declined.ok ? 'You declined. The referee has been told. Please go to the referee desk before your match.' : ((await declined.json() as any).error || 'Could not send your answer.'));
+        } catch { console.log('Could not reach the referee laptop to send your answer. Tell the referee you declined.'); }
+      } else console.log('Monitoring not started. Run the command again and type YES or NO.');
+      process.exit(0);
+    }
   }
 
   const claim = await api('/device/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, device: { model: hostname().slice(0, 80), os: `Windows ${release()}`, agent: VERSION } }) });
@@ -55,7 +64,8 @@ async function main() {
   await installGsi();
   await heartbeat();
   setInterval(() => void heartbeat(), (session.heartbeatSeconds || 15) * 1000);
-  void screenshot(); setInterval(() => void screenshot(), 20_000);
+  if (session.record !== false) { void screenshot(); setInterval(() => void screenshot(), 20_000); }
+  else console.log('The referee did not ask for screenshots for this match, so only program checks run.');
 }
 let token = '', game = '', blocked: string[] = [];
 let lastScreenshotOk = true, stopping = false;

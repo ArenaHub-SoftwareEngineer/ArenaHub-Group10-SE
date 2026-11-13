@@ -11,21 +11,22 @@ ArenaHub tournaments may ask you to turn on match monitoring during official mat
 ## What is collected
 
 **Android phone (Mobile Legends, CODM):**
-- A recording of your screen. There is no microphone and no camera.
-- Whether your game app is the official version, checked through its signing certificate.
-- Apps on the tournament blocklist, if any are installed. Your full app list never leaves your phone.
+- A recording of your screen, only if the referee turned recording on for your match. There is no microphone and no camera.
+- Whether your game app is the official version (checked through its signing certificate) and which app store installed it.
+- Apps on the tournament blocklist, if any are installed, including tools that can change other apps' files. Your full app list never leaves your phone.
+- It cannot open your game's own folder or files: Android does not allow that, and the companion does not try.
 - Whether the phone is rooted or is an emulator.
 - Screen-control (accessibility) apps that are turned on, and apps allowed to draw over other apps.
 - Whether developer options or debugging are on.
 - Optional, only if you allow it: which app was on screen.
 
 **iPhone (Mobile Legends, CODM):**
-- Only the screen recording you make yourself and upload after the match. Nothing is installed and nothing else on the iPhone is checked.
-- Turn on Do Not Disturb before you record, so private notifications do not appear in the video.
+- Only that you checked in. Nothing is installed and nothing on the iPhone is checked. A referee records the match from the observer slot in the custom room.
+- If a referee asks for your own screen recording, you can upload it from the check-in page. Turn on Do Not Disturb before you record, so private notifications do not appear in the video.
 
 **Windows PC (Dota 2):**
 - Running programs that are on the tournament blocklist. Your full program list never leaves your PC.
-- A screenshot every 20 seconds.
+- A screenshot every 20 seconds, only if the referee turned screenshots on for your match.
 - Dota 2's official Game State Integration: your hero, match ID, game state and Steam ID.
 
 **Never collected:** your messages, photos, files, contacts, location, passwords, browser history, or what other apps contain.
@@ -45,7 +46,7 @@ ArenaHub tournaments may ask you to turn on match monitoring during official mat
 
 ## If you do not agree
 
-Declining is not a penalty. You can play on an organizer-provided device, or under direct referee supervision at the venue.
+Press **Decline** on the check-in page, in the app, or type NO in the PC agent. Declining is not a penalty. The referee is told straight away, so they can give you an organizer-provided device or watch your match in person.
 
 ## Your rights
 

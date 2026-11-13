@@ -106,3 +106,14 @@
 .monitor-layers span { font-size: 11px; font-weight: 650; padding: 3px 8px; border-radius: 20px; background: var(--surface-soft); color: var(--text-secondary); }
 .monitor-conn.paired { color: var(--info); }
 @media (max-width: 520px) { .monitor-breakdown li, .monitor-timeline-row { grid-template-columns: 110px 1fr auto; } .monitor-timeline-row { grid-template-columns: 110px 1fr; } .monitor-timeline-ends { margin-left: 120px; } }
+
+/* Alerts a referee must act on. */
+.monitor-alerts { margin-top: 18px; border: 1px solid var(--danger); border-left-width: 5px; border-radius: 12px; padding: 14px 16px; background: var(--danger-soft, var(--surface)); }
+.monitor-alerts ul { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
+.monitor-alerts li { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; font-size: 14px; color: var(--text-primary); }
+.monitor-alerts li > span:first-child { flex: 1 1 260px; min-width: 0; }
+.monitor-alert-actions { display: flex; gap: 8px; }
+.monitor-alert-actions button { min-height: 36px; padding: 0 14px; }
+.monitor-summary { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 640px) { .monitor-summary { grid-template-columns: repeat(2, 1fr); } }
+.monitor-conn.declined { color: var(--danger); }

@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.content.pm.Signature
 import android.os.Build
 import android.os.Process
+import android.os.SystemClock
 import android.provider.Settings
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,24 +20,49 @@ import java.security.MessageDigest
 /**
  * Collects the facts the server turns into signals. The format must match androidFactsSchema in
  * src/lib/integrityRisk.ts. Nothing here touches the game itself: it only describes the phone around it.
+ *
+ * To keep the phone smooth, the expensive part (walking every installed app) runs at most once a
+ * minute, or straight away when an app is installed, updated or removed. Cheap settings checks run
+ * on every report.
  */
 class DeviceChecks(private val context: Context) {
     private val pm = context.packageManager
+    private var heavyAt = 0L
+    private var heavyKey = ""
+    private var heavy: Heavy? = null
 
-    fun collect(gamePackages: List<String>, blockedPatterns: List<String>, recording: Boolean): JSONObject {
-        val installed = pm.getInstalledApplications(0)
+    private class Heavy(val games: JSONArray, val flagged: List<String>, val overlays: List<String>)
+
+    /** Called when apps change, so the next report rescans. */
+    @Synchronized fun invalidate() { heavy = null }
+
+    @Synchronized
+    fun collect(gamePackages: List<String>, blockedPatterns: List<String>, recording: Boolean, recordingRefused: Boolean): JSONObject {
+        val key = (gamePackages + "|" + blockedPatterns).joinToString(",")
+        val now = SystemClock.elapsedRealtime()
+        val scan = heavy?.takeIf { key == heavyKey && now - heavyAt < HEAVY_EVERY_MS } ?: scanApps(gamePackages, blockedPatterns).also { heavy = it; heavyAt = now; heavyKey = key }
         return JSONObject()
             .put("platform", "android")
-            .put("games", JSONArray(gamePackages.mapNotNull { gameInfo(it) }))
-            .put("installedFlagged", JSONArray(installed.map { it.packageName }.filter { matchesAny(it, blockedPatterns) }.take(100)))
+            .put("games", scan.games)
+            .put("installedFlagged", JSONArray(scan.flagged))
             .put("rootIndicators", JSONArray(rootIndicators()))
             .put("emulatorIndicators", JSONArray(emulatorIndicators()))
             .put("accessibilityServices", JSONArray(accessibilityServices()))
-            .put("overlayPackages", JSONArray(overlayPackages(installed)))
+            .put("overlayPackages", JSONArray(scan.overlays))
             .put("developerOptions", globalFlag(Settings.Global.DEVELOPMENT_SETTINGS_ENABLED))
             .put("usbDebugging", globalFlag(Settings.Global.ADB_ENABLED) || globalFlag("adb_wifi_enabled"))
             .put("recording", recording)
+            .put("recordingRefused", recordingRefused)
             .apply { foregroundPackage()?.let { put("foregroundPackage", it) } }
+    }
+
+    private fun scanApps(gamePackages: List<String>, blockedPatterns: List<String>): Heavy {
+        val installed = pm.getInstalledApplications(0)
+        return Heavy(
+            JSONArray(gamePackages.mapNotNull { gameInfo(it) }),
+            installed.map { it.packageName }.filter { matchesAny(it, blockedPatterns) }.take(100),
+            overlayPackages(installed),
+        )
     }
 
     /** Trailing * matches a prefix, otherwise the name must match exactly (case-insensitive). */
@@ -45,7 +71,10 @@ class DeviceChecks(private val context: Context) {
         return patterns.any { p -> if (p.endsWith("*")) value.startsWith(p.dropLast(1)) else value == p }
     }
 
-    /** Signing-certificate SHA-256 of an installed game. A modified APK cannot keep the official signature. */
+    /**
+     * Signing-certificate SHA-256 and install source of an installed game. A modified APK cannot keep
+     * the official signature, and modified builds are spread as downloaded files, not through stores.
+     */
     private fun gameInfo(packageName: String): JSONObject? = try {
         val info = pm.getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
         val signing = info.signingInfo
@@ -57,7 +86,14 @@ class DeviceChecks(private val context: Context) {
         val digest = MessageDigest.getInstance("SHA-256")
         val certs = signatures.take(5).map { sig -> digest.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) } }
         JSONObject().put("packageName", packageName).put("versionName", (info.versionName ?: "").take(200)).put("certSha256", JSONArray(certs))
+            .apply { installer(packageName)?.let { put("installer", it) } }
     } catch (_: PackageManager.NameNotFoundException) { null }
+
+    private fun installer(packageName: String): String? = try {
+        val name = if (Build.VERSION.SDK_INT >= 30) pm.getInstallSourceInfo(packageName).installingPackageName
+            else @Suppress("DEPRECATION") pm.getInstallerPackageName(packageName)
+        name?.takeIf { Regex("^[a-zA-Z0-9._]{2,200}$").matches(it) }
+    } catch (_: Exception) { null }
 
     private fun rootIndicators(): List<String> {
         val found = mutableListOf<String>()
@@ -119,4 +155,6 @@ class DeviceChecks(private val context: Context) {
         }
         return last?.takeIf { Regex("^[a-zA-Z0-9._]{2,200}$").matches(it) }
     }
+
+    companion object { const val HEAVY_EVERY_MS = 60_000L }
 }

@@ -2,6 +2,7 @@ package ph.edu.wmsu.arenahub.companion
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
@@ -31,6 +32,7 @@ class MainActivity : Activity() {
     private lateinit var codeField: EditText
     private lateinit var consent: CheckBox
     private lateinit var startButton: Button
+    private lateinit var declineButton: Button
     private lateinit var stopButton: Button
     private lateinit var usageButton: Button
     private lateinit var status: TextView
@@ -57,7 +59,9 @@ class MainActivity : Activity() {
         column.addView(text(getString(R.string.consent), 14f))
         consent = CheckBox(this).apply { text = "I understand and agree to monitoring for this match" }
         column.addView(consent)
-        startButton = Button(this).apply { text = "Start monitoring"; setOnClickListener { start() } }
+        column.addView(text("Declining is allowed and is not a penalty. The referee is told and will give you an organizer device or watch you in person.", 13f))
+        startButton = Button(this).apply { text = "Agree and start monitoring"; setOnClickListener { start() } }
+        declineButton = Button(this).apply { text = "Decline monitoring"; setOnClickListener { decline() } }
         stopButton = Button(this).apply { text = "Stop monitoring"; setOnClickListener { MonitorService.stop(this@MainActivity) } }
         usageButton = Button(this).apply {
             text = "Optional: allow app usage access"
@@ -65,6 +69,7 @@ class MainActivity : Activity() {
         }
         status = text("", 15f)
         column.addView(startButton)
+        column.addView(declineButton)
         column.addView(stopButton)
         column.addView(usageButton)
         column.addView(text("Usage access lets the referee see whether the game was the app on screen. It is optional.", 13f))
@@ -115,14 +120,61 @@ class MainActivity : Activity() {
                     else -> {
                         claim = result.json(); claimServer = server
                         val body = claim!!
-                        show("Paired: ${body.optString("playerName")} - ${body.optString("matchLabel")}. Android will now ask to record your screen; choose the entire screen.")
-                        val projection = getSystemService(MediaProjectionManager::class.java)
-                        @Suppress("DEPRECATION")
-                        startActivityForResult(projection.createScreenCaptureIntent(), REQUEST_CAPTURE)
+                        if (body.optBoolean("record", true)) {
+                            show("Paired: ${body.optString("playerName")} - ${body.optString("matchLabel")}. Android will now ask to record your screen; choose the entire screen.")
+                            val projection = getSystemService(MediaProjectionManager::class.java)
+                            @Suppress("DEPRECATION")
+                            startActivityForResult(projection.createScreenCaptureIntent(), REQUEST_CAPTURE)
+                        } else {
+                            show("Paired: ${body.optString("playerName")} - ${body.optString("matchLabel")}. The referee did not ask for screen recording, so only device checks run.")
+                            startService(body, RESULT_CANCELED, null)
+                        }
                     }
                 }
             }
         }
+    }
+
+    private fun decline() {
+        val server = serverField.text.toString().trim().trimEnd('/')
+        val code = codeField.text.toString().trim().uppercase()
+        if (!Regex("^https?://[^\\s/]+$").matches(server) || !Regex("^[A-Z0-9]{8}$").matches(code)) return show("Enter the laptop address and pairing code first, so the referee knows who declined.")
+        AlertDialog.Builder(this)
+            .setTitle("Decline monitoring?")
+            .setMessage("The referee will be told and will arrange an organizer device or watch your match in person.")
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Decline") { _, _ ->
+                declineButton.isEnabled = false
+                thread {
+                    val result = try { Api.postJson(server, "/device/decline", JSONObject().put("code", code)) } catch (_: Exception) { null }
+                    runOnUiThread {
+                        declineButton.isEnabled = true
+                        when {
+                            result == null -> show("Cannot reach $server. Join the event Wi-Fi and try again.")
+                            !result.ok -> show(result.error("Could not send your answer (${result.code})."))
+                            else -> { codeField.setText(""); show("You declined. The referee has been told. Please go to the referee desk before your match.") }
+                        }
+                    }
+                }
+            }
+            .show()
+    }
+
+    /** Starts the service. Recording is only requested when the referee turned it on for this match. */
+    private fun startService(body: JSONObject, resultCode: Int, data: Intent?) {
+        val monitor = body.optJSONObject("monitor") ?: JSONObject()
+        val service = Intent(this, MonitorService::class.java)
+            .putExtra(MonitorService.EXTRA_SERVER, claimServer)
+            .putExtra(MonitorService.EXTRA_TOKEN, body.getString("token"))
+            .putStringArrayListExtra(MonitorService.EXTRA_GAMES, monitor.optJSONArray("gamePackages").strings())
+            .putStringArrayListExtra(MonitorService.EXTRA_BLOCKED, monitor.optJSONArray("blockedPackages").strings())
+            .putExtra(MonitorService.EXTRA_HEARTBEAT, body.optInt("heartbeatSeconds", 15))
+            .putExtra(MonitorService.EXTRA_RECORD, body.optBoolean("record", true))
+            .putExtra(MonitorService.EXTRA_PROJECTION_CODE, resultCode)
+        if (resultCode == RESULT_OK && data != null) service.putExtra(MonitorService.EXTRA_PROJECTION_DATA, data)
+        startForegroundService(service)
+        claim = null
+        codeField.setText("")
     }
 
     @Deprecated("Platform Activity API; no AndroidX dependency in this app.")
@@ -131,25 +183,15 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_CAPTURE) return
         val body = claim ?: return
-        val monitor = body.optJSONObject("monitor") ?: JSONObject()
-        // Monitoring starts even if recording is refused; the referee then sees "recording stopped".
-        val service = Intent(this, MonitorService::class.java)
-            .putExtra(MonitorService.EXTRA_SERVER, claimServer)
-            .putExtra(MonitorService.EXTRA_TOKEN, body.getString("token"))
-            .putStringArrayListExtra(MonitorService.EXTRA_GAMES, monitor.optJSONArray("gamePackages").strings())
-            .putStringArrayListExtra(MonitorService.EXTRA_BLOCKED, monitor.optJSONArray("blockedPackages").strings())
-            .putExtra(MonitorService.EXTRA_HEARTBEAT, body.optInt("heartbeatSeconds", 15))
-            .putExtra(MonitorService.EXTRA_PROJECTION_CODE, resultCode)
-        if (resultCode == RESULT_OK && data != null) service.putExtra(MonitorService.EXTRA_PROJECTION_DATA, data)
-        else show("Screen recording was declined. Monitoring continues without it, and the referee will see that.")
-        startForegroundService(service)
-        claim = null
-        codeField.setText("")
+        // Monitoring starts even if recording is refused; the referee is told "screen recording refused".
+        if (resultCode != RESULT_OK || data == null) show("You did not allow screen recording. Device checks still run, and the referee has been told.")
+        startService(body, resultCode, data)
     }
 
     private fun render() {
         val running = MonitorState.running
         startButton.visibility = if (running) View.GONE else View.VISIBLE
+        declineButton.visibility = if (running) View.GONE else View.VISIBLE
         stopButton.visibility = if (running) View.VISIBLE else View.GONE
         usageButton.visibility = if (DeviceChecks(this).hasUsageAccess()) View.GONE else View.VISIBLE
         if (running || MonitorState.lastReport > 0) {

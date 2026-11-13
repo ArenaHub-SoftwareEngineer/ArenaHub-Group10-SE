@@ -11,7 +11,7 @@ import { AuthError } from '../server/staffAuth';
 
 function removeTree(path: string) { if (!existsSync(path)) return; if (statSync(path).isDirectory()) { for (const e of readdirSync(path)) removeTree(join(path, e)); rmdirSync(path); } else unlinkSync(path); }
 const OFFICIAL = 'a'.repeat(64), MODDED = 'b'.repeat(64);
-const facts = (over: Record<string, unknown> = {}) => ({ platform: 'android', games: [{ packageName: 'com.mobile.legends', certSha256: [OFFICIAL] }], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [], developerOptions: false, usbDebugging: false, recording: true, ...over });
+const facts = (over: Record<string, unknown> = {}) => ({ platform: 'android', games: [{ packageName: 'com.mobile.legends', certSha256: [OFFICIAL], installer: 'com.android.vending' }], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [], developerOptions: false, usbDebugging: false, recording: true, ...over });
 const pause = (ms = 1600) => new Promise(r => setTimeout(r, ms));
 const mp4 = () => Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(32)]);
 
@@ -47,7 +47,7 @@ test('pair, report, score, record, review and end an Android session', async t =
   assert.equal(created.status, 201);
   const pair = await created.json() as any;
   assert.match(pair.code, /^[A-Z2-9]{8}$/); assert.match(pair.qr, /^data:image\/png;base64,/);
-  assert.equal(pair.link, `arenahub://pair?s=${encodeURIComponent(pairing.serverUrl)}&c=${pair.code}`);
+  assert.equal(pair.link, `${pairing.serverUrl}/join.html?c=${pair.code}`, 'one QR link for every device type');
 
   assert.equal((await call('/device/claim', { body: { code: 'WRONG123' } })).status, 404);
   assert.equal((await call('/device/claim', { body: { code: pair.code } })).status, 429, 'guessing codes is throttled');
@@ -71,7 +71,7 @@ test('pair, report, score, record, review and end an Android session', async t =
   assert.equal((await call('/device/heartbeat', { token: claimed.token, body: { platform: 'pc', processes: [], gameRunning: true, screenshotOk: true } })).status, 400);
   await new Promise(r => setTimeout(r, 4100));
   tick(60_000);
-  assert.equal((await call('/device/heartbeat', { token: claimed.token, body: facts({ games: [{ packageName: 'com.mobile.legends', certSha256: [MODDED] }], recording: false }) })).status, 200);
+  assert.equal((await call('/device/heartbeat', { token: claimed.token, body: facts({ games: [{ packageName: 'com.mobile.legends', certSha256: [MODDED], installer: 'com.android.vending' }], recording: false }) })).status, 200);
   assert.equal((await call('/device/heartbeat', { token: claimed.token, body: facts() })).status, 429);
 
   const detail = await (await call(`/sessions/${claimed.sessionId}`, { token: 'staff' })).json() as any;
@@ -153,12 +153,12 @@ test('Dota 2 GSI and OpenDota checks on a PC session', async t => {
   assert.ok(after.audit.some((a: any) => a.action === 'observation-recorded' && a.actor === 'staff-uid'));
 });
 
-test('iPhone sessions: web pairing link, chunked upload, playback ticket and missing-recording signal', async t => {
+test('iPhone sessions: check-in, optional chunked upload and playback ticket', async t => {
   const { call } = await setup(t);
   assert.equal((await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2', platform: 'ios' } })).status, 400, 'Dota 2 is not an iPhone game');
   const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, platform: 'ios', team: 'CCS Phoenix' } })).json() as any;
   assert.equal(pair.platform, 'ios');
-  assert.equal(pair.link, `http://192.168.1.5:3000/proctor.html?c=${pair.code}`);
+  assert.equal(pair.link, `http://192.168.1.5:3000/join.html?c=${pair.code}`);
   const claimed = await (await call('/device/claim', { body: { code: pair.code, device: { model: 'iPhone', os: 'iOS 18.1', agent: 'web 1.0.0' } } })).json() as any;
   assert.deepEqual(claimed.monitor, {});
   let view = (await (await call('/sessions', { token: 'staff' })).json() as any[])[0];
@@ -188,14 +188,51 @@ test('iPhone sessions: web pairing link, chunked upload, playback ticket and mis
   assert.equal(ranged.status, 206); assert.equal((await ranged.arrayBuffer()).byteLength, 100);
   assert.equal((await call('/media/not-a-real-ticket')).status, 404);
 
-  // A second iPhone that never uploads is flagged once its session ends.
+  // The referee records iPhones from the observer slot, so an iPhone that checks in and never uploads is not flagged.
   await pause();
   const quiet = await (await call('/pairings', { token: 'staff', body: { ...pairing, platform: 'ios', playerName: 'Bee' } })).json() as any;
   await call('/device/claim', { body: { code: quiet.code } });
   await call(`/sessions/${quiet.id}/end`, { token: 'staff', body: {} });
   view = await (await call(`/sessions/${quiet.id}`, { token: 'staff' })).json() as any;
-  assert.deepEqual(view.risk.reasons.map((r: any) => r.id), ['recording-missing']);
-  assert.equal(view.risk.categories.connection, 15);
+  assert.deepEqual(view.risk.reasons, []);
+});
+
+test('join page info, decline, and the per-match recording switch', async t => {
+  const { call, store } = await setup(t);
+  const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, record: false } })).json() as any;
+  const info = await call(`/device/pairing/${pair.code}`);
+  assert.equal(info.status, 200);
+  assert.deepEqual(await info.json(), { platform: 'android', game: 'mlbb', gameLabel: 'Mobile Legends', playerName: 'Ace', matchLabel: pairing.matchLabel, record: false, codeExpiresAt: pair.codeExpiresAt });
+  assert.equal(store.session(pair.id)!.status, 'pending', 'reading the info does not use the code');
+  assert.equal((await call('/device/pairing/short')).status, 404, 'malformed codes are not looked up');
+  assert.equal((await call('/device/pairing/ZZZZZZZZ')).status, 404);
+  for (let i = 0; i < 7; i++) await call('/device/pairing/ZZZZZZZZ');
+  assert.equal((await call('/device/pairing/ZZZZZZZZ')).status, 429, 'more than 10 lookups in 10 seconds are refused');
+
+  // Recording off: a phone with no recording raises nothing about recording.
+  const claimed = await (await call('/device/claim', { body: { code: pair.code } })).json() as any;
+  assert.equal(claimed.record, false);
+  const facts = { platform: 'android', games: [{ packageName: 'com.mobile.legends', certSha256: ['a'.repeat(64)], installer: 'com.android.vending' }], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [], developerOptions: false, usbDebugging: false, recording: false };
+  assert.equal((await call('/device/heartbeat', { token: claimed.token, body: facts })).status, 200);
+  let view = (await (await call('/sessions', { token: 'staff' })).json() as any[])[0];
+  assert.equal(view.record, false);
+  assert.ok(!view.risk.reasons.some((r: any) => r.id.startsWith('recording')));
+
+  // Decline: the code is used up, staff see "declined" with a signal, and the session cannot be claimed.
+  await pause();
+  const second = await (await call('/pairings', { token: 'staff', body: { ...pairing, playerName: 'Bee', team: 'COE Titans' } })).json() as any;
+  assert.equal((await call('/device/decline', { body: { code: 'WRONG123' } })).status, 404);
+  await pause();
+  const declined = await call('/device/decline', { body: { code: second.code.toLowerCase() } });
+  assert.equal(declined.status, 200);
+  await pause();
+  assert.equal((await call('/device/claim', { body: { code: second.code } })).status, 404, 'a declined code cannot be used');
+  view = await (await call(`/sessions/${second.id}`, { token: 'staff' })).json() as any;
+  assert.equal(view.status, 'declined'); assert.equal(view.connection, 'declined');
+  assert.deepEqual(view.risk.reasons.map((r: any) => r.id), ['monitoring-declined']);
+  assert.ok(view.audit.some((a: any) => a.action === 'player-declined'));
+  assert.equal((await call(`/sessions/${second.id}/end`, { token: 'staff', body: {} })).status, 200);
+  assert.equal(store.session(second.id)!.status, 'declined', 'ending does not hide a decline');
 });
 
 function fetchChunk(call: any, token: string, id: string, index: number, total: number, raw: Buffer) {

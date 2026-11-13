@@ -11,7 +11,7 @@ import android.os.HandlerThread
 import java.io.File
 
 /**
- * Records the screen in 30-second MP4 segments (720p, no audio) and hands each finished file to
+ * Records the screen in 30-second MP4 segments (720p, 24 fps, no audio) and hands each finished file to
  * [onSegment]. Android 14 allows only one virtual display per projection, so the display is created
  * once and pointed at each new MediaRecorder's surface.
  */
@@ -70,8 +70,9 @@ class ScreenRecorder(
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setVideoEncoder(MediaRecorder.VideoEncoder.H264)
             setVideoSize(width, height)
-            setVideoFrameRate(30)
-            setVideoEncodingBitRate(2_500_000)
+            // 24 fps at 1.5 Mbit/s keeps the phone's video chip lightly loaded and halves upload size.
+            setVideoFrameRate(24)
+            setVideoEncodingBitRate(1_500_000)
             setOutputFile(file.absolutePath)
             prepare()
         }.also { current = file }

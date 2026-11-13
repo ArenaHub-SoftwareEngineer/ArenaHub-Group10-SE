@@ -20,16 +20,20 @@ It does three things instead:
 
 | Device | Tool | Status |
 |---|---|---|
-| Android phone (MLBB, CODM) | ArenaHub Companion APK | Source in `companion/android`. Build it once in Android Studio (see below) |
-| Windows PC (Dota 2) | `arenahub-agent.exe` | Run `npm run build:agent` |
-| iPhone (MLBB, CODM) | Web page on the laptop (`/proctor.html`) | Nothing to install. The player uploads their own screen recording after the match. No device checks are possible on iPhone |
+| Android phone (MLBB, CODM) | ArenaHub Companion app | Run `npm run build:companion`. Players download it from the laptop through the QR code |
+| Windows PC (Dota 2) | `arenahub-agent.exe` | Run `npm run build:agent`. Players download it from the laptop through the QR code |
+| iPhone (MLBB, CODM) | Check-in page on the laptop | Nothing to install and no device checks (Apple does not allow any app to check other apps). The player agrees or declines; a referee records the match from the observer slot |
+
+**Every player scans the same kind of QR code with their phone camera.** It opens `join.html` on the laptop, which shows the right next step for the device the code was made for: download or open the Android app, check in an iPhone, or download and run the PC agent. Every version has a **Decline** button.
+
+**Record from the observer slot.** For MLBB and CODM, a referee joins the custom room as an observer (spectator) on a laptop or spare phone and records the whole match with OBS or the phone's screen recorder. This covers iPhone players, puts no load on any player's phone, and shows every player at once.
 
 **Dota 2 players install the PC agent, not a phone app.** The cheats run on the PC, so that is where the checks run. For every Dota 2 match, a referee should also join the lobby as an observer and write down the match ID, so the replay can be reviewed from each player's view.
 
 ## One-time preparation
 
 1. **Build the PC agent.** Run `npm run build:agent`. It writes `dist-agent/arenahub-agent.exe` (about 90 MB, with no install needed). Copy it to a USB drive for player PCs. Windows SmartScreen may warn that it is unsigned. Choose "More info", then "Run anyway".
-2. **Build the Android app.** See `companion/android/README.md`. Copy `app-debug.apk` to a shared folder, a USB drive or a group chat. Players install it once.
+2. **Build the Android app.** Run `npm run build:companion` (details in `companion/android/README.md`). It writes `dist-agent/arenahub-companion.apk`, which the laptop serves to players.
 3. **Allow phones to reach the laptop.** Open PowerShell as Administrator once and run:
    ```powershell
    New-NetFirewallRule -DisplayName "ArenaHub LAN 3210" -Direction Inbound -Protocol TCP -LocalPort 3210 -Action Allow -Profile Private
@@ -53,15 +57,17 @@ It does three things instead:
    ```
 3. On the laptop itself, open `http://localhost:3210`. Sign in with a staff account and go to **Admin > Match monitor**. Use the laptop for the staff page, because Google sign-in only works on `localhost`, not on the Wi-Fi address.
 4. **Pair each player.** For each player:
-   1. Choose the match, the game and the player.
-   2. Check the laptop address. It fills itself in, for example `http://192.168.137.1:3210`.
-   3. Press **Create pairing code**.
+   1. Choose the match, the game, the device (Android, iPhone or PC), the team and the player.
+   2. Choose whether to **record the screen** (Android) or **take screenshots** (PC). Turn it off for casual matches to keep phones light; device checks still run.
+   3. Check the laptop address. It fills itself in, for example `http://192.168.137.1:3210`.
+   4. Press **Create pairing code**. Each code works once and expires after 5 minutes.
 
-   Each code works once and expires after 5 minutes.
-   - **Android:** the player scans the QR code with the phone camera. That opens the Companion. The player reads the notice, ticks the box, presses Start, and allows "entire screen" recording. A "monitoring is ON" notification stays visible for the whole match.
-   - **iPhone:** choose **iPhone** under Device before creating the code. The player scans the QR code with the iPhone camera, which opens a page in Safari. They agree, start the iPhone's built-in screen recording from Control Center, play, then return to the page and upload the video. The upload must finish before the monitoring window closes, so do not press End monitoring on an iPhone session until its recording has arrived. A session that ends with no recording is flagged "No recording uploaded".
-   - **PC:** the player runs the command shown under the QR code, for example `arenahub-agent.exe --server http://192.168.137.1:3210 --code ABCD2345`, and types YES. For Dota 2, the player must **restart Dota 2** after pairing so it loads the live-data connection.
+   The player scans the QR code with their phone camera:
+   - **Android:** the page offers **Download the app** the first time (the phone may ask to allow installing apps from the browser), then **Open ArenaHub Companion**. In the app the player ticks the box and presses **Agree and start monitoring**, or presses **Decline monitoring**. If recording is on, Android asks to record the screen; refusing is allowed and is reported to you. A "monitoring is ON" notification stays visible for the whole match. The app re-checks the installed apps once a minute (or immediately when an app is installed or removed) so it stays light.
+   - **iPhone:** the page shows what checking in means and two buttons: **Agree and check in** or **Decline**. Nothing is installed. If you need the player's own recording, they can upload it from the same page.
+   - **PC:** the page offers the agent download and the exact command to run, for example `arenahub-agent.exe --server http://192.168.137.1:3210 --code ABCD2345`. The player types YES to agree or NO to decline. For Dota 2, the player must **restart Dota 2** after the agent starts.
 5. **During the match**, the session list refreshes every 5 seconds:
+   - A red **Needs your attention** box appears when a player declines, refuses screen recording, or their device stops reporting. The browser tab shows the count. Press **Turn on desktop alerts** once to get a Windows notification even when the page is in the background.
    - "Not reporting" means the device went quiet for more than 45 seconds.
    - Coloured edges show the level: watch (blue), review (amber), urgent (red).
 6. **After the match:**
@@ -103,9 +109,10 @@ The observation counts in the Behaviour category and appears in the case summary
 - Accessibility and overlay apps include normal apps (password managers, chat heads, TalkBack). They are "medium" or "low" for that reason. Read the evidence before acting.
 - Stat outliers mean a player had an unusually good game. They are context only.
 - A cheat that hides from the game publisher's own anti-cheat will usually hide from the device checks too. For those, the recording and the referee checklist are the only evidence, and they show signs, not proof.
-- iPhone sessions have no device checks at all. The player also chooses which video to upload, so a referee should check that the recording shows the right match from start to finish.
-- The iPhone page was tested in a desktop browser only, not yet on a real iPhone.
-- The Android app has not yet been built or tested on a real phone. Test it on two or three phones with different Android versions before the first event.
+- No app can open MLBB's or CODM's game folder on Android 11 or newer: Android locks each app's data so only that app can read it. The companion instead flags what file-injector hacks need to get in (root, Shizuku, virtual-phone apps, modified game builds, games installed from APK sites).
+- iPhone sessions have no device checks at all. The observer recording and the referee are the only evidence.
+- The join page and the iPhone check-in were tested in a desktop browser pretending to be a phone, not yet on a real iPhone or Android phone.
+- The Android app compiles and passes Android's lint checks, but has not been run on a real phone yet. Test it on two or three phones with different Android versions before the first event.
 - Remote (off-campus) matches need a tunnel such as Cloudflare Tunnel, which is not set up yet.
 
 ## Troubleshooting

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '../../lib/firebase';
 import type { Match } from '../../lib/types';
 import { FAIR_PLAY_GAMES, belongsToFairPlayGame } from '../../lib/fairPlayGames';
@@ -11,7 +11,7 @@ import '../../monitor.css';
 
 interface SessionView {
   id: string; matchId: string; matchLabel: string; game: MonitorGame; gameLabel: string; platform: MonitorPlatform; playerName: string; team: string; expectedSteamId: string;
-  status: 'pending' | 'active' | 'ended'; connection: 'waiting' | 'online' | 'paired' | 'lost' | 'ended'; createdAt: number; expiresAt: number; claimedAt: number | null; endedAt: number | null;
+  status: 'pending' | 'active' | 'ended' | 'declined'; connection: 'waiting' | 'online' | 'paired' | 'lost' | 'ended' | 'declined'; record: boolean; createdAt: number; expiresAt: number; claimedAt: number | null; endedAt: number | null;
   lastSeen: number | null; device: { model?: string; os?: string; agent?: string } | null; gsi: { matchId: string; steamId: string; hero: string; gameState: string; clockTime: number | null } | null;
   reviewNote: string; hold: boolean; mediaBytes: number; risk: RiskResult;
 }
@@ -30,7 +30,7 @@ async function call<T>(path: string, init: { method?: string; body?: unknown } =
   if (!response.ok) throw new Error(data.error || `The monitor service answered ${response.status}. Is the ArenaHub server running on this laptop?`);
   return data as T;
 }
-const DEVICE_LABEL: Record<MonitorPlatform, string> = { android: 'Android companion', ios: 'iPhone upload page', pc: 'PC agent' };
+const DEVICE_LABEL: Record<MonitorPlatform, string> = { android: 'Android companion', ios: 'iPhone check-in', pc: 'PC agent' };
 async function mediaUrl(sessionId: string, mediaId: number) {
   const user = auth.currentUser; if (!user) throw new Error('Sign in again.');
   const response = await fetch(`/api/integrity/sessions/${sessionId}/media/${mediaId}`, { headers: { Authorization: `Bearer ${await user.getIdToken()}` } });
@@ -41,7 +41,20 @@ async function mediaUrl(sessionId: string, mediaId: number) {
 const time = (ms: number | null) => ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
 const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 const gameOf = (match: Match): MonitorGame | '' => (FAIR_PLAY_GAMES.find(g => belongsToFairPlayGame(match, g))?.id as MonitorGame) || '';
-const CONNECTION_LABEL = { waiting: 'Waiting for device', online: 'Online', paired: 'Paired, uploads after the match', lost: 'Not reporting', ended: 'Ended' };
+const CONNECTION_LABEL = { waiting: 'Waiting for device', online: 'Online', paired: 'Checked in', lost: 'Not reporting', ended: 'Ended', declined: 'Declined' };
+
+/** Things a referee must act on now: a player declined, refused recording, or went silent. */
+interface MonitorAlert { key: string; sessionId: string; text: string }
+function alertsFor(sessions: SessionView[]): MonitorAlert[] {
+  const out: MonitorAlert[] = [];
+  for (const s of sessions) {
+    const who = `${s.playerName}${s.team ? ` (${s.team})` : ''}`;
+    if (s.connection === 'declined') out.push({ key: `${s.id}:declined`, sessionId: s.id, text: `${who} declined monitoring for ${s.matchLabel}. Arrange an organizer device or watch them in person.` });
+    if (s.risk.reasons.some(r => r.id === 'recording-refused')) out.push({ key: `${s.id}:recording`, sessionId: s.id, text: `${who} agreed to monitoring but did not allow screen recording.` });
+    if (s.connection === 'lost') out.push({ key: `${s.id}:lost`, sessionId: s.id, text: `${who}'s device stopped reporting. Check that the app or agent is still running.` });
+  }
+  return out;
+}
 const entriesToText = (entries: BlockEntry[]) => entries.map(e => `${e.match} | ${e.label} | ${e.severity}`).join('\n');
 function textToEntries(text: string): BlockEntry[] {
   return text.split('\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
@@ -167,7 +180,9 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
   const [sessions, setSessions] = useState<SessionView[]>([]), [urls, setUrls] = useState<string[]>([]), [error, setError] = useState(''), [downloads, setDownloads] = useState<string[]>([]);
   const [matchId, setMatchId] = useState(''), [customLabel, setCustomLabel] = useState(''), [game, setGame] = useState<MonitorGame>('mlbb');
   const [player, setPlayer] = useState(''), [steamId, setSteamId] = useState(''), [hours, setHours] = useState(4), [server, setServer] = useState('');
-  const [platform, setPlatform] = useState<MonitorPlatform>('android'), [team, setTeam] = useState('');
+  const [platform, setPlatform] = useState<MonitorPlatform>('android'), [team, setTeam] = useState(''), [record, setRecord] = useState(true);
+  const [dismissed, setDismissed] = useState<string[]>([]), [desktopAlerts, setDesktopAlerts] = useState(() => typeof Notification !== 'undefined' && Notification.permission === 'granted');
+  const announced = useRef<Set<string> | null>(null);
   const [pairing, setPairing] = useState<Pairing & { playerName: string } | null>(null), [busy, setBusy] = useState(false), [openId, setOpenId] = useState(''), [filter, setFilter] = useState('');
   const monitorable = useMemo(() => matches.filter(m => gameOf(m) && m.team1 && m.team2 && !m.team1.isBye && !m.team2.isBye && m.status !== 'completed'), [matches]);
   const match = monitorable.find(m => m.id === matchId);
@@ -179,29 +194,50 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
   useEffect(() => { void refresh(); const timer = setInterval(() => void refresh(), 5000); return () => clearInterval(timer); }, [refresh]);
   useEffect(() => { call<{ urls: string[]; downloads?: string[] }>('/server-info').then(info => { setUrls(info.urls); setDownloads(info.downloads || []); setServer(s => s || info.urls[0] || ''); }).catch(() => {}); }, []);
   useEffect(() => { if (match) { const g = gameOf(match); if (g) setGame(g); } }, [matchId]);
+  const alerts = useMemo(() => alertsFor(sessions).filter(a => !dismissed.includes(a.key)), [sessions, dismissed]);
+  // New alerts pop up as desktop notifications (if allowed) and show a count in the browser tab.
+  useEffect(() => {
+    const keys = alertsFor(sessions).map(a => a.key);
+    if (announced.current === null) { if (sessions.length) announced.current = new Set(keys); return; }
+    for (const alert of alertsFor(sessions)) {
+      if (announced.current.has(alert.key)) continue;
+      announced.current.add(alert.key);
+      if (desktopAlerts && typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification('ArenaHub match monitor', { body: alert.text, tag: alert.key });
+    }
+  }, [sessions, desktopAlerts]);
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\) /, '');
+    document.title = alerts.length ? `(${alerts.length}) ${base}` : base;
+    return () => { document.title = document.title.replace(/^\(\d+\) /, ''); };
+  }, [alerts.length]);
 
   const pair = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setError(''); setPairing(null);
     try {
       const label = match ? `${match.matchNumber} · ${match.team1?.name} vs ${match.team2?.name}` : customLabel.trim();
-      const result = await call<Pairing>('/pairings', { body: { matchId: match?.id || `scrim-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`, matchLabel: label, game, platform, team: team.trim(), playerName: player.trim(), expectedSteamId: game === 'dota2' ? steamId.trim() : '', hours, serverUrl: server.trim().replace(/\/$/, '') } });
+      const result = await call<Pairing>('/pairings', { body: { matchId: match?.id || `scrim-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`, matchLabel: label, game, platform, team: team.trim(), record: platform === 'ios' ? false : record, playerName: player.trim(), expectedSteamId: game === 'dota2' ? steamId.trim() : '', hours, serverUrl: server.trim().replace(/\/$/, '') } });
       setPairing({ ...result, playerName: player.trim() }); setPlayer(''); setSteamId(''); void refresh();
     } catch (err) { setError(err instanceof Error ? err.message : 'Pairing failed.'); } finally { setBusy(false); }
   };
   const serverBase = server.trim().endsWith('/') ? server.trim().slice(0, -1) : server.trim();
-  const counts = { online: sessions.filter(s => s.connection === 'online').length, lost: sessions.filter(s => s.connection === 'lost').length, flagged: sessions.filter(s => ['review', 'urgent'].includes(s.risk.level)).length };
+  const counts = { online: sessions.filter(s => ['online', 'paired'].includes(s.connection)).length, lost: sessions.filter(s => s.connection === 'lost').length, declined: sessions.filter(s => s.connection === 'declined').length, flagged: sessions.filter(s => ['review', 'urgent'].includes(s.risk.level)).length };
   const matchOptions = [...new Map(sessions.map(s => [s.matchId, s.matchLabel])).entries()];
   const arenaMatch = filter || sessions[0]?.matchId || '';
   const arenaPlayers = sessions.filter(s => s.matchId === arenaMatch);
 
   return <div className="module-page monitor-page">
     <header className="dashboard-page-heading"><span className="section-overline">MATCH MONITOR</span><h1>Watch the devices, not just the screen.</h1>
-      <p>Pair each player's phone or PC to a match. ArenaHub checks the device around the game, records the screen and flags anything a referee should look at. It cannot see inside the game and never decides a penalty by itself.</p></header>
+      <p>Pair each player's phone or PC to a match. ArenaHub checks the device around the game and flags anything a referee should look at. It cannot see inside the game and never decides a penalty by itself.</p></header>
     {error && <p className="field-error" role="alert">{error}</p>}
-    <div className="feature-summary" aria-label="Monitor overview"><div><strong>{counts.online}</strong><span>Devices online</span></div><div><strong>{counts.lost}</strong><span>Not reporting</span></div><div><strong>{counts.flagged}</strong><span>Need a referee</span></div></div>
+    {alerts.length > 0 && <section className="monitor-alerts" role="alert" aria-label="Needs your attention">
+      <div className="operations-row"><strong>Needs your attention ({alerts.length})</strong>{typeof Notification !== 'undefined' && !desktopAlerts && <button type="button" className="arena-outline" onClick={() => void Notification.requestPermission().then(p => setDesktopAlerts(p === 'granted'))}>Turn on desktop alerts</button>}</div>
+      <ul>{alerts.map(a => <li key={a.key}><span>{a.text}</span><span className="monitor-alert-actions"><button type="button" className="arena-outline" onClick={() => setOpenId(a.sessionId)}>Open</button><button type="button" className="arena-outline" onClick={() => setDismissed(d => [...d, a.key])}>Done</button></span></li>)}</ul>
+    </section>}
+    {alerts.length === 0 && typeof Notification !== 'undefined' && !desktopAlerts && <p className="field-hint"><button type="button" className="arena-outline" onClick={() => void Notification.requestPermission().then(p => setDesktopAlerts(p === 'granted'))}>Turn on desktop alerts</button> to be told when a player declines or a device goes quiet, even in another tab.</p>}
+    <div className="feature-summary monitor-summary" aria-label="Monitor overview"><div><strong>{counts.online}</strong><span>Checked in</span></div><div><strong>{counts.declined}</strong><span>Declined</span></div><div><strong>{counts.lost}</strong><span>Not reporting</span></div><div><strong>{counts.flagged}</strong><span>Need a referee</span></div></div>
 
     <section className="operations-section">
-      <div className="operations-section-heading"><QrCode size={20} /><div><h2>Pair a device</h2><p>Android players scan the code with the ArenaHub Companion, iPhone players with their camera, and PC players run the agent. Codes work once and expire in 5 minutes.</p></div></div>
+      <div className="operations-section-heading"><QrCode size={20} /><div><h2>Pair a device</h2><p>Every player scans the code with their phone camera (PC players can type the address shown). The page that opens installs or opens the app, checks in iPhones, and lets anyone decline. Codes work once and expire in 5 minutes.</p></div></div>
       <form className="module-form monitor-pair-form" onSubmit={e => void pair(e)}>
         <label>Match<select value={matchId} onChange={e => setMatchId(e.target.value)}><option value="">Scrim or unlisted match</option>{monitorable.map(m => <option key={m.id} value={m.id}>{m.matchNumber} · {m.team1?.name} vs {m.team2?.name}</option>)}</select></label>
         {!match && <label>Match name<input required maxLength={200} value={customLabel} onChange={e => setCustomLabel(e.target.value)} placeholder="e.g. Practice scrim CCS vs COE" /></label>}
@@ -210,6 +246,9 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
         <label>Team{matchTeams.length ? <select value={team} onChange={e => setTeam(e.target.value)}><option value="">Choose team</option>{matchTeams.map(t => <option key={t!.id} value={t!.name}>{t!.name}</option>)}</select> : <input maxLength={80} value={team} onChange={e => setTeam(e.target.value)} placeholder="e.g. CCS Phoenix" />}</label>
         <label>Player (IGN)<input required maxLength={80} list="monitor-players" value={player} onChange={e => setPlayer(e.target.value)} /><datalist id="monitor-players">{players.map(p => <option key={p} value={p} />)}</datalist></label>
         {game === 'dota2' && <label>Steam ID (17 digits, optional)<input inputMode="numeric" maxLength={17} value={steamId} onChange={e => setSteamId(e.target.value.replace(/\D/g, ''))} placeholder="7656119..." /></label>}
+        {platform !== 'ios' && <label className="settings-toggle">{platform === 'pc' ? 'Take screenshots during the match' : 'Record the screen during the match'}<input type="checkbox" checked={record} onChange={e => setRecord(e.target.checked)} /></label>}
+        {platform !== 'ios' && <p className="field-hint">{record ? 'Uses a little battery and Wi-Fi. Turn it off for casual matches; device checks still run.' : 'Only device checks run. Record from the observer slot if you need video.'}</p>}
+        {platform === 'ios' && <p className="field-hint">iPhones only check in. Record this match from an observer slot in the custom room.</p>}
         <label>Monitoring window (hours)<input type="number" min={0.5} max={12} step={0.5} value={hours} onChange={e => setHours(Number(e.target.value))} /></label>
         <label>Laptop address devices will use<input required list="monitor-urls" value={server} onChange={e => setServer(e.target.value)} placeholder="http://192.168.x.x:3210" /><datalist id="monitor-urls">{urls.map(u => <option key={u} value={u} />)}</datalist></label>
         {!urls.length && <p className="field-hint">No Wi-Fi address found. Start the server in LAN mode (see docs/INTEGRITY_SETUP.md) and connect this laptop to the event Wi-Fi or hotspot.</p>}
@@ -218,9 +257,9 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
       {pairing && <div className="monitor-pairing" role="status">
         <img src={pairing.qr} alt={`Pairing QR code for ${pairing.playerName}`} width={220} height={220} />
         <div><p className="field-hint">For {pairing.playerName} · expires {time(pairing.codeExpiresAt)}</p><p className="monitor-code">{pairing.code}</p>
-          {pairing.platform === 'android' ? <><p>Open the ArenaHub Companion and scan this code, or type the code and the laptop address.</p>{downloads.includes('arenahub-companion.apk') ? <p className="field-hint">No app yet? On the phone, open <code className="monitor-command">{serverBase}/api/integrity/downloads/arenahub-companion.apk</code></p> : <p className="field-hint">The Android app has not been built on this laptop yet, so there is no download link.</p>}</>
-            : pairing.platform === 'ios' ? <p>The player scans this code with the iPhone camera. It opens a page in Safari where they agree, then upload their screen recording after the match. iPhones get no device checks.</p>
-            : <><p>On the player's PC, open Command Prompt in the folder with the agent and run:</p><code className="monitor-command">{pairing.agentCommand}</code>{downloads.includes('arenahub-agent.exe') && <p className="field-hint">No agent yet? On that PC, download <code className="monitor-command">{serverBase}/api/integrity/downloads/arenahub-agent.exe</code></p>}</>}
+          {pairing.platform === 'android' ? <><p>The player scans this with the phone camera. The page that opens offers <strong>Download the app</strong> the first time and <strong>Open ArenaHub Companion</strong> after that. They agree or decline inside the app.</p>{!downloads.includes('arenahub-companion.apk') && <p className="field-error">The Android app has not been built on this laptop yet. Run npm run build:companion.</p>}</>
+            : pairing.platform === 'ios' ? <p>The player scans this with the iPhone camera and chooses Agree or Decline in Safari. Nothing is installed; record the match from the observer slot.</p>
+            : <><p>On the player's PC, open <code className="monitor-command">{pairing.link}</code> to download the agent, or if it is already there, run:</p><code className="monitor-command">{pairing.agentCommand}</code>{!downloads.includes('arenahub-agent.exe') && <p className="field-error">The PC agent has not been built on this laptop yet. Run npm run build:agent.</p>}</>}
         </div>
       </div>}
     </section>
@@ -235,7 +274,7 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
         <div className="module-form monitor-inline"><label>Match<select value={filter} onChange={e => setFilter(e.target.value)}><option value="">All recent</option>{matchOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button type="button" className="arena-outline" onClick={() => void refresh()}><RefreshCw size={15} /> Refresh</button></div></div>
       {!sessions.length ? <p className="field-hint">No sessions yet. Create a pairing code above.</p> : <ul className="monitor-sessions">{sessions.map(s => <li key={s.id} className={`monitor-session ${s.risk.level}`}>
         <div className="operations-row"><strong>{s.playerName}</strong><span className={`monitor-conn ${s.connection}`}>{CONNECTION_LABEL[s.connection]}</span></div>
-        <p className="field-hint">{s.gameLabel} · {PLATFORM_LABEL[s.platform]}{s.team ? ` · ${s.team}` : ''} · {s.matchLabel}</p>
+        <p className="field-hint">{s.gameLabel} · {PLATFORM_LABEL[s.platform]}{s.team ? ` · ${s.team}` : ''}{s.platform !== 'ios' && !s.record ? ' · recording off' : ''} · {s.matchLabel}</p>
         <div className="monitor-session-risk"><span className={`monitor-risk ${s.risk.level}`}>{s.risk.score}</span><span>{s.risk.reasons.slice(0, 2).map(r => r.title).join(', ') || 'No concerns reported'}</span></div>
         <button type="button" className="arena-outline" aria-haspopup="dialog" onClick={() => setOpenId(s.id)}>{['review', 'urgent'].includes(s.risk.level) ? <ShieldAlert size={15} /> : <ShieldCheck size={15} />} Open session</button>
       </li>)}</ul>}

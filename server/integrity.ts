@@ -26,6 +26,7 @@ const pairingInput = z.object({
   platform: z.enum(['android', 'ios', 'pc']).optional(),
   expectedSteamId: z.string().trim().regex(/^(\d{17})?$/, 'Steam ID must be the 17-digit SteamID64.').default(''),
   hours: z.number().min(0.5).max(12).default(4),
+  record: z.boolean().default(true),
 });
 const claimInput = z.object({ code: z.string().trim().min(6).max(12), device: z.object({ model: z.string().max(80).default(''), os: z.string().max(80).default(''), agent: z.string().max(40).default('') }).default({ model: '', os: '', agent: '' }) });
 
@@ -51,6 +52,9 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   if (!deps.store) { store.cleanup(); setInterval(() => store.cleanup(), 3600_000).unref(); }
   const router = express.Router();
   const lastCall = new Map<string, number>();
+  // Code lookups allow short bursts (a page reload, Chrome's app fallback) but still stop guessing: 10 per 10 seconds per address.
+  const lookups = new Map<string, number[]>();
+  const tooManyLookups = (ip: string) => { const now = Date.now(), recent = (lookups.get(ip) || []).filter(t => now - t < 10_000); recent.push(now); lookups.set(ip, recent); if (lookups.size > 5000) lookups.clear(); return recent.length > 10; };
   const tooFast = (key: string, gapMs: number) => { const now = Date.now(), last = lastCall.get(key) || 0; if (now - last < gapMs) return true; lastCall.set(key, now); return false; };
 
   const deviceConfig = (row: SessionRow) => {
@@ -61,7 +65,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
       : { blockedProcesses: config.pc.blockedProcesses.map(e => e.match) };
   };
   const sessionView = (row: SessionRow) => ({
-    id: row.id, matchId: row.match_id, matchLabel: row.match_label, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, team: row.team,
+    id: row.id, matchId: row.match_id, matchLabel: row.match_label, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, team: row.team, record: row.record === 1,
     expectedSteamId: row.expected_steam_id, status: row.status, connection: store.connection(row), createdAt: row.created_at, expiresAt: row.expires_at, claimedAt: row.claimed_at,
     endedAt: row.ended_at, lastSeen: row.last_seen, device: row.device ? JSON.parse(row.device) : null, gsi: row.gsi ? JSON.parse(row.gsi) : null,
     reviewNote: row.review_note, hold: row.hold === 1, mediaBytes: row.media_bytes, risk: store.risk(row),
@@ -90,14 +94,30 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const claimed = store.claim(input.data.code, input.data.device);
     if (!claimed) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
     const row = claimed.session;
-    res.json({ token: claimed.token, sessionId: row.id, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, matchLabel: row.match_label, expiresAt: row.expires_at, heartbeatSeconds: HEARTBEAT_SECONDS, monitor: deviceConfig(row) });
+    res.json({ token: claimed.token, sessionId: row.id, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, matchLabel: row.match_label, expiresAt: row.expires_at, heartbeatSeconds: HEARTBEAT_SECONDS, record: row.record === 1, monitor: deviceConfig(row) });
+  });
+  // The join page reads what a code is for (device type, game, player) before the player decides. The code stays unused.
+  router.get('/device/pairing/:code', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (tooManyLookups(String(req.ip))) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
+    const code = String(req.params.code);
+    const row = /^[A-Za-z0-9]{8}$/.test(code) ? store.pending(code) : undefined;
+    if (!row) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
+    res.json({ platform: row.platform, game: row.game, gameLabel: GAME_LABEL[row.game], playerName: row.player_name, matchLabel: row.match_label, record: row.record === 1, codeExpiresAt: row.code_expires_at });
+  });
+  router.post('/device/decline', express.json({ limit: '2kb' }), (req, res) => {
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    if (tooFast(`claim:${req.ip}`, 1500)) { res.status(429).json({ error: 'Wait a second and try again.' }); return; }
+    const row = /^[A-Za-z0-9]{8}$/.test(code) ? store.decline(code) : undefined;
+    if (!row) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
+    res.json({ declined: true });
   });
   router.post('/device/heartbeat', device, express.json({ limit: '64kb' }), (req, res) => {
     const row = res.locals.session as SessionRow;
     if (tooFast(`hb:${row.id}`, 4000)) { res.status(429).json({ error: 'Reporting too often.' }); return; }
     const facts = deviceFactsSchema.safeParse(req.body);
     if (!facts.success || facts.data.platform !== row.platform) { res.status(400).json({ error: 'The device report was not in the expected format. Update the companion.' }); return; }
-    store.heartbeat(row, facts.data, evaluateFacts(facts.data, store.config(), row.game));
+    store.heartbeat(row, facts.data, evaluateFacts(facts.data, store.config(), row.game, { recordingRequired: row.record === 1 }));
     res.json({ active: true, heartbeatSeconds: HEARTBEAT_SECONDS, expiresAt: row.expires_at, monitor: deviceConfig(row) });
   });
   router.post('/device/media', device, express.raw({ type: ['video/mp4', 'image/jpeg'], limit: MAX_VIDEO_BYTES }), (req, res) => {
@@ -189,7 +209,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const platform = input.data.platform || allowed[0];
     if (!allowed.includes(platform)) { res.status(400).json({ error: 'That game is not played on that kind of device.' }); return; }
     const pairing = store.createPairing({ ...input.data, platform }, uidOf(req));
-    const link = pairingLink(server, pairing.code, platform);
+    const link = pairingLink(server, pairing.code);
     res.status(201).json({ ...pairing, platform, link, qr: await QRCode.toDataURL(link, { margin: 1, width: 280 }), agentCommand: `arenahub-agent.exe --server ${server} --code ${pairing.code}` });
   });
   staff.get('/sessions', (req, res) => {

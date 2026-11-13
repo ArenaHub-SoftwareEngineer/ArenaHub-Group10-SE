@@ -35,7 +35,9 @@ export const SIGNAL_CATALOG = {
   'dota-not-running': { severity: 'low', title: 'Dota 2 not running', explain: 'The PC agent did not find Dota 2 running when it reported in.' },
   'screenshot-failed': { severity: 'low', title: 'Screenshot failed', explain: 'The PC agent could not capture the screen.' },
   'stat-outlier': { severity: 'low', title: 'Unusual stats for this player', explain: 'A stat from this match is far above the player\'s own recent average. Players have good games, so this is context only.' },
-  'recording-missing': { severity: 'medium', title: 'No recording uploaded', explain: 'The session ended and this iPhone player did not upload a screen recording of the match.' },
+  'recording-refused': { severity: 'medium', title: 'Screen recording refused', explain: 'The player agreed to monitoring but did not allow screen recording when the phone asked.' },
+  'game-sideloaded': { severity: 'medium', title: 'Game not installed from an app store', explain: 'The game was installed from a downloaded file or an unknown source instead of an app store. Modified game apps are spread this way, but some players install official files this way too.' },
+  'monitoring-declined': { severity: 'medium', title: 'Player declined monitoring', explain: 'The player chose not to be monitored for this match. Declining is allowed and is not a penalty; arrange an organizer device or direct referee watch.' },
   'referee-observation': { severity: 'medium', title: 'Referee observation', explain: 'A referee watched the evidence and recorded something that matches a known cheat type.' },
 } as const satisfies Record<string, { severity: Severity; title: string; explain: string }>;
 export type SignalId = keyof typeof SIGNAL_CATALOG;
@@ -46,9 +48,10 @@ export type SignalCategory = typeof SIGNAL_CATEGORIES[number];
 export const CATEGORY_LABEL: Record<SignalCategory, string> = { 'game-build': 'Game build', 'cheat-tools': 'Cheat tools', device: 'Device state', connection: 'Connection and recording', behaviour: 'Behaviour' };
 export const SIGNAL_CATEGORY: Record<SignalId, SignalCategory> = {
   'game-signature-mismatch': 'game-build', 'game-signature-unverified': 'game-build', 'game-not-installed': 'game-build',
+  'game-sideloaded': 'game-build',
   'cheat-tool-installed': 'cheat-tools', 'blocked-process': 'cheat-tools',
   'root-detected': 'device', 'emulator-detected': 'device', 'accessibility-service': 'device', 'overlay-app': 'device', 'developer-options': 'device', 'usb-debugging': 'device',
-  'recording-stopped': 'connection', 'game-left-foreground': 'connection', 'heartbeat-lost': 'connection', 'dota-not-running': 'connection', 'screenshot-failed': 'connection', 'recording-missing': 'connection',
+  'recording-stopped': 'connection', 'game-left-foreground': 'connection', 'heartbeat-lost': 'connection', 'dota-not-running': 'connection', 'screenshot-failed': 'connection', 'recording-refused': 'connection', 'monitoring-declined': 'connection',
   'steam-account-mismatch': 'behaviour', 'stat-outlier': 'behaviour', 'referee-observation': 'behaviour',
 };
 
@@ -56,7 +59,7 @@ export interface Signal { id: SignalId; severity: Severity; evidence: string }
 
 export interface BlockEntry { match: string; label: string; severity: Severity }
 export interface MonitorConfig {
-  android: { games: { mlbb: GameIdentity; codm: GameIdentity }; blockedPackages: BlockEntry[] };
+  android: { games: { mlbb: GameIdentity; codm: GameIdentity }; blockedPackages: BlockEntry[]; trustedInstallers: string[] };
   pc: { blockedProcesses: BlockEntry[] };
   thresholds: { watch: number; review: number; urgent: number };
 }
@@ -66,8 +69,10 @@ const severity = z.enum(SEVERITIES);
 const blockEntry = z.object({ match: z.string().trim().toLowerCase().min(2).max(120).regex(/^[a-z0-9._\- ]+\*?$/), label: z.string().trim().min(2).max(80), severity });
 const certHash = z.string().regex(/^[0-9a-f]{64}$/);
 const gameIdentity = z.object({ packages: z.array(z.string().regex(/^[a-zA-Z0-9._]{3,150}$/)).min(1).max(10), trustedCertSha256: z.array(certHash).max(20) });
+// App stores that ship the official MLBB and CODM builds. A game installed by anything else is "sideloaded".
+export const DEFAULT_TRUSTED_INSTALLERS = ['com.android.vending', 'com.huawei.appmarket', 'com.sec.android.app.samsungapps', 'com.xiaomi.market', 'com.xiaomi.mipicks', 'com.heytap.market', 'com.oppo.market', 'com.bbk.appstore', 'com.hihonor.appmarket', 'com.transsnet.store', 'com.amazon.venezia'];
 export const monitorConfigSchema = z.object({
-  android: z.object({ games: z.object({ mlbb: gameIdentity, codm: gameIdentity }), blockedPackages: z.array(blockEntry).max(300) }),
+  android: z.object({ games: z.object({ mlbb: gameIdentity, codm: gameIdentity }), blockedPackages: z.array(blockEntry).max(300), trustedInstallers: z.array(z.string().regex(/^[a-zA-Z0-9._]{3,150}$/)).max(40).default(DEFAULT_TRUSTED_INSTALLERS) }),
   pc: z.object({ blockedProcesses: z.array(blockEntry).max(300) }),
   thresholds: z.object({ watch: z.number().int().min(1).max(100), review: z.number().int().min(1).max(100), urgent: z.number().int().min(1).max(100) }).refine(t => t.watch < t.review && t.review < t.urgent, 'Thresholds must increase: watch < review < urgent.'),
 });
@@ -97,7 +102,11 @@ export const DEFAULT_MONITOR_CONFIG: MonitorConfig = {
       { match: 'com.lbe.parallel*', label: 'Parallel Space (app cloner)', severity: 'medium' },
       { match: 'com.ludashi.dualspace*', label: 'Dual Space (app cloner)', severity: 'medium' },
       { match: 'com.truedevelopersstudio.automatictap*', label: 'Auto Clicker', severity: 'high' },
+      // These can reach a game's private folder, which is how file-injector hacks (drone view, map, skins) get in.
+      { match: 'moe.shizuku.privileged.api', label: 'Shizuku (can change other apps\' files)', severity: 'high' },
+      { match: 'com.vmos*', label: 'VMOS (virtual phone inside the phone)', severity: 'high' },
     ],
+    trustedInstallers: DEFAULT_TRUSTED_INSTALLERS,
   },
   pc: {
     blockedProcesses: [
@@ -128,7 +137,7 @@ const shortText = z.string().trim().max(200);
 const packageName = z.string().regex(/^[a-zA-Z0-9._]{2,200}$/);
 export const androidFactsSchema = z.object({
   platform: z.literal('android'),
-  games: z.array(z.object({ packageName, versionName: shortText.optional(), certSha256: z.array(z.string().toLowerCase().pipe(certHash)).max(5) })).max(10),
+  games: z.array(z.object({ packageName, versionName: shortText.optional(), certSha256: z.array(z.string().toLowerCase().pipe(certHash)).max(5), installer: packageName.optional() })).max(10),
   installedFlagged: z.array(packageName).max(100),
   rootIndicators: z.array(shortText).max(20),
   emulatorIndicators: z.array(shortText).max(20),
@@ -137,6 +146,7 @@ export const androidFactsSchema = z.object({
   developerOptions: z.boolean(),
   usbDebugging: z.boolean(),
   recording: z.boolean(),
+  recordingRefused: z.boolean().optional(),
   foregroundPackage: packageName.optional(),
 });
 export const pcFactsSchema = z.object({
@@ -153,7 +163,8 @@ export type DeviceFacts = z.infer<typeof deviceFactsSchema>;
 const signal = (id: SignalId, evidence: string, level: Severity = SIGNAL_CATALOG[id].severity): Signal => ({ id, severity: level, evidence: evidence.slice(0, 200) });
 
 /** Turns one device report into signals. The server re-checks every list against its own config. */
-export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: MonitorGame): Signal[] {
+export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: MonitorGame, options: { recordingRequired?: boolean } = {}): Signal[] {
+  const recordingRequired = options.recordingRequired ?? true;
   const out: Signal[] = [];
   if (facts.platform === 'pc') {
     for (const process of facts.processes) {
@@ -161,7 +172,7 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
       if (entry) out.push(signal('blocked-process', `${entry.label}: ${process.name}${process.signer ? ` (signed by ${process.signer})` : ' (unsigned)'}`, entry.severity));
     }
     if (game === 'dota2' && !facts.gameRunning) out.push(signal('dota-not-running', 'dota2.exe was not running'));
-    if (!facts.screenshotOk) out.push(signal('screenshot-failed', 'Screen capture failed on this report'));
+    if (recordingRequired && !facts.screenshotOk) out.push(signal('screenshot-failed', 'Screen capture failed on this report'));
     return out;
   }
   const identity = game === 'mlbb' ? config.android.games.mlbb : config.android.games.codm;
@@ -172,6 +183,8 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
     if (!app.certSha256.length) out.push(signal('game-signature-mismatch', `${label}: no signing certificate reported`));
     else if (!identity.trustedCertSha256.length) out.push(signal('game-signature-unverified', `${label} cert ${app.certSha256[0]}`));
     else if (!app.certSha256.some(cert => identity.trustedCertSha256.includes(cert))) out.push(signal('game-signature-mismatch', `${label} cert ${app.certSha256[0]}`));
+    if (!app.installer) out.push(signal('game-sideloaded', `${label}: installed from a file or unknown source`));
+    else if (!config.android.trustedInstallers.includes(app.installer)) out.push(signal('game-sideloaded', `${label}: installed by ${app.installer}`));
   }
   for (const name of facts.installedFlagged) {
     const entry = findEntry(name, config.android.blockedPackages);
@@ -190,7 +203,8 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
   if (facts.emulatorIndicators.length) out.push(signal('emulator-detected', facts.emulatorIndicators.join(', ')));
   if (facts.developerOptions) out.push(signal('developer-options', 'Developer options enabled'));
   if (facts.usbDebugging) out.push(signal('usb-debugging', 'USB or wireless debugging enabled'));
-  if (!facts.recording) out.push(signal('recording-stopped', 'Recording was off at this report'));
+  if (facts.recordingRefused) out.push(signal('recording-refused', 'The player did not allow screen recording'));
+  else if (recordingRequired && !facts.recording) out.push(signal('recording-stopped', 'Recording was off at this report'));
   if (facts.foregroundPackage && !identity.packages.includes(facts.foregroundPackage) && facts.foregroundPackage !== 'ph.edu.wmsu.arenahub.companion') out.push(signal('game-left-foreground', facts.foregroundPackage));
   return out;
 }
@@ -246,4 +260,7 @@ export function statOutliers(current: Record<string, unknown>, history: Record<s
 }
 
 export const PAIRING_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-export const pairingLink = (serverUrl: string, code: string, platform: MonitorPlatform = 'android') => platform === 'ios' ? `${serverUrl}/proctor.html?c=${code}` : `arenahub://pair?s=${encodeURIComponent(serverUrl)}&c=${code}`;
+/** One link for every device: the join page opens the Android app, offers the download, or runs the iPhone check-in. */
+export const pairingLink = (serverUrl: string, code: string) => `${serverUrl}/join.html?c=${code}`;
+/** Deep link the join page hands to the Android companion. */
+export const companionLink = (serverUrl: string, code: string) => `arenahub://pair?s=${encodeURIComponent(serverUrl)}&c=${code}`;
