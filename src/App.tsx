@@ -25,7 +25,7 @@ import { SpectatorLayout } from './components/spectator/SpectatorLayout';
 import { HomeScreen } from './components/spectator/HomeScreen';
 const LiveMatchView = lazy(() => import('./components/spectator/LiveMatchView').then(m => ({ default: m.LiveMatchView })));
 import { CurrentLiveView } from './components/spectator/CurrentLiveView';
-import { upNext, watchGames } from './lib/watchCards';
+import { liveRailItem, upNext, watchGames } from './lib/watchCards';
 import { ChooseTournamentView } from './components/spectator/ChooseTournamentView';
 import { BracketsView } from './components/spectator/BracketsView';
 const TeamsView = lazy(() => import('./components/spectator/TeamsView').then(m => ({ default: m.TeamsView })));
@@ -130,6 +130,9 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
   const activeMatchBracket = activeMatch && publishedBrackets.find(bracket => bracket.matches.some(match => match.id === activeMatch.id));
   const matchCenterGame = routeParams.get('game');
   const openMatchCenter = () => setSpectatorTab('current-live', matchCenterGame ? { game: matchCenterGame } : undefined);
+  // Live matches for the navigation rail's "Live now" list (broadcasting first, then started but not yet on air).
+  const liveCards = watchGames(publishedBrackets).flatMap(game => game.cards)
+    .filter(card => card.state === 'live' || card.state === 'waiting').sort((a, b) => Number(b.state === 'live') - Number(a.state === 'live'));
 
   const handleLogout = async () => {
     await logout();
@@ -222,6 +225,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           onExitToSpectator={() => { setForceAdminShell(false); setSpectatorTab('home'); }}
           onLogout={publicMode ? () => onSignIn?.() : handleLogout}
           openReportsCount={reports.filter((r) => r.status === 'open').length}
+          live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => setAdminTab('live-stream', { streamBracket: card.bracket.id, streamMatch: card.match.id }) }))}
         >
           {sharedError && <div className="module-notice mb-6" role="alert">{sharedError}</div>}
           {adminTab === 'overview' && (
@@ -280,6 +284,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           onOpenAdmin={() => { if (isAdminRole) { setForceAdminShell(true); setAdminTab('overview'); } }}
           isGuest={publicMode}
           breadcrumb={breadcrumb}
+          live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => card.state === 'live' ? setSpectatorTab('live', { match: card.match.id, game: card.gameId }) : setSpectatorTab('current-live', { game: card.gameId }) }))}
         >
           {spectatorTab === 'integrity' && <IntegrityCenter key={routeParams.get('case') || 'new'} matches={officialMatches} teams={teams} onSignIn={onSignIn} initialCaseId={routeParams.get('case')} />}
           {spectatorTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'team'} brackets={publishedBrackets} initialEntityId={routeParams.get('entity')} />}

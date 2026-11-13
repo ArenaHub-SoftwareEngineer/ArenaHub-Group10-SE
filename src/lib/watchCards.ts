@@ -48,3 +48,15 @@ export function upNext(brackets: BracketDraft[], currentId: string, limit = 12):
   const upcoming = cards.filter(c => c.state === 'upcoming').sort(upcomingOrder);
   return [...live, ...waiting, ...upcoming].slice(0, limit);
 }
+
+const short = (name?: string) => (name || 'TBD').replace(/^DEMO\s+/i, '');
+/** The rail's compact form of a live match: "CN Pulse vs CA Echo", the game, and the score. */
+export function liveRailItem(card: WatchCard) {
+  return {
+    id: card.match.id,
+    title: `${short(card.match.team1?.name)} vs ${short(card.match.team2?.name)}`,
+    subtitle: card.state === 'live' ? card.gameLabel : `${card.gameLabel} · starting soon`,
+    image: card.image,
+    score: `${card.match.score.team1Score}–${card.match.score.team2Score}`,
+  };
+}

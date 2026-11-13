@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
 import { Shield, ShieldAlert, Sparkles, LayoutDashboard, Users as UsersIcon, Gamepad2, AlertTriangle, Star, GitBranch, ClipboardList, Radio, Swords } from '../ui/Icons';
-import { AppShell, type ShellGroup } from '../ui/AppShell';
+import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
 import { ProfileMenu, type AccountPanel } from '../common/ProfileMenu';
 import { NotificationBell } from '../common/NotificationBell';
 
@@ -14,11 +14,13 @@ interface AdminLayoutProps {
   onLogout?: () => void;
   onOpenAccountPanel: (panel: AccountPanel) => void;
   openReportsCount: number;
+  /** Live matches for the rail's "Live now" list. */
+  live?: ShellLive[];
   children: React.ReactNode;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
-  currentUser, activeTab, onTabChange, onNotificationNavigate, onExitToSpectator, onLogout, onOpenAccountPanel, openReportsCount, children,
+  currentUser, activeTab, onTabChange, onNotificationNavigate, onExitToSpectator, onLogout, onOpenAccountPanel, openReportsCount, live = [], children,
 }) => {
   const groups = useMemo<ShellGroup[]>(() => [
     { label: 'Workspace', items: [
@@ -44,7 +46,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const profile = (placement: 'above' | 'below') => <ProfileMenu user={currentUser} placement={placement} onOpenPanel={onOpenAccountPanel}
     onSwitch={onExitToSpectator} switchLabel="Viewer" onLogout={onLogout} />;
 
-  return <AppShell context="Admin" groups={groups} navLabel="Admin navigation" isActive={id => id === activeTab} onNavigate={onTabChange}
+  return <AppShell context="Admin" groups={groups} live={live} navLabel="Admin navigation" isActive={id => id === activeTab} onNavigate={onTabChange}
     mobileTabs={['overview', 'bracket-studio', 'live-stream', 'match-data', 'ai-assistant']} pageKey={activeTab} fullBleed={activeTab === 'ai-assistant'}
     actions={<><NotificationBell staff onNavigate={onNotificationNavigate || onTabChange} />{profile('below')}</>}>
     {children}

@@ -6,7 +6,6 @@ import { sendMatchChat, watchMatchChat, type LiveChatMessage } from '../../lib/m
 import { matchBroadcasts } from '../../lib/streamUtils';
 import type { WatchCard } from '../../lib/watchCards';
 import { useToast } from '../ui/Toast';
-import { PlatformLogo, PLATFORM_NAMES } from '../ui/PlatformLogo';
 import { CollegeLogo } from '../common/CollegeLogo';
 import { MatchRostersAndCareerStats } from './MatchRostersAndCareerStats';
 import { WatchCardView } from './WatchCardView';
@@ -72,7 +71,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
         </div>
         <div className="watch-actions">
           <button type="button" className="watch-action" onClick={() => void share()}><Link2 size={18} />Share</button>
-          {links.map(link => <a key={link.platform} className="watch-action" href={link.url} target="_blank" rel="noopener noreferrer"><PlatformLogo platform={link.platform} size={18} />{PLATFORM_NAMES[link.platform]}<ExternalLink size={13} /></a>)}
+          {links[0] && <a className="watch-action" href={links[0].url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} />Open original</a>}
         </div>
       </div>
 

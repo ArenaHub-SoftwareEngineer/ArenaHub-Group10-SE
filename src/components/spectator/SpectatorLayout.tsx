@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
 import { Home, CalendarDays, Trophy, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag } from '../ui/Icons';
 import { hasCampusEmail } from '../../lib/campusAccess';
-import { AppShell, type ShellGroup } from '../ui/AppShell';
+import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
 import { ProfileMenu, type AccountPanel } from '../common/ProfileMenu';
 import { NotificationBell } from '../common/NotificationBell';
 
@@ -17,11 +17,13 @@ interface SpectatorLayoutProps {
   onOpenAccountPanel: (panel: AccountPanel) => void;
   /** Kept for callers; the new top bar shows search instead of a breadcrumb. */
   breadcrumb?: string;
+  /** Live matches for the rail's "Live now" list. */
+  live?: ShellLive[];
   children: React.ReactNode;
 }
 
 export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
-  currentUser, isGuest = false, activeTab, onTabChange, onNotificationNavigate, onLogout, onOpenAdmin, onOpenAccountPanel, children,
+  currentUser, isGuest = false, activeTab, onTabChange, onNotificationNavigate, onLogout, onOpenAdmin, onOpenAccountPanel, live = [], children,
 }) => {
   const campus = hasCampusEmail(currentUser.email);
   const canAccessAdmin = campus && ['organizer', 'moderator', 'school-admin', 'admin'].includes(currentUser.role);
@@ -46,7 +48,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
 
   const status = isGuest ? 'Preview' : campus ? 'WMSU member' : 'Spectator';
   return <div className="spectator-shell">
-    <AppShell context={campus ? 'WMSU' : undefined} groups={groups} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
+    <AppShell context={campus ? 'WMSU' : undefined} groups={groups} live={live} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
       mobileTabs={['home', 'current-live', 'brackets', 'schedule', 'ai-assistant']} pageKey={activeTab} fullBleed={activeTab === 'ai-assistant'}
       actions={<>
         <span className="shell-status" title={status}><i aria-hidden="true" />{status}</span>

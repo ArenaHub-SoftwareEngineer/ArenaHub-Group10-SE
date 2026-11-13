@@ -4,6 +4,7 @@ import { bracketScheduleLabel } from '../../lib/calendar';
 import { upcomingOrder, watchGames, type WatchCard } from '../../lib/watchCards';
 import { MultiMatchViewer } from './MultiMatchViewer';
 import { WatchCardView } from './WatchCardView';
+import { FeaturedCarousel } from './FeaturedCarousel';
 import { BroadcastIllustration, CalendarIllustration } from '../ui/Illustrations';
 import { LayoutGrid } from 'lucide-react';
 import { CalendarDays, Radio } from '../ui/Icons';
@@ -31,6 +32,8 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
   const waiting = inScope.filter(c => c.state === 'waiting');
   const upcoming = inScope.filter(c => c.state === 'upcoming').sort(upcomingOrder);
   const totalLive = all.filter(c => c.state === 'live').length;
+  // Featured: everything live, then matches about to go live, topped up with the next scheduled ones.
+  const featured = [...all.filter(c => c.state === 'live'), ...all.filter(c => c.state === 'waiting'), ...all.filter(c => c.state === 'upcoming').sort(upcomingOrder)].slice(0, 6);
   const open = (card: WatchCard) => card.state === 'live' ? onSelectMatch(card.match, card.gameId) : setPending(card);
 
   const shelf = (title: string, icon: React.ReactNode, cards: WatchCard[], id: string) => cards.length > 0 && <section className="watch-shelf" aria-labelledby={id}>
@@ -48,6 +51,8 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
       </div>
       <button type="button" className="arena-outline" aria-haspopup="dialog" onClick={() => setMultiOpen(true)}><LayoutGrid size={16} />Multi-view</button>
     </header>
+
+    {filter === 'all' && <FeaturedCarousel cards={featured} onOpen={open} />}
 
     <div className="ah-chips" role="toolbar" aria-label="Filter matches">
       {[{ id: 'all', label: 'All' }, { id: 'live', label: 'Live now' }, { id: 'upcoming', label: 'Upcoming' }].map(chip =>

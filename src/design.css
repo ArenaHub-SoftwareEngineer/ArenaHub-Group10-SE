@@ -1,43 +1,46 @@
 /*
  * ArenaHub design system (redesign 2026-11). Loaded last, so it is the single source of truth.
  *
+ * - Dark, like the streaming sites people already use (Twitch, YouTube dark). ArenaHub orange from the logo is
+ *   the signature colour, the way Twitch uses its purple: active states, primary buttons, live accents.
  * - One font: Google Sans Flex (the font Kaggle uses), never italic, never the code font except for real codes.
  * - One type scale: 12 / 14 / 16 / 18 / 20 / 24 / 30 / 36 px. Nothing smaller than 12px.
  * - One palette, by role: surfaces, text, borders, brand orange, and status colours (success, warning,
  *   danger, info, violet), each with -soft (tinted background) and -border variants.
- * - Pages are light. "Stages" are dark panels for the visual parts: brackets, the stream player, the 3D match
- *   arena. A stage redefines the same tokens, so any component looks right in either place.
+ * - "Stages" (brackets, the stream player, the 3D arena, the home hero) sit one step deeper than the page.
  */
 
-/* ---------- Light pages (the whole signed-in app and the welcome page) ---------- */
+/* ---------- The app (signed-in app and the welcome page) ---------- */
 .app-shell, .auth-entry, .auth-entry-dialog, .auth-status-screen {
-  color-scheme: light;
-  --bg-base: #f8f9fa;
-  --sidebar: #ffffff;
-  --topbar: #ffffff;
-  --surface: #ffffff;
-  --surface-soft: #f1f3f4;
-  --surface-elevated: #e8eaed;
-  --surface-hover: #f1f3f4;
-  --border: #e0e3e7;
-  --border-strong: #c4c8cd;
-  --text-primary: #202124;
-  --text-secondary: #474b50;
-  --text-muted: #5f6368;
+  color-scheme: dark;
+  --bg-base: #0e0e10;
+  --sidebar: #141416;
+  --topbar: #18181b;
+  --surface: #18181b;
+  --surface-soft: #1f1f23;
+  --surface-elevated: #2a2a2f;
+  --surface-hover: #26262c;
+  --border: #2c2c32;
+  --border-strong: #3f3f46;
+  --text-primary: #efeff1;
+  --text-secondary: #c9c9d1;
+  --text-muted: #a1a1aa;
   --brand: #ff6600;
-  --brand-hover: #e85d00;
-  --brand-ink: #b34700;
-  --brand-soft: #fff1e6;
-  --brand-border: #ffcfad;
-  --on-brand: #1f1206;
-  --success: #137333; --success-soft: #e6f4ea; --success-border: #a8dab5;
-  --warning: #8a5300; --warning-soft: #fef7e0; --warning-border: #f3d58a;
-  --danger: #c5221f;  --danger-soft: #fce8e6;  --danger-border: #f4b7b2;
-  --info: #1a5fb4;    --info-soft: #e8f0fe;    --info-border: #aecbfa;
-  --violet: #7b3fc4;  --violet-soft: #f3e8fd;  --violet-border: #d7b7f7;
-  --focus: #1a73e8;
-  --shadow-1: 0 1px 2px rgba(60, 64, 67, .12), 0 1px 3px 1px rgba(60, 64, 67, .08);
-  --shadow-2: 0 2px 6px 2px rgba(60, 64, 67, .12), 0 1px 2px rgba(60, 64, 67, .16);
+  --brand-hover: #ff7a1f;
+  --brand-ink: #ff8a3d;
+  --brand-soft: rgba(255, 102, 0, .16);
+  --brand-border: rgba(255, 122, 31, .5);
+  --on-brand: #1a0b00;
+  --live: #eb0400;
+  --success: #4ade80; --success-soft: rgba(74, 222, 128, .13); --success-border: rgba(74, 222, 128, .4);
+  --warning: #facc15; --warning-soft: rgba(250, 204, 21, .13); --warning-border: rgba(250, 204, 21, .4);
+  --danger: #f87171;  --danger-soft: rgba(248, 113, 113, .14); --danger-border: rgba(248, 113, 113, .42);
+  --info: #7cb4ff;    --info-soft: rgba(124, 180, 255, .14);   --info-border: rgba(124, 180, 255, .4);
+  --violet: #c4a1ff;  --violet-soft: rgba(196, 161, 255, .14); --violet-border: rgba(196, 161, 255, .4);
+  --focus: #ff8a3d;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .6);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .4);
+  --glow: 0 0 0 1px rgba(255, 102, 0, .35), 0 8px 28px rgba(255, 102, 0, .18);
   --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 24px;
   --ease: cubic-bezier(.2, 0, 0, 1);
   --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms;
@@ -45,30 +48,16 @@
   color: var(--text-primary);
 }
 
-/* ---------- Dark stages: brackets, stream player, 3D arena ---------- */
+/* ---------- Stages: one step deeper (brackets, stream player, 3D arena, hero) ---------- */
 .stage, .stage-board, .dashboard-media, .arena-hero, .broadcast-player-shell, .monitor3d, .multi-video-grid {
   color-scheme: dark;
-  --bg-base: #0f1114;
-  --surface: #17191d;
-  --surface-soft: #1e2126;
-  --surface-elevated: #272b31;
-  --surface-hover: #23272c;
-  --border: #2c3036;
-  --border-strong: #3c4148;
-  --text-primary: #f1f3f4;
-  --text-secondary: #c4c7cc;
-  --text-muted: #9aa0a6;
-  --brand-ink: #ff8f4d;
-  --brand-soft: rgba(255, 102, 0, .16);
-  --brand-border: rgba(255, 133, 51, .45);
-  --success: #5bd38f; --success-soft: rgba(91, 211, 143, .14); --success-border: rgba(91, 211, 143, .4);
-  --warning: #f5c04a; --warning-soft: rgba(245, 192, 74, .14); --warning-border: rgba(245, 192, 74, .4);
-  --danger: #f28b82;  --danger-soft: rgba(242, 139, 130, .14); --danger-border: rgba(242, 139, 130, .4);
-  --info: #8ab4f8;    --info-soft: rgba(138, 180, 248, .14);   --info-border: rgba(138, 180, 248, .4);
-  --violet: #c58af9;  --violet-soft: rgba(197, 138, 249, .14); --violet-border: rgba(197, 138, 249, .4);
-  --focus: #8ab4f8;
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
-  --shadow-2: 0 4px 16px rgba(0, 0, 0, .45);
+  --bg-base: #08080a;
+  --surface: #0f0f12;
+  --surface-soft: #16161a;
+  --surface-elevated: #222227;
+  --surface-hover: #1c1c21;
+  --border: #26262c;
+  --border-strong: #38383f;
   color: var(--text-primary);
 }
 .stage, .stage-board, .dashboard-media { background-color: var(--surface); }
@@ -135,7 +124,7 @@ html[data-motion=reduced] .ah-card-interactive:hover { transform: none; }
 .app-shell [data-tip] { position: relative; }
 .app-shell [data-tip]::after {
   content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 8px); transform: translate(-50%, -4px);
-  padding: 4px 8px; border-radius: 6px; background: #3c4043; color: #fff; font-size: 12px; font-weight: 500;
+  padding: 4px 8px; border-radius: 6px; background: var(--text-primary); color: var(--bg-base); font-size: 12px; font-weight: 500;
   white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); z-index: 60;
 }
 .app-shell [data-tip]:is(:hover, :focus-visible)::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 350ms; }

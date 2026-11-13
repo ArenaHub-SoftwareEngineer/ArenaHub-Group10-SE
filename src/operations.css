@@ -1,7 +1,7 @@
 .notification-root { position: relative; }
 .notification-trigger { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--text-secondary); background: var(--surface-soft); cursor: pointer; }
 .notification-trigger:hover,.notification-trigger.has-unread { background: var(--brand-soft); color: var(--brand-ink); }
-.notification-count { position: absolute; top: -3px; right: -4px; min-width: 19px; height: 19px; padding: 0 4px; border-radius: 12px; background: var(--brand); color: #211e1b; border: 2px solid var(--topbar); font-size: 12px; font-weight: 700; line-height: 15px; }
+.notification-count { position: absolute; top: -3px; right: -4px; min-width: 19px; height: 19px; padding: 0 4px; border-radius: 12px; background: var(--brand); color:var(--text-primary); border: 2px solid var(--topbar); font-size: 12px; font-weight: 700; line-height: 15px; }
 .notification-popover { margin: 0; padding: 0; position: fixed; border: 1px solid var(--border); border-radius: 16px; color: var(--text-primary); background: var(--surface); box-shadow: 0 12px 40px #211e1b20; overflow: hidden; }
 .notification-popover:popover-open { display: flex; flex-direction: column; }
 .notification-popover::backdrop { background: transparent; }
@@ -81,7 +81,7 @@
 .video-file-caption { display: flex; gap: 12px; justify-content: space-between; margin: 16px 0; font-size: 12px; overflow-wrap: anywhere; }
 .video-inspection-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr); gap: 20px; align-items: start; }
 .video-player-column:only-child { grid-column: 1 / -1; max-width: 850px; width: 100%; }
-.video-player-column video { width: 100%; max-height: 450px; background: #151515; border-radius: 9px; aspect-ratio: 16/9; }
+.video-player-column video { width: 100%; max-height: 450px; background:var(--bg-base); border-radius: 9px; aspect-ratio: 16/9; }
 .video-transport { display: flex; gap: 10px; align-items: center; padding: 10px 0; font-size: 12px; }
 .video-transport button { display: grid; place-items: center; border: 1px solid var(--border); border-radius: 6px; padding: 7px; cursor: pointer; background: var(--surface-soft); }
 .video-transport span { font-variant-numeric: tabular-nums; }
@@ -90,7 +90,7 @@
 .video-disclosure,.video-review-footnote { font-size: 12px; line-height: 1.7; color: var(--text-muted); margin: 12px 0; }
 .video-review-footnote { border-top: 1px solid var(--border); padding-top: 15px; margin-top: 24px; }
 .video-findings { padding: 16px; border-radius: 10px; background: var(--surface-soft); font-size: 12px; line-height: 1.7; min-width: 0; }
-.video-findings>img { width: 100%; border-radius: 6px; margin: 12px 0; aspect-ratio: 16/9; object-fit: contain; background: #151515; }
+.video-findings>img { width: 100%; border-radius: 6px; margin: 12px 0; aspect-ratio: 16/9; object-fit: contain; background:var(--bg-base); }
 .video-finding-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 10px 0; }
 .finding-state { padding: 3px 6px; font-size: 12px; border-radius: 4px; background: var(--surface); }
 .finding-state.review { color: var(--danger); background: var(--danger-soft); }

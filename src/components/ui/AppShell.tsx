@@ -21,6 +21,8 @@ export interface ShellItem {
   keywords?: string;
 }
 export interface ShellGroup { label: string; items: ShellItem[] }
+/** A live match in the rail's "Live now" list, like the live channels list on streaming sites. */
+export interface ShellLive { id: string; title: string; subtitle: string; image?: string; score?: string; onOpen: () => void }
 
 interface AppShellProps {
   context?: string;
@@ -38,6 +40,8 @@ interface AppShellProps {
   /** Full-height pages (chat) skip padding and page scroll. */
   fullBleed?: boolean;
   navLabel: string;
+  /** Live matches shown under the navigation. */
+  live?: ShellLive[];
   children: React.ReactNode;
 }
 
@@ -101,7 +105,7 @@ function ShellSearch({ items, onNavigate, onDone }: { items: ShellItem[]; onNavi
   </div>;
 }
 
-export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, actions, railFooter, pageKey, fullBleed = false, navLabel, children }: AppShellProps) {
+export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, actions, railFooter, pageKey, fullBleed = false, navLabel, live = [], children }: AppShellProps) {
   const reduced = useReducedMotion() || (typeof document !== 'undefined' && document.documentElement.dataset.motion === 'reduced');
   const phone = useMedia('(max-width: 767px)'), wide = useMedia('(min-width: 1200px)');
   const [railPref, setRailPref] = useState(readRail);
@@ -130,6 +134,19 @@ export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, ac
     })}
   </div>);
 
+  const liveList = (mode: 'rail' | 'drawer') => live.length > 0 && <div className="shell-group shell-live">
+    {(mode === 'drawer' || !collapsed) ? <p className="shell-group-label shell-live-label">Live now<span>{live.length}</span></p> : <span className="shell-live-mini-label" aria-hidden="true">LIVE</span>}
+    {live.slice(0, 8).map(item => {
+      const mini = mode === 'rail' && collapsed;
+      return <button key={item.id} type="button" className={`shell-live-item${mini ? ' is-mini' : ''}`} onClick={() => { item.onOpen(); setDrawer(false); }}
+        aria-label={`${item.title}, ${item.subtitle}${item.score ? `, score ${item.score}` : ''}. Live`} {...(mini ? { 'data-tip': item.title, 'data-tip-side': 'right' } : {})}>
+        <span className="shell-live-avatar">{item.image ? <img src={item.image} alt="" /> : null}</span>
+        {!mini && <span className="shell-live-text"><strong>{item.title}</strong><small>{item.subtitle}</small></span>}
+        {!mini && <span className="shell-live-meta"><i aria-hidden="true" />{item.score || 'Live'}</span>}
+      </button>;
+    })}
+  </div>;
+
   return <div className={`app-shell shell${collapsed ? ' shell-collapsed' : ''}`}>
     <header className="shell-topbar">
       <div className="shell-topbar-start">
@@ -151,7 +168,7 @@ export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, ac
 
     <div className="shell-body">
       <aside className="shell-rail" aria-label={navLabel}>
-        <nav className="shell-nav">{navList('rail')}</nav>
+        <nav className="shell-nav">{navList('rail')}{liveList('rail')}</nav>
         {railFooter && !collapsed && <div className="shell-rail-footer">{railFooter}</div>}
       </aside>
 
@@ -166,7 +183,7 @@ export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, ac
       <motion.aside className="shell-drawer" aria-label={navLabel} onClick={e => e.stopPropagation()}
         initial={{ x: reduced ? 0 : -24, opacity: reduced ? 1 : 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: reduced ? 0 : -24, opacity: 0 }} transition={{ duration: .2, ease: [.2, 0, 0, 1] }}>
         <div className="shell-drawer-head"><Brand compact context={context} /><button type="button" className="shell-icon-button" aria-label="Close navigation" onClick={() => setDrawer(false)}><X size={20} aria-hidden="true" /></button></div>
-        <nav className="shell-nav">{navList('drawer')}</nav>
+        <nav className="shell-nav">{navList('drawer')}{liveList('drawer')}</nav>
         {railFooter && <div className="shell-rail-footer">{railFooter}</div>}
       </motion.aside>
     </motion.div>}</AnimatePresence>

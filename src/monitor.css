@@ -3,7 +3,7 @@
 .monitor-pair-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end; }
 .monitor-pair-form .feature-dialog-actions, .monitor-pair-form > .field-hint { grid-column: 1 / -1; }
 .monitor-pairing { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-top: 18px; padding: 18px; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--surface-soft); }
-.monitor-pairing img { background: #fff; border-radius: 8px; padding: 6px; max-width: 100%; height: auto; }
+.monitor-pairing img { background:var(--surface); border-radius: 8px; padding: 6px; max-width: 100%; height: auto; }
 .monitor-pairing > div { min-width: 0; flex: 1 1 240px; }
 .monitor-code { font-family: ui-monospace, Consolas, monospace; font-size: clamp(26px, 7vw, 38px); letter-spacing: .18em; font-weight: 700; color: var(--text-primary); margin: 4px 0 8px; overflow-wrap: anywhere; }
 .monitor-command { display: block; margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: var(--bg-base); border: 1px solid var(--border); font-size: 14px; overflow-wrap: anywhere; user-select: all; }
@@ -20,7 +20,7 @@
 .monitor-risk.clear { color: var(--success); }
 .monitor-risk.watch { color: var(--info); }
 .monitor-risk.review { color: var(--warning); }
-.monitor-risk.urgent { color: #fff; background: var(--danger); }
+.monitor-risk.urgent { color:var(--text-primary); background: var(--danger); }
 .monitor-risk.urgent small { color: inherit; }
 .monitor-conn { font-size: 12px; font-weight: 650; text-transform: none; letter-spacing: .04em; padding: 4px 8px; border-radius: 20px; background: var(--surface-soft); color: var(--text-secondary); white-space: nowrap; }
 .monitor-conn.online { color: var(--success); }
@@ -76,8 +76,8 @@
 .monitor3d-label span { font-size: 12px; color: var(--text-secondary); max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 .monitor3d-pillar.watch .monitor3d-label strong { color: var(--info); }
 .monitor3d-pillar.review .monitor3d-label strong { color: var(--warning); }
-.monitor3d-pillar.urgent .monitor3d-label button { background: var(--danger); border-color: var(--danger); color: #fff; }
-.monitor3d-pillar.urgent .monitor3d-label span { color: #fff; }
+.monitor3d-pillar.urgent .monitor3d-label button { background: var(--danger); border-color: var(--danger); color:var(--text-primary); }
+.monitor3d-pillar.urgent .monitor3d-label span { color:var(--text-primary); }
 .monitor3d-label button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 .monitor3d-controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; margin: 12px 0 6px; }
 .monitor3d-controls label { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
@@ -118,4 +118,4 @@
 @media (max-width: 640px) { .monitor-summary { grid-template-columns: repeat(2, 1fr); } }
 .monitor-conn.declined { color: var(--danger); }
 
-.monitor-online { color: var(--success, #16724d); font-weight: 600; }
+.monitor-online { color:var(--success, var(--success)); font-weight: 600; }

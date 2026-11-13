@@ -1,9 +1,7 @@
 import React from 'react';
 import type { WatchCard } from '../../lib/watchCards';
 import { bracketScheduleLabel } from '../../lib/calendar';
-import { matchBroadcasts } from '../../lib/streamUtils';
 import { CollegeLogo } from '../common/CollegeLogo';
-import { PlatformLogo } from '../ui/PlatformLogo';
 import { Play } from '../ui/Icons';
 
 const teamName = (team?: { name?: string }) => team?.name || 'Awaiting team';
@@ -18,7 +16,6 @@ export const cardStatus = (card: WatchCard) => card.state === 'live' ? 'Live now
 export function WatchCardView({ card, layout = 'grid', onOpen }: { card: WatchCard; layout?: 'grid' | 'row'; onOpen: (card: WatchCard) => void }) {
   const { match } = card;
   const live = card.state === 'live';
-  const platforms = live ? matchBroadcasts(match) : [];
   const title = `${teamName(match.team1)} vs ${teamName(match.team2)}`;
   return <button type="button" className={`watch-card watch-card-${layout}${live ? ' is-live' : ''}`} onClick={() => onOpen(card)}
     aria-label={`${title}. ${cardStatus(card)}. ${card.gameLabel}`}>
@@ -40,7 +37,6 @@ export function WatchCardView({ card, layout = 'grid', onOpen }: { card: WatchCa
         <span className="watch-channel">{card.gameLabel}{card.mode ? ` · ${card.mode}` : ''}</span>
         <span className="watch-sub">{[card.bracket.title, match.roundName].filter(Boolean).join(' · ')}</span>
         <span className={`watch-status${live ? ' is-live' : ''}`}>{cardStatus(card)}
-          {platforms.length > 0 && <span className="watch-platforms">{platforms.map(link => <PlatformLogo key={link.platform} platform={link.platform} size={14} />)}</span>}
         </span>
       </span>
     </span>
