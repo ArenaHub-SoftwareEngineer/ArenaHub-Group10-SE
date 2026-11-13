@@ -148,17 +148,17 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
   return (
     <div className="space-y-6">
       {/* Top Section Header with Prominent + Add Game Button */}
-      <div className="bg-[#222222] border border-[#333333] rounded-[6px] p-6 shadow-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="bg-(--surface-soft) border border-(--border) rounded-[6px] p-6 shadow-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h2 className="text-xl font-heading font-black text-white tracking-tight">
+            <h2 className="text-xl font-heading font-bold text-(--text-primary) tracking-tight">
               Games Management
             </h2>
-            <span className="px-2 py-0.5 rounded-[4px] bg-[#ff6600]/15 border border-[#ff6600]/30 text-xs font-mono font-bold text-[#ff6600]">
+            <span className="px-2 py-0.5 rounded-[4px] bg-(--brand)/15 border border-(--brand)/30 text-xs tabular-nums font-bold text-(--brand-ink)">
               {games.length} Titles
             </span>
           </div>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-(--text-muted) mt-1">
             Titles available when creating tournaments, brackets, and team registrations.
           </p>
         </div>
@@ -166,7 +166,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
         {/* Primary + Add Game Button */}
         <button
           onClick={openAddModal}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-black font-semibold text-xs transition-all shadow-md shadow-[#ff6600]/10 cursor-pointer self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black font-semibold text-xs transition-all shadow-md shadow-(color:--brand)/10 cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
           <span>Add Game</span>
@@ -178,11 +178,11 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
         {games.map((g) => (
           <div
             key={g.id}
-            className="p-4 rounded-[6px] bg-[#222222] border border-[#333333] hover:border-[#444444] transition-all flex items-center justify-between gap-4 shadow-md group"
+            className="p-4 rounded-[6px] bg-(--surface-soft) border border-(--border) hover:border-(--border-strong) transition-all flex items-center justify-between gap-4 shadow-md group"
           >
             {/* Game Thumbnail & Details */}
             <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-16 h-16 rounded-[4px] overflow-hidden bg-[#161616] border border-[#363636] shrink-0 relative flex items-center justify-center">
+              <div className="w-16 h-16 rounded-[4px] overflow-hidden bg-(--bg-base) border border-(--border-strong) shrink-0 relative flex items-center justify-center">
                 <img
                   src={g.bannerImage}
                   alt={g.name}
@@ -190,21 +190,21 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
                   onError={(e) => {
                     // Fallback to stylized gamepad placeholder if image fails to load
                     e.currentTarget.style.display = 'none';
-                    e.currentTarget.parentElement?.classList.add('bg-gradient-to-br', 'from-[#2A2A2A]', 'to-[#1E1E1E]');
+                    e.currentTarget.parentElement?.classList.add('bg-gradient-to-br', 'from-(--surface-elevated)', 'to-(--surface-soft)');
                   }}
                   className="w-full h-full object-cover"
                 />
-                <Gamepad2 className="w-6 h-6 text-[#555555] absolute" />
+                <Gamepad2 className="w-6 h-6 text-(--text-muted) absolute" />
               </div>
 
               <div className="min-w-0">
-                <h3 className="text-sm font-heading font-bold text-white truncate group-hover:text-[#ff6600] transition-colors">
+                <h3 className="text-sm font-heading font-bold text-(--text-primary) truncate group-hover:text-(--brand-ink) transition-colors">
                   {g.name}
                 </h3>
-                <span className="text-xs text-[#888888] block mt-0.5">
+                <span className="text-xs text-(--text-muted) block mt-0.5">
                   {g.registeredTeams} registered teams
                 </span>
-                <span className="inline-block mt-1 px-2 py-0.5 rounded-[3px] bg-[#1A1A1A] border border-[#2E2E2E] text-[10px] text-[#AAAAAA] font-mono">
+                <span className="inline-block mt-1 px-2 py-0.5 rounded-[3px] bg-(--surface) border border-(--border) text-xs text-(--text-secondary) tabular-nums">
                   {g.visibility}
                 </span>
               </div>
@@ -214,7 +214,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => openEditModal(g)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-[#333333] text-xs font-medium text-[#CCCCCC] hover:text-white transition-colors cursor-pointer"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--border) text-xs font-medium text-(--text-secondary) hover:text-(--text-primary) transition-colors cursor-pointer"
                 title={`Edit ${g.name}`}
               >
                 <Edit2 className="w-3.5 h-3.5" />
@@ -223,7 +223,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
 
               <button
                 onClick={() => setGameToDelete(g)}
-                className="p-1.5 rounded-[4px] bg-[#1E1E1E] hover:bg-[#E8544B]/15 border border-[#333333] hover:border-[#E8544B]/40 text-[#888888] hover:text-[#E8544B] transition-colors cursor-pointer"
+                className="p-1.5 rounded-[4px] bg-(--surface-soft) hover:bg-(--danger)/15 border border-(--border) hover:border-(--danger)/40 text-(--text-muted) hover:text-(--danger) transition-colors cursor-pointer"
                 title={`Remove ${g.name}`}
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -233,10 +233,10 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
         ))}
 
         {games.length === 0 && (
-          <div className="col-span-full p-12 bg-[#222222] border border-[#333333] rounded-[6px] text-center space-y-3">
-            <Gamepad2 className="w-10 h-10 text-[#555555] mx-auto" />
-            <h3 className="text-sm font-bold text-white">No game titles configured</h3>
-            <p className="text-xs text-[#888888]">
+          <div className="col-span-full p-12 bg-(--surface-soft) border border-(--border) rounded-[6px] text-center space-y-3">
+            <Gamepad2 className="w-10 h-10 text-(--text-muted) mx-auto" />
+            <h3 className="text-sm font-bold text-(--text-primary)">No game titles configured</h3>
+            <p className="text-xs text-(--text-muted)">
               Click the "+ Add Game" button above to register an esports title.
             </p>
           </div>
@@ -249,7 +249,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
               {formError && <p role="alert" className="module-error">{formError}</p>}
               {/* Game Name */}
               <div>
-                <label htmlFor="game-name" className="block text-xs font-semibold text-[#CCCCCC] uppercase tracking-wider mb-2">
+                <label htmlFor="game-name" className="block text-xs font-semibold text-(--text-secondary) mb-2">
                   Game Name<Req />
                 </label>
                 <input
@@ -258,18 +258,18 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
                   value={gameName}
                   onChange={(e) => setGameName(e.target.value)}
                   placeholder="e.g., Tekken 8, Mobile Legends, Valorant"
-                  className="w-full bg-[#161616] border border-[#333333] focus:border-[#ff6600] rounded-[4px] px-3.5 py-2.5 text-sm text-white placeholder-[#555555] outline-hidden transition-colors"
+                  className="w-full bg-(--bg-base) border border-(--border) focus:border-(--brand) rounded-[4px] px-3.5 py-2.5 text-sm text-(--text-primary) placeholder-(--text-muted) outline-hidden transition-colors"
                 />
               </div>
 
               {/* Game Picture / Banner Selection */}
               <div>
-                <label className="block text-xs font-semibold text-[#CCCCCC] uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-(--text-secondary) mb-2">
                   Game Banner Picture
                 </label>
 
                 {/* Banner Live Preview Box */}
-                <div className="relative w-full h-32 rounded-[6px] overflow-hidden bg-[#161616] border border-[#383838] mb-3 flex items-center justify-center">
+                <div className="relative w-full h-32 rounded-[6px] overflow-hidden bg-(--bg-base) border border-(--border-strong) mb-3 flex items-center justify-center">
                   {bannerUrl ? (
                     <img
                       src={bannerUrl}
@@ -278,15 +278,15 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="flex flex-col items-center gap-1.5 text-[#666666]">
+                    <div className="flex flex-col items-center gap-1.5 text-(--text-muted)">
                       <ImageIcon className="w-8 h-8" />
                       <span className="text-xs">No picture selected</span>
                     </div>
                   )}
 
                   {bannerUrl && (
-                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded-[3px] bg-black/60 text-[10px] text-white font-mono flex items-center gap-1 backdrop-blur-xs">
-                      <Check className="w-3 h-3 text-[#3DD68C]" />
+                    <div className="absolute top-2 right-2 px-2 py-0.5 rounded-[3px] bg-black/60 text-xs text-white tabular-nums flex items-center gap-1 backdrop-blur-xs">
+                      <Check className="w-3 h-3 text-(--success)" />
                       Preview
                     </div>
                   )}
@@ -308,9 +308,9 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-[4px] bg-[#2A2A2A] hover:bg-[#333333] border border-[#3D3D3D] text-xs font-semibold text-white transition-colors cursor-pointer"
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-[4px] bg-(--surface-elevated) hover:bg-(--surface-elevated) border border-(--border-strong) text-xs font-semibold text-(--text-primary) transition-colors cursor-pointer"
                     >
-                      <Upload className="w-3.5 h-3.5 text-[#ff6600]" />
+                      <Upload className="w-3.5 h-3.5 text-(--brand-ink)" />
                       <span>Upload Picture from Computer</span>
                     </button>
                   </div>
@@ -322,15 +322,15 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
                       value={bannerUrl}
                       onChange={(e) => setBannerUrl(e.target.value)}
                       placeholder="Or paste an image web link (URL)"
-                      className="w-full bg-[#161616] border border-[#333333] focus:border-[#ff6600] rounded-[4px] pl-8 pr-3 py-2 text-xs text-white placeholder-[#555555] outline-hidden transition-colors"
+                      className="w-full bg-(--bg-base) border border-(--border) focus:border-(--brand) rounded-[4px] pl-8 pr-3 py-2 text-xs text-(--text-primary) placeholder-(--text-muted) outline-hidden transition-colors"
                     />
-                    <LinkIcon className="w-3.5 h-3.5 text-[#666666] absolute left-2.5 top-2.5" />
+                    <LinkIcon className="w-3.5 h-3.5 text-(--text-muted) absolute left-2.5 top-2.5" />
                   </div>
                 </div>
 
                 {/* Quick Preset Banners */}
                 <div className="mt-3">
-                  <span className="text-[11px] text-[#777777] block mb-1.5">
+                  <span className="text-xs text-(--text-muted) block mb-1.5">
                     Or select an esports preset:
                   </span>
                   <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -344,8 +344,8 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
                         }}
                         className={`group relative rounded-[4px] overflow-hidden border shrink-0 transition-all cursor-pointer ${
                           bannerUrl === preset.url
-                            ? 'border-[#ff6600] ring-1 ring-[#ff6600]'
-                            : 'border-[#333333] hover:border-[#555555]'
+                            ? 'border-(--brand) ring-1 ring-(color:--brand)'
+                            : 'border-(--border) hover:border-(--border-strong)'
                         }`}
                         title={preset.name}
                       >
@@ -362,13 +362,13 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
 
               {/* Visibility Options */}
               <div>
-                <label className="block text-xs font-semibold text-[#CCCCCC] uppercase tracking-wider mb-2">
+                <label className="block text-xs font-semibold text-(--text-secondary) mb-2">
                   Tournament Visibility
                 </label>
                 <select aria-label="Tournament visibility"
                   value={visibility}
                   onChange={(e) => setVisibility(e.target.value as any)}
-                  className="w-full bg-[#161616] border border-[#333333] focus:border-[#ff6600] rounded-[4px] px-3.5 py-2 text-xs text-white outline-hidden cursor-pointer"
+                  className="w-full bg-(--bg-base) border border-(--border) focus:border-(--brand) rounded-[4px] px-3.5 py-2 text-xs text-(--text-primary) outline-hidden cursor-pointer"
                 >
                   <option value="Show everywhere">Show everywhere (All Brackets & Teams)</option>
                   <option value="Tournaments only">Tournaments only</option>
@@ -377,17 +377,17 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
               </div>
 
               {/* Modal Action Buttons */}
-              <div className="pt-4 border-t border-[#2C2C2C] flex items-center justify-end gap-2.5">
+              <div className="pt-4 border-t border-(--border) flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-[4px] bg-[#2A2A2A] hover:bg-[#333333] text-xs font-semibold text-[#CCCCCC] transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-[4px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs font-semibold text-(--text-secondary) transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-xs font-bold text-black transition-colors cursor-pointer shadow-md shadow-[#ff6600]/10"
+                  className="px-5 py-2 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-xs font-bold text-black transition-colors cursor-pointer shadow-md shadow-(color:--brand)/10"
                 >
                   {editingGameId ? 'Save Changes' : 'Add Game'}
                 </button>

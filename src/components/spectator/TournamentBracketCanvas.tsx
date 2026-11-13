@@ -38,18 +38,18 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
   };
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[#12151b] shadow-[0_22px_70px_rgba(0,0,0,.24)]">
+    <section className="stage overflow-hidden rounded-2xl border border-[var(--border)] bg-(--bg-base) shadow-[0_22px_70px_rgba(0,0,0,.24)]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-white">Tournament bracket</h2>
+          <h2 className="text-sm font-semibold text-(--text-primary)">Tournament bracket</h2>
           <p className="mt-0.5 text-xs text-[var(--text-muted)]">{broadcast ? 'Scroll or drag to explore. Select a match to manage its broadcast.' : 'Drag to explore. Select a live match to open it.'}</p>
         </div>
         <div className="flex items-center gap-1 rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] p-1">
-          <button onClick={() => setZoom((v) => Math.max(.65, +(v - .1).toFixed(2)))} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-white/[.08] hover:text-white" aria-label="Zoom out"><Minus className="h-4 w-4" /></button>
+          <button onClick={() => setZoom((v) => Math.max(.65, +(v - .1).toFixed(2)))} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-white/[.08] hover:text-(--text-primary)" aria-label="Zoom out"><Minus className="h-4 w-4" /></button>
           <span className="w-12 text-center text-xs font-medium tabular-nums text-[var(--text-secondary)]">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom((v) => Math.min(1.35, +(v + .1).toFixed(2)))} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-white/[.08] hover:text-white" aria-label="Zoom in"><Plus className="h-4 w-4" /></button>
+          <button onClick={() => setZoom((v) => Math.min(1.35, +(v + .1).toFixed(2)))} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-white/[.08] hover:text-(--text-primary)" aria-label="Zoom in"><Plus className="h-4 w-4" /></button>
           <span className="mx-1 h-5 w-px bg-[var(--border)]" />
-          <button onClick={reset} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-white/[.08] hover:text-white" aria-label="Reset view"><Maximize2 className="h-4 w-4" /></button>
+          <button onClick={reset} className="rounded-lg p-2 text-[var(--text-muted)] hover:bg-white/[.08] hover:text-(--text-primary)" aria-label="Reset view"><Maximize2 className="h-4 w-4" /></button>
         </div>
       </div>
 
@@ -89,7 +89,7 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
                 <div className="absolute flex items-center gap-2" style={{ left: PAD + r * (CARD_W + COL_GAP), top: 14, width: CARD_W }}>
                   <span className={`text-xs font-semibold ${r === rounds.length - 1 ? 'text-[var(--brand)]' : 'text-[var(--text-secondary)]'}`}>{round[0]?.roundName || `Round ${r + 1}`}</span>
                   <span className="h-px flex-1 bg-[var(--border)]" />
-                  <span className="text-[10px] text-[var(--text-muted)]">{round[0]?.matchFormat ?? 'Bo3'}</span>
+                  <span className="text-xs text-[var(--text-muted)]">{round[0]?.matchFormat ?? 'Bo3'}</span>
                 </div>
 
                 {round.map((match, i) => {
@@ -115,10 +115,10 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
                         onSelectMatch(match);
                       }}
                       data-live={live}
-                      className={`viewer-bracket-match absolute overflow-hidden rounded-xl border text-left shadow-lg transition-all duration-150 ${selected ? (broadcast ? 'border-[var(--brand)] ring-2 ring-[#ff6600]/40' : 'border-white/70 ring-2 ring-white/10') : live ? 'border-[var(--brand)]' : final ? 'border-[var(--brand)]/55' : 'border-[var(--border)]'} ${bye ? 'cursor-default bg-[#15181e]' : 'bg-[var(--surface)] hover:-translate-y-0.5 hover:border-white/35 hover:bg-[var(--surface-soft)] hover:shadow-xl'}`}
+                      className={`viewer-bracket-match absolute overflow-hidden rounded-xl border text-left shadow-lg transition-all duration-150 ${selected ? (broadcast ? 'border-[var(--brand)] ring-2 ring-(color:--brand)/40' : 'border-white/70 ring-2 ring-white/10') : live ? 'border-[var(--brand)]' : final ? 'border-[var(--brand)]/55' : 'border-[var(--border)]'} ${bye ? 'cursor-default bg-(--surface)' : 'bg-[var(--surface)] hover:-translate-y-0.5 hover:border-white/35 hover:bg-[var(--surface-soft)] hover:shadow-xl'}`}
                       style={{ left: PAD + r * (CARD_W + COL_GAP), top: matchCenter(r, i) - cardHeight / 2, width: CARD_W, height: cardHeight }}
                     >
-                      <div className="flex h-8 items-center justify-between border-b border-[var(--border)] px-3 text-[10px] text-[var(--text-muted)]">
+                      <div className="flex h-8 items-center justify-between border-b border-[var(--border)] px-3 text-xs text-[var(--text-muted)]">
                         <span>{match.matchNumber}</span>
                         {bye ? <span>Automatic advance</span> : live ? <span className="flex items-center gap-1 font-semibold text-[var(--brand-hover)]"><Radio className="h-3 w-3" /> Live</span> : match.status === 'completed' ? <span>Final</span> : broadcast ? <span>{match.streamUrl ? 'Broadcast linked' : match.status.replace('-', ' ')}</span> : <span>Upcoming</span>}
                       </div>
@@ -142,11 +142,11 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
 
 function TeamRow({ seed, name, score, winner, muted = false }: { seed?: number; name: string; score?: number; winner: boolean; muted?: boolean }) {
   return (
-    <div className={`flex h-10 items-center gap-2 px-3 ${muted ? 'text-[var(--text-muted)]' : winner ? 'text-white' : 'text-[var(--text-secondary)]'}`}>
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/[.06] text-[10px] tabular-nums text-[var(--text-muted)]">{seed ?? '–'}</span>
+    <div className={`flex h-10 items-center gap-2 px-3 ${muted ? 'text-[var(--text-muted)]' : winner ? 'text-(--text-primary)' : 'text-[var(--text-secondary)]'}`}>
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/[.06] text-xs tabular-nums text-[var(--text-muted)]">{seed ?? '–'}</span>
       <span className={`min-w-0 flex-1 truncate text-xs ${winner ? 'font-semibold' : 'font-medium'}`}>{name}</span>
       {winner && <Check className="h-3.5 w-3.5 text-[var(--brand)]" strokeWidth={2.5} />}
-      {score !== undefined && <span className={`w-5 text-right text-sm font-semibold tabular-nums ${winner ? 'text-white' : 'text-[var(--text-muted)]'}`}>{score}</span>}
+      {score !== undefined && <span className={`w-5 text-right text-sm font-semibold tabular-nums ${winner ? 'text-(--text-primary)' : 'text-[var(--text-muted)]'}`}>{score}</span>}
     </div>
   );
 }

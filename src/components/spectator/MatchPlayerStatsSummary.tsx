@@ -229,32 +229,32 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
 
   return (
     <div
-      className={`rounded-[4px] border border-[#333333] bg-[#222222] p-5 space-y-4 shadow-xl ${className}`}
+      className={`rounded-[4px] border border-(--border) bg-(--surface-soft) p-5 space-y-4 shadow-xl ${className}`}
     >
       {/* Header with Title & Filter Buttons */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2E2E2E] pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-(--border) pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-[3px] bg-[#33221A] border border-[#ff6600]/50 flex items-center justify-center text-[#ff6600]">
+            <div className="w-7 h-7 rounded-[3px] bg-(--surface-elevated) border border-(--brand)/50 flex items-center justify-center text-(--brand-ink)">
               <Swords className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <h3 className="text-base font-heading font-black text-white tracking-tight uppercase">
+            <h3 className="text-base font-heading font-bold text-(--text-primary) tracking-tight">
               Player Performance Summary
             </h3>
           </div>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-(--text-muted) mt-1">
             Real-time kills, deaths, and assists breakdown for all active competitors
           </p>
         </div>
 
         {/* Tab Controls: All / Team 1 / Team 2 */}
-        <div className="flex items-center bg-[#181818] p-1 rounded-[4px] border border-[#303030] self-start sm:self-auto text-xs">
+        <div className="flex items-center bg-(--bg-base) p-1 rounded-[4px] border border-(--border) self-start sm:self-auto text-xs">
           <button
             onClick={() => setActiveTab('all')}
             className={`px-3 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer ${
               activeTab === 'all'
-                ? 'bg-[#ff6600] text-white shadow-sm'
-                : 'text-[#888888] hover:text-white'
+                ? 'bg-(--brand) text-white shadow-sm'
+                : 'text-(--text-muted) hover:text-white'
             }`}
           >
             All Players ({enrichedStats.length})
@@ -263,22 +263,22 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
             onClick={() => setActiveTab('team1')}
             className={`px-3 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'team1'
-                ? 'bg-[#202733] text-[#ff6600] border border-[#303E54]'
-                : 'text-[#888888] hover:text-[#ff6600]'
+                ? 'bg-(--surface-elevated) text-(--brand-ink) border border-(--info-border)'
+                : 'text-(--text-muted) hover:text-(--brand-ink)'
             }`}
           >
-            <span className="w-2 h-2 rounded-full bg-[#ff6600]" />
+            <span className="w-2 h-2 rounded-full bg-(--brand)" />
             {team1Code}
           </button>
           <button
             onClick={() => setActiveTab('team2')}
             className={`px-3 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'team2'
-                ? 'bg-[#332020] text-[#EF4444] border border-[#543030]'
-                : 'text-[#888888] hover:text-[#EF4444]'
+                ? 'bg-(--surface-elevated) text-(--danger) border border-(--danger-border)'
+                : 'text-(--text-muted) hover:text-(--danger)'
             }`}
           >
-            <span className="w-2 h-2 rounded-full bg-[#EF4444]" />
+            <span className="w-2 h-2 rounded-full bg-(--danger)" />
             {team2Code}
           </button>
         </div>
@@ -287,20 +287,20 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
       {/* Team Aggregates & Highlights Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {/* Team Kills Comparison */}
-        <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2D2D2D] p-3 flex items-center justify-between">
+        <div className="rounded-[4px] bg-(--surface) border border-(--border) p-3 flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] uppercase tracking-wider text-[#888888] font-bold block">
+            <span className="text-xs text-(--text-muted) font-bold block">
               Team Kills Score
             </span>
-            <div className="flex items-center gap-2 font-mono text-xs">
-              <span className="text-[#3B82F6] font-bold">{team1Code}: {team1Totals.kills}</span>
-              <span className="text-[#555555]">vs</span>
-              <span className="text-[#EF4444] font-bold">{team2Code}: {team2Totals.kills}</span>
+            <div className="flex items-center gap-2 tabular-nums text-xs">
+              <span className="text-(--info) font-bold">{team1Code}: {team1Totals.kills}</span>
+              <span className="text-(--text-muted)">vs</span>
+              <span className="text-(--danger) font-bold">{team2Code}: {team2Totals.kills}</span>
             </div>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-[#666666] block">Total elims</span>
-            <span className="text-lg font-heading font-black text-white font-mono">
+            <span className="text-xs text-(--text-muted) block">Total elims</span>
+            <span className="text-lg font-heading font-bold text-(--text-primary) tabular-nums">
               {team1Totals.kills + team2Totals.kills}
             </span>
           </div>
@@ -308,23 +308,23 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
 
         {/* Top Frag / Kill Leader */}
         {killLeader && (
-          <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2D2D2D] p-3 flex items-center justify-between">
+          <div className="rounded-[4px] bg-(--surface) border border-(--border) p-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-[4px] bg-[#2E2218] border border-[#ff6600]/40 flex items-center justify-center text-[#ff6600] shrink-0">
+              <div className="w-8 h-8 rounded-[4px] bg-(--surface-soft) border border-(--brand)/40 flex items-center justify-center text-(--brand-ink) shrink-0">
                 <Target className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] uppercase tracking-wider text-[#ff6600] font-bold block">
+                <span className="text-xs text-(--brand-ink) font-bold block">
                   Kill Leader
                 </span>
-                <span className="text-xs font-heading font-black text-white truncate block">
+                <span className="text-xs font-heading font-bold text-(--text-primary) truncate block">
                   {killLeader.ign} ({killLeader.teamCode})
                 </span>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[10px] text-[#888888] block">Kills</span>
-              <span className="text-base font-heading font-black text-[#3DD68C] font-mono">
+              <span className="text-xs text-(--text-muted) block">Kills</span>
+              <span className="text-base font-heading font-bold text-(--success) tabular-nums">
                 {killLeader.kills}
               </span>
             </div>
@@ -333,23 +333,23 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
 
         {/* Playmaker / Assist Leader */}
         {assistLeader && (
-          <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2D2D2D] p-3 flex items-center justify-between">
+          <div className="rounded-[4px] bg-(--surface) border border-(--border) p-3 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-[4px] bg-[#1C2533] border border-[#ff6600]/40 flex items-center justify-center text-[#ff6600] shrink-0">
+              <div className="w-8 h-8 rounded-[4px] bg-(--surface-elevated) border border-(--brand)/40 flex items-center justify-center text-(--brand-ink) shrink-0">
                 <Shield className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="text-[10px] uppercase tracking-wider text-[#ff6600] font-bold block">
+                <span className="text-xs text-(--brand-ink) font-bold block">
                   Top Playmaker
                 </span>
-                <span className="text-xs font-heading font-black text-white truncate block">
+                <span className="text-xs font-heading font-bold text-(--text-primary) truncate block">
                   {assistLeader.ign} ({assistLeader.teamCode})
                 </span>
               </div>
             </div>
             <div className="text-right">
-              <span className="text-[10px] text-[#888888] block">Assists</span>
-              <span className="text-base font-heading font-black text-[#ff6600] font-mono">
+              <span className="text-xs text-(--text-muted) block">Assists</span>
+              <span className="text-base font-heading font-bold text-(--brand-ink) tabular-nums">
                 {assistLeader.assists}
               </span>
             </div>
@@ -358,86 +358,86 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
       </div>
 
       {/* Main Stats Table */}
-      <div className="overflow-x-auto rounded-[4px] border border-[#2D2D2D]">
+      <div className="overflow-x-auto rounded-[4px] border border-(--border)">
         <table className="w-full text-left text-xs">
           <thead>
-            <tr className="bg-[#1A1A1A] text-[#888888] border-b border-[#2D2D2D] font-heading font-bold uppercase text-[10px] tracking-wider">
+            <tr className="bg-(--surface) text-(--text-muted) border-b border-(--border) font-heading font-bold text-xs">
               <th className="py-2.5 px-3">Player</th>
               <th className="py-2.5 px-3">Team</th>
               <th className="py-2.5 px-3">Role</th>
               <th
                 onClick={() => handleSort('kills')}
-                className="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors select-none"
+                className="py-2.5 px-3 text-center cursor-pointer hover:text-(--text-primary) transition-colors select-none"
               >
                 <div className="inline-flex items-center gap-1">
                   <span>Kills</span>
                   {sortBy === 'kills' && (
-                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-[#ff6600]" /> : <ChevronUp className="w-3 h-3 text-[#ff6600]" />
+                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-(--brand-ink)" /> : <ChevronUp className="w-3 h-3 text-(--brand-ink)" />
                   )}
                 </div>
               </th>
               <th className="py-2.5 px-3 text-center">Deaths</th>
               <th
                 onClick={() => handleSort('assists')}
-                className="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors select-none"
+                className="py-2.5 px-3 text-center cursor-pointer hover:text-(--text-primary) transition-colors select-none"
               >
                 <div className="inline-flex items-center gap-1">
                   <span>Assists</span>
                   {sortBy === 'assists' && (
-                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-[#ff6600]" /> : <ChevronUp className="w-3 h-3 text-[#ff6600]" />
+                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-(--brand-ink)" /> : <ChevronUp className="w-3 h-3 text-(--brand-ink)" />
                   )}
                 </div>
               </th>
               <th
                 onClick={() => handleSort('kda')}
-                className="py-2.5 px-3 text-center cursor-pointer hover:text-white transition-colors select-none"
+                className="py-2.5 px-3 text-center cursor-pointer hover:text-(--text-primary) transition-colors select-none"
               >
                 <div className="inline-flex items-center gap-1">
                   <span>KDA Ratio</span>
                   {sortBy === 'kda' && (
-                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-[#ff6600]" /> : <ChevronUp className="w-3 h-3 text-[#ff6600]" />
+                    sortOrder === 'desc' ? <ChevronDown className="w-3 h-3 text-(--brand-ink)" /> : <ChevronUp className="w-3 h-3 text-(--brand-ink)" />
                   )}
                 </div>
               </th>
               <th className="py-2.5 px-3 text-right">CS / Gold</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#262626]">
+          <tbody className="divide-y divide-(--border)">
             {displayedStats.map((p) => {
               const kdaFormatted = `${p.kills} / ${p.deaths} / ${p.assists}`;
               return (
                 <tr
                   key={p.id}
-                  className={`hover:bg-[#282828] transition-colors ${
-                    p.isMvp ? 'bg-[#ff6600]/5' : ''
+                  className={`hover:bg-(--surface-elevated) transition-colors ${
+                    p.isMvp ? 'bg-(--brand)/5' : ''
                   }`}
                 >
                   {/* Player Name & Badge */}
                   <td className="py-2.5 px-3">
                     <div className="flex items-center gap-2">
                       <div
-                        className={`w-7 h-7 rounded-[3px] flex items-center justify-center text-[10px] font-bold font-mono ${
+                        className={`w-7 h-7 rounded-[3px] flex items-center justify-center text-xs font-bold tabular-nums ${
                           p.isTeam1
-                            ? 'bg-[#202733] text-[#3B82F6] border border-[#303E54]'
-                            : 'bg-[#332020] text-[#EF4444] border border-[#543030]'
+                            ? 'bg-(--surface-elevated) text-(--info) border border-(--info-border)'
+                            : 'bg-(--surface-elevated) text-(--danger) border border-(--danger-border)'
                         }`}
                       >
                         {p.ign.slice(0, 2).toUpperCase()}
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className="font-heading font-black text-white text-xs">
+                          <span className="font-heading font-bold text-(--text-primary) text-xs">
                             {p.ign}
                           </span>
                           {p.isMvp && (
-                            <span className="px-1.5 py-0.2 rounded-[2px] bg-[#ff6600] text-white text-[9px] font-heading font-black uppercase flex items-center gap-0.5">
+                            <span className="px-1.5 py-0.2 rounded-[2px] bg-(--brand) text-white text-xs font-heading font-bold flex items-center gap-0.5">
                               <Zap className="w-2.5 h-2.5 fill-white" />
                               MVP
                             </span>
                           )}
                         </div>
                         {p.playerName && p.playerName !== p.ign && (
-                          <span className="text-[10px] text-[#777777] block leading-none">
+                          <span className="text-xs text-(--text-muted) block leading-none">
                             {p.playerName}
                           </span>
                         )}
@@ -448,10 +448,10 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
                   {/* Team */}
                   <td className="py-2.5 px-3">
                     <span
-                      className={`px-1.5 py-0.5 rounded-[3px] text-[10px] font-heading font-bold ${
+                      className={`px-1.5 py-0.5 rounded-[3px] text-xs font-heading font-bold ${
                         p.isTeam1
-                          ? 'bg-[#202733] text-[#3B82F6]'
-                          : 'bg-[#332020] text-[#EF4444]'
+                          ? 'bg-(--surface-elevated) text-(--info)'
+                          : 'bg-(--surface-elevated) text-(--danger)'
                       }`}
                     >
                       {p.teamCode}
@@ -459,15 +459,15 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
                   </td>
 
                   {/* Role */}
-                  <td className="py-2.5 px-3 text-[#AAAAAA] text-xs font-medium">
+                  <td className="py-2.5 px-3 text-(--text-secondary) text-xs font-medium">
                     {p.role}
                   </td>
 
                   {/* Kills */}
                   <td className="py-2.5 px-3 text-center">
                     <span
-                      className={`font-heading font-black font-mono text-xs ${
-                        p.kills > 0 ? 'text-[#3DD68C]' : 'text-[#888888]'
+                      className={`font-heading font-bold tabular-nums text-xs ${
+                        p.kills > 0 ? 'text-(--success)' : 'text-(--text-muted)'
                       }`}
                     >
                       {p.kills}
@@ -477,8 +477,8 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
                   {/* Deaths */}
                   <td className="py-2.5 px-3 text-center">
                     <span
-                      className={`font-heading font-black font-mono text-xs ${
-                        p.deaths > 3 ? 'text-[#E8544B]' : 'text-[#AAAAAA]'
+                      className={`font-heading font-bold tabular-nums text-xs ${
+                        p.deaths > 3 ? 'text-(--danger)' : 'text-(--text-secondary)'
                       }`}
                     >
                       {p.deaths}
@@ -488,8 +488,8 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
                   {/* Assists */}
                   <td className="py-2.5 px-3 text-center">
                     <span
-                      className={`font-heading font-black font-mono text-xs ${
-                        p.assists > 5 ? 'text-[#ff6600]' : 'text-[#AAAAAA]'
+                      className={`font-heading font-bold tabular-nums text-xs ${
+                        p.assists > 5 ? 'text-(--brand-ink)' : 'text-(--text-secondary)'
                       }`}
                     >
                       {p.assists}
@@ -497,29 +497,29 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
                   </td>
 
                   {/* KDA Ratio & breakdown */}
-                  <td className="py-2.5 px-3 text-center font-mono">
-                    <span className="font-heading font-black text-white text-xs block">
+                  <td className="py-2.5 px-3 text-center tabular-nums">
+                    <span className="font-heading font-bold text-(--text-primary) text-xs block">
                       {p.kdaRatio.toFixed(2)}
                     </span>
-                    <span className="text-[10px] text-[#777777] block">
+                    <span className="text-xs text-(--text-muted) block">
                       {kdaFormatted}
                     </span>
                   </td>
 
                   {/* CS / Gold */}
-                  <td className="py-2.5 px-3 text-right font-mono text-[#AAAAAA]">
+                  <td className="py-2.5 px-3 text-right tabular-nums text-(--text-secondary)">
                     {p.gold && (
-                      <span className="text-[#ff6600] text-[11px] font-semibold block">
+                      <span className="text-(--brand-ink) text-xs font-semibold block">
                         {p.gold}
                       </span>
                     )}
                     {p.cs !== undefined && (
-                      <span className="text-[10px] text-[#666666] block">
+                      <span className="text-xs text-(--text-muted) block">
                         {p.cs} CS
                       </span>
                     )}
                     {!p.gold && p.cs === undefined && (
-                      <span className="text-[11px] text-[#555555]">—</span>
+                      <span className="text-xs text-(--text-muted)">—</span>
                     )}
                   </td>
                 </tr>

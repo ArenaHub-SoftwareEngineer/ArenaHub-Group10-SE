@@ -11,7 +11,7 @@ interface SkeletonProps {
 /** Single skeleton bar */
 export const Skeleton: React.FC<SkeletonProps> = ({ className = '' }) => (
   <div
-    className={`animate-pulse bg-[#2A2A2A] rounded-[3px] ${className}`}
+    className={`animate-pulse bg-(--surface-elevated) rounded-[3px] ${className}`}
     aria-hidden="true"
   />
 );
@@ -21,7 +21,7 @@ export const SkeletonCard: React.FC<{ lines?: number; className?: string }> = ({
   lines = 3,
   className = '',
 }) => (
-  <div className={`p-4 rounded-[4px] bg-[#222222] border border-[#2A2A2A] space-y-3 ${className}`}>
+  <div className={`p-4 rounded-[4px] bg-(--surface-soft) border border-(--border) space-y-3 ${className}`}>
     <Skeleton className="h-4 w-3/4" />
     {Array.from({ length: lines - 1 }).map((_, i) => (
       <Skeleton key={i} className={`h-3 ${i % 2 === 0 ? 'w-full' : 'w-5/6'}`} />
@@ -36,7 +36,7 @@ export const SkeletonList: React.FC<{ rows?: number; className?: string }> = ({
 }) => (
   <div className={`space-y-2 ${className}`}>
     {Array.from({ length: rows }).map((_, i) => (
-      <div key={i} className="flex items-center gap-3 p-3 rounded-[4px] bg-[#222222] border border-[#2A2A2A]">
+      <div key={i} className="flex items-center gap-3 p-3 rounded-[4px] bg-(--surface-soft) border border-(--border)">
         <Skeleton className="w-8 h-8 rounded-full shrink-0" />
         <div className="flex-1 space-y-2">
           <Skeleton className="h-3 w-1/2" />
@@ -49,7 +49,7 @@ export const SkeletonList: React.FC<{ rows?: number; className?: string }> = ({
 
 /** Stat tile skeleton */
 export const SkeletonStatTile: React.FC = () => (
-  <div className="p-5 rounded-[4px] bg-[#222222] border border-[#2A2A2A] space-y-2">
+  <div className="p-5 rounded-[4px] bg-(--surface-soft) border border-(--border) space-y-2">
     <Skeleton className="h-3 w-20" />
     <Skeleton className="h-8 w-24" />
     <Skeleton className="h-2 w-16" />
@@ -61,8 +61,8 @@ export const PageSkeleton: React.FC<{ title?: string }> = ({ title }) => (
   <div className="space-y-6 animate-pulse">
     {title && (
       <div className="space-y-1">
-        <div className="h-6 w-48 bg-[#2A2A2A] rounded-[3px]" />
-        <div className="h-3 w-72 bg-[#222222] rounded-[3px]" />
+        <div className="h-6 w-48 bg-(--surface-elevated) rounded-[3px]" />
+        <div className="h-3 w-72 bg-(--surface-soft) rounded-[3px]" />
       </div>
     )}
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

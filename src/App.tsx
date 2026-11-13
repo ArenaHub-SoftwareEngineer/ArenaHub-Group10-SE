@@ -55,10 +55,10 @@ import { Tournament, Match, BracketDraft } from './lib/types';
 // ─── Full-screen loading skeleton ─────────────────────────────────────────────
 function AppLoadingScreen() {
   return (
-    <div className="min-h-screen bg-[#191919] flex items-center justify-center">
+    <div className="min-h-screen bg-(--surface) flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
         <Brand />
-        <div className="flex items-center gap-2 text-[#888888] text-sm">
+        <div className="flex items-center gap-2 text-(--text-muted) text-sm">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span>Loading ArenaHub…</span>
         </div>

@@ -468,22 +468,22 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
       {selectedMatch && <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Guide */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="rounded-[4px] bg-[#222222] border border-[#333333] overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#2D2D2D] flex items-center justify-between">
-              <span className="text-[10px] font-bold text-[#888888] uppercase tracking-wider">Step-by-step guide</span>
-              <span className="text-[10px] text-[#666666]">How to get URL</span>
+          <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) overflow-hidden">
+            <div className="px-4 py-3 border-b border-(--border) flex items-center justify-between">
+              <span className="text-xs font-bold text-(--text-muted)">Step-by-step guide</span>
+              <span className="text-xs text-(--text-muted)">How to get URL</span>
             </div>
 
             {/* Platform Selector */}
-            <div className="flex border-b border-[#2D2D2D]">
+            <div className="flex border-b border-(--border)">
               {(['youtube', 'facebook', 'other'] as Platform[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setSelectedGuide(p)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold transition-all cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
                     selectedGuide === p
-                      ? 'text-white border-b-2'
-                      : 'text-[#666666] hover:text-[#AAAAAA]'
+                      ? 'text-(--text-primary) border-b-2'
+                      : 'text-(--text-muted) hover:text-(--text-secondary)'
                   }`}
                   style={selectedGuide === p ? { borderBottomColor: platformColor(p) } : {}}
                 >
@@ -500,7 +500,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
               {PLATFORM_GUIDE[selectedGuide].steps.map((step, i) => (
                 <div key={i} className="flex gap-3 text-xs">
                   <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5"
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
                     style={{
                       backgroundColor: `${platformColor(selectedGuide)}18`,
                       border: `1px solid ${platformColor(selectedGuide)}40`,
@@ -509,13 +509,13 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                   >
                     {i + 1}
                   </div>
-                  <p className="text-[#AAAAAA] leading-relaxed">{step}</p>
+                  <p className="text-(--text-secondary) leading-relaxed">{step}</p>
                 </div>
               ))}
             </div>
 
             {selectedGuide === 'facebook' && (
-              <div className="mx-4 mb-4 p-3 rounded-[8px] bg-[var(--info-soft)] border border-[var(--info-border)] text-[13px] text-[var(--info)] leading-relaxed">
+              <div className="mx-4 mb-4 p-3 rounded-[8px] bg-[var(--info-soft)] border border-[var(--info-border)] text-sm text-[var(--info)] leading-relaxed">
                 <strong className="text-[var(--info)]"><PlatformLogo platform="facebook" size={15}/> Facebook Live notice:</strong> The video must be set to{' '}
                 <strong>Public</strong> on Facebook. Private or group-restricted streams will not render in the iframe embed.
               </div>
@@ -528,14 +528,14 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
           {/* Target Match Banner */}
           <div className="stream-selected-match">
             <div>
-              <div className="text-[10px] font-bold text-[#ff6600] uppercase tracking-wider">
+              <div className="text-xs font-bold text-(--brand-ink)">
                 Selected match
               </div>
-              <div className="text-sm font-bold text-white mt-0.5">
+              <div className="text-sm font-bold text-(--text-primary) mt-0.5">
                 {selectedMatch?.matchNumber} — {selectedMatch?.team1?.collegeCode || 'TBD'} vs{' '}
                 {selectedMatch?.team2?.collegeCode || 'TBD'}
               </div>
-              <div className="text-[11px] text-[#888888]">
+              <div className="text-xs text-(--text-muted)">
                 {selectedMatch.roundName} · {selectedMatch.matchFormat} · {matchSchedule(selectedMatch)}
               </div>
             </div>
@@ -549,11 +549,11 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
           </div>
 
           {/* Broadcast Configuration: Title & Stream URL Input */}
-          <div className="rounded-[4px] bg-[#222222] border border-[#333333] p-5 space-y-4">
+          <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-5 space-y-4">
             <div className="space-y-3">
               {/* Title Input */}
               <div>
-                <label htmlFor="broadcast-title" className="text-[10px] font-bold text-[#888888] uppercase tracking-wider block mb-1.5">
+                <label htmlFor="broadcast-title" className="text-xs font-bold text-(--text-muted) block mb-1.5">
                   Broadcast Title / Stream Name
                 </label>
                 <input
@@ -562,14 +562,14 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                   value={streamTitle}
                   onChange={(e) => setStreamTitle(e.target.value)}
                   placeholder="e.g. MPL Philippines — Mobile Legends: Bang Bang Live"
-                  className="w-full bg-[#1A1A1A] border border-[#2E2E2E] focus:border-[#ff6600]/60 rounded-[4px] px-3 py-2 text-sm text-white placeholder-[#555555] outline-none transition-colors"
+                  className="w-full bg-(--surface) border border-(--border) focus:border-(--brand)/60 rounded-[4px] px-3 py-2 text-sm text-(--text-primary) placeholder-(--text-muted) outline-none transition-colors"
                 />
               </div>
 
               {/* URL Input & Sample Button */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="broadcast-url" className="text-[10px] font-bold text-[#888888] uppercase tracking-wider">
+                  <label htmlFor="broadcast-url" className="text-xs font-bold text-(--text-muted)">
                     Stream URL (YouTube Live / Facebook Live)<Req />
                   </label>
                   <button
@@ -579,7 +579,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                       setRawUrl('https://www.youtube.com/live/m4zQpYzzM0g?si=pNrl1Ja7Ot13PwFu');
                       setUrlError(null);
                     }}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-[#ff6600] hover:text-[#ff8533] transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-(--brand-ink) hover:text-(--brand-ink) transition-colors cursor-pointer"
                     title="Paste sample MPL live stream for MLBB"
                   >
                     <Radio className="w-3 h-3 animate-pulse" />
@@ -589,7 +589,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
 
                 <div className="broadcast-connect-row flex gap-2">
                   <div className="flex-1 relative min-w-0">
-                    <Link2 className="w-4 h-4 text-[#666666] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Link2 className="w-4 h-4 text-(--text-muted) absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       id="broadcast-url" aria-required="true" aria-invalid={!!urlError} aria-describedby={urlError ? "broadcast-url-error" : undefined}
                       type="url"
@@ -600,8 +600,8 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                       }}
                       onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
                       placeholder="https://www.youtube.com/live/m4zQpYzzM0g?si=... or https://youtube.com/watch?v=…"
-                      className={`w-full bg-[#1A1A1A] border rounded-[4px] pl-9 pr-3 py-2.5 text-sm text-white placeholder-[#444444] outline-none transition-colors ${
-                        urlError ? 'border-[#E8544B]/60' : 'border-[#2E2E2E] focus:border-[#ff6600]/60'
+                      className={`w-full bg-(--surface) border rounded-[4px] pl-9 pr-3 py-2.5 text-sm text-(--text-primary) placeholder-(--text-muted) outline-none transition-colors ${
+                        urlError ? 'border-(--danger)/60' : 'border-(--border) focus:border-(--brand)/60'
                       }`}
                     />
                   </div>
@@ -615,7 +615,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                 </div>
 
                 {urlError && (
-                  <div id="broadcast-url-error" role="alert" className="flex items-center gap-2 mt-2 text-[11px] text-[#E8544B]">
+                  <div id="broadcast-url-error" role="alert" className="flex items-center gap-2 mt-2 text-xs text-(--danger)">
                     <XCircle className="w-3.5 h-3.5 shrink-0" />
                     {urlError}
                   </div>
@@ -626,15 +626,15 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
 
           {/* Active Stream Preview or Empty Placeholder */}
           {activeStream ? (
-            <div className="rounded-[4px] bg-[#222222] border border-[#3DD68C]/30 overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-[#2D2D2D] flex items-center justify-between">
+            <div className="rounded-[4px] bg-(--surface-soft) border border-(--success)/30 overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-(--border) flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#3DD68C] animate-pulse" />
-                  <span className="text-sm font-heading font-bold text-[#3DD68C]">
+                  <span className="w-2 h-2 rounded-full bg-(--success) animate-pulse" />
+                  <span className="text-sm font-heading font-bold text-(--success)">
                     Broadcast linked — {activeStream.title || selectedMatch?.streamTitle || selectedMatch?.matchNumber}
                   </span>
                   <span
-                    className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold uppercase"
+                    className="px-2 py-0.5 rounded-[3px] text-xs font-bold"
                     style={{
                       backgroundColor: `${platformColor(activeStream.platform)}15`,
                       color: platformColor(activeStream.platform),
@@ -651,20 +651,20 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                       <button
                         type="button"
                         onClick={() => setPauseConfirmStep(1)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-[#3B2810] hover:bg-[#523714] border border-[#855018] text-xs font-semibold text-[#FBBF24] transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--warning-soft) hover:bg-(--warning-soft) border border-(--brand) text-xs font-semibold text-(--warning) transition-colors cursor-pointer"
                         title="Pause the live stream for timeouts/breaks (Requires 2 confirmations)"
                       >
-                        <PauseCircle className="w-3.5 h-3.5 text-[#FBBF24]" />
+                        <PauseCircle className="w-3.5 h-3.5 text-(--warning)" />
                         <span>Pause Live</span>
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setEndConfirmStep(1)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-[#381616] hover:bg-[#4E1E1E] border border-[#7A2C2C] text-xs font-semibold text-[#F87171] transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--danger-soft) hover:bg-(--danger-soft) border border-(--danger) text-xs font-semibold text-(--danger) transition-colors cursor-pointer"
                         title="Conclude and finalize live broadcast (Requires 2 confirmations)"
                       >
-                        <XCircle className="w-3.5 h-3.5 text-[#F87171]" />
+                        <XCircle className="w-3.5 h-3.5 text-(--danger)" />
                         <span>End Live</span>
                       </button>
                     </>
@@ -672,24 +672,24 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                     <button
                       type="button"
                       onClick={handleResumeLive}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-[#143322] hover:bg-[#1E4830] border border-[#2D6643] text-xs font-semibold text-[#34D399] transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--success-soft) hover:bg-(--success-soft) border border-(--success-border) text-xs font-semibold text-(--success) transition-colors cursor-pointer"
                       title="Resume live broadcast transmission"
                     >
-                      <Play className="w-3.5 h-3.5 text-[#34D399]" />
+                      <Play className="w-3.5 h-3.5 text-(--success)" />
                       <span>Resume Live</span>
                     </button>
                   ) : null}
 
                   <button
                     onClick={() => setShowPreviewModal(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-[#1A1A1A] hover:bg-[#252525] border border-[#333333] text-xs font-semibold text-white transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-primary) transition-colors cursor-pointer"
                   >
-                    <Play className="w-3 h-3 text-[#ff6600]" />
+                    <Play className="w-3 h-3 text-(--brand-ink)" />
                     Preview embed
                   </button>
                   <button
                     onClick={() => setStreamToDisconnect(activeStream)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-[#2E1818] hover:bg-[#3A2020] border border-[#522525] text-xs font-semibold text-[#E8544B] transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--danger-border) text-xs font-semibold text-(--danger) transition-colors cursor-pointer"
                   >
                     <XCircle className="w-3 h-3" />
                     Disconnect
@@ -705,9 +705,9 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                     { label: 'Connected at', value: activeStream.connectedAt, color: '#FFFFFF' },
                     { label: 'Spectator View', value: 'PLAYER LINKED', color: '#ff6600' },
                   ].map((s) => (
-                    <div key={s.label} className="bg-[#1A1A1A] border border-[#2B2B2B] rounded-[4px] p-2.5">
-                      <div className="text-[10px] text-[#666666] uppercase tracking-wider">{s.label}</div>
-                      <div className="font-mono font-bold text-[11px] mt-0.5" style={{ color: s.color }}>
+                    <div key={s.label} className="bg-(--surface) border border-(--border) rounded-[4px] p-2.5">
+                      <div className="text-xs text-(--text-muted)">{s.label}</div>
+                      <div className="tabular-nums font-bold text-xs mt-0.5" style={{ color: s.color }}>
                         {s.value}
                       </div>
                     </div>
@@ -716,29 +716,29 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
 
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-[#888888] uppercase tracking-wider">Embed URL</span>
+                    <span className="text-xs font-bold text-(--text-muted)">Embed URL</span>
                     <button
                       onClick={() => handleCopyEmbed(activeStream)}
-                      className="flex items-center gap-1 text-[10px] text-[#888888] hover:text-white transition-colors cursor-pointer"
+                      className="flex items-center gap-1 text-xs text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer"
                     >
                       <Copy className="w-3 h-3" />
                       Copy
                     </button>
                   </div>
-                  <div className="bg-[#141414] border border-[#252525] rounded-[4px] px-3 py-2 font-mono text-[10px] text-[#888888] break-all">
+                  <div className="bg-(--bg-base) border border-(--border) rounded-[4px] px-3 py-2 tabular-nums text-xs text-(--text-muted) break-all">
                     {activeStream.embedUrl}
                   </div>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="rounded-[4px] bg-[#1A1A1A] border border-[#2A2A2A] border-dashed p-8 flex flex-col items-center justify-center gap-3 text-center">
-              <div className="w-12 h-12 rounded-full bg-[#222222] border border-[#333333] flex items-center justify-center">
-                <Radio className="w-6 h-6 text-[#444444]" />
+            <div className="rounded-[4px] bg-(--surface) border border-(--border) border-dashed p-8 flex flex-col items-center justify-center gap-3 text-center">
+              <div className="w-12 h-12 rounded-full bg-(--surface-soft) border border-(--border) flex items-center justify-center">
+                <Radio className="w-6 h-6 text-(--text-muted)" />
               </div>
               <div>
-                <div className="text-sm font-semibold text-[#777777]">No active stream for {selectedMatch?.matchNumber}</div>
-                <div className="text-[11px] text-[#555555] mt-1">
+                <div className="text-sm font-semibold text-(--text-muted)">No active stream for {selectedMatch?.matchNumber}</div>
+                <div className="text-xs text-(--text-muted) mt-1">
                   Paste the YouTube Live or Facebook Live URL above and click "Connect broadcast".
                 </div>
               </div>
@@ -750,18 +750,18 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
       {/* ── POPUP MODAL: Match Click in Bracket (Requested by User) ── */}
       {matchToSelect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[#242424] border border-[#3a3a3a] rounded-[6px] shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#333333] bg-[#202020]">
+          <div className="w-full max-w-md bg-(--surface-soft) border border-(--border-strong) rounded-[6px] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-(--border) bg-(--surface-soft)">
               <div>
-                <h3 className="text-base font-heading font-bold text-white tracking-tight flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-[#ff6600]" />
+                <h3 className="text-base font-heading font-bold text-(--text-primary) tracking-tight flex items-center gap-2">
+                  <Radio className="w-4 h-4 text-(--brand-ink)" />
                   Select Match for Broadcast
                 </h3>
-                <span className="text-xs text-[#888899] font-mono">{matchToSelect.matchNumber} · {matchToSelect.roundName}</span>
+                <span className="text-xs text-(--text-muted) tabular-nums">{matchToSelect.matchNumber} · {matchToSelect.roundName}</span>
               </div>
               <button
                 onClick={() => setMatchToSelect(null)}
-                className="text-[#777788] hover:text-white p-1 rounded-[3px] transition-colors cursor-pointer"
+                className="text-(--text-muted) hover:text-(--text-primary) p-1 rounded-[3px] transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -769,42 +769,42 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
 
             <div className="p-6 space-y-4">
               {/* Teams Display */}
-              <div className="p-4 rounded-[5px] bg-[#191919] border border-[#2B2D3A] flex items-center justify-between gap-4">
+              <div className="p-4 rounded-[5px] bg-(--surface) border border-(--border) flex items-center justify-between gap-4">
                 <div className="text-center flex-1">
-                  <div className="text-lg font-heading font-black text-white">
+                  <div className="text-lg font-heading font-bold text-(--text-primary)">
                     {matchToSelect.team1?.collegeCode || 'TBD'}
                   </div>
-                  <div className="text-[11px] text-[#888888] truncate">{matchToSelect.team1?.name}</div>
-                  <div className="text-xs font-bold text-[#ff6600] mt-1">{matchToSelect.score.team1Score} pts</div>
+                  <div className="text-xs text-(--text-muted) truncate">{matchToSelect.team1?.name}</div>
+                  <div className="text-xs font-bold text-(--brand-ink) mt-1">{matchToSelect.score.team1Score} pts</div>
                 </div>
 
                 <div className="text-center px-2">
-                  <span className="px-2 py-0.5 rounded bg-[#252525] text-[10px] font-bold text-[#888888]">VS</span>
-                  <div className="text-[10px] text-[#666666] mt-1">{matchToSelect.matchFormat}</div>
+                  <span className="px-2 py-0.5 rounded bg-(--surface-soft) text-xs font-bold text-(--text-muted)">VS</span>
+                  <div className="text-xs text-(--text-muted) mt-1">{matchToSelect.matchFormat}</div>
                 </div>
 
                 <div className="text-center flex-1">
-                  <div className="text-lg font-heading font-black text-white">
+                  <div className="text-lg font-heading font-bold text-(--text-primary)">
                     {matchToSelect.team2?.collegeCode || 'TBD'}
                   </div>
-                  <div className="text-[11px] text-[#888888] truncate">{matchToSelect.team2?.name}</div>
-                  <div className="text-xs font-bold text-[#ff6600] mt-1">{matchToSelect.score.team2Score} pts</div>
+                  <div className="text-xs text-(--text-muted) truncate">{matchToSelect.team2?.name}</div>
+                  <div className="text-xs font-bold text-(--brand-ink) mt-1">{matchToSelect.score.team2Score} pts</div>
                 </div>
               </div>
 
               {/* Match Details */}
-              <div className="text-xs space-y-1.5 text-[#888888]">
+              <div className="text-xs space-y-1.5 text-(--text-muted)">
                 <div className="flex justify-between">
                   <span>Current Status:</span>
-                  <span className={`font-bold uppercase ${
-                    matchToSelect.status === 'live' ? 'text-[#3DD68C]' : 'text-white'
+                  <span className={`font-bold ${
+                    matchToSelect.status === 'live' ? 'text-(--success)' : 'text-(--text-primary)'
                   }`}>
                     {matchToSelect.status}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Scheduled:</span>
-                  <span className="text-white">{matchToSelect.scheduledTime} · {matchToSelect.scheduledDate}</span>
+                  <span className="text-(--text-primary)">{matchToSelect.scheduledTime} · {matchToSelect.scheduledDate}</span>
                 </div>
               </div>
 
@@ -813,7 +813,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                 <button
                   type="button"
                   onClick={() => handleConfirmSelectMatch(matchToSelect, true)}
-                  className="w-full py-2.5 px-4 rounded-[4px] bg-[#E8544B] hover:bg-[#d9433a] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-[4px] bg-(--danger) hover:bg-(--danger) text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer"
                 >
                   <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                   <span>Select & Mark LIVE NOW</span>
@@ -822,7 +822,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                 <button
                   type="button"
                   onClick={() => handleConfirmSelectMatch(matchToSelect, false)}
-                  className="w-full py-2.5 px-4 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-black text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer"
                 >
                   <Check className="w-4 h-4 stroke-[2.5]" />
                   <span>Select for Broadcast (Keep Status)</span>
@@ -836,17 +836,17 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
       {/* ── POPUP MODAL: Confirm Disconnect Live Stream ── */}
       {streamToDisconnect && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[#242424] border border-[#522525] rounded-[6px] shadow-2xl overflow-hidden p-6 text-center space-y-4">
-            <div className="w-12 h-12 rounded-full bg-[#2E1818] border border-[#522525] text-[#E8544B] flex items-center justify-center mx-auto">
+          <div className="w-full max-w-md bg-(--surface-soft) border border-(--danger-border) rounded-[6px] shadow-2xl overflow-hidden p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-(--surface-soft) border border-(--danger-border) text-(--danger) flex items-center justify-center mx-auto">
               <Trash2 className="w-6 h-6" />
             </div>
 
             <div>
-              <h3 className="text-base font-heading font-black text-white">
+              <h3 className="text-base font-heading font-bold text-(--text-primary)">
                 Disconnect Live Stream?
               </h3>
-              <p className="text-xs text-[#888899] mt-1 leading-relaxed">
-                Remove the broadcast link from <strong className="text-white">{streamToDisconnect.matchId}</strong>?
+              <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
+                Remove the broadcast link from <strong className="text-(--text-primary)">{streamToDisconnect.matchId}</strong>?
                 The original broadcast will keep running on its platform. ArenaHub will show the stream placeholder.
               </p>
             </div>
@@ -854,13 +854,13 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
             <div className="flex items-center gap-3 pt-2">
               <button
                 onClick={() => setStreamToDisconnect(null)}
-                className="flex-1 py-2 rounded-[4px] bg-[#2A2C3A] hover:bg-[#35384A] text-white text-xs font-semibold cursor-pointer"
+                className="flex-1 py-2 rounded-[4px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-(--text-primary) text-xs font-semibold cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDisconnect}
-                className="flex-1 py-2 rounded-[4px] bg-[#E8544B] hover:bg-[#d9433a] text-white text-xs font-bold cursor-pointer"
+                className="flex-1 py-2 rounded-[4px] bg-(--danger) hover:bg-(--danger) text-white text-xs font-bold cursor-pointer"
               >
                 Disconnect Stream
               </button>
@@ -881,13 +881,13 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
           onClick={() => setShowPreviewModal(false)}
         >
           <div
-            className="w-full max-w-3xl rounded-[6px] bg-[#1A1A1A] border border-[#333333] overflow-hidden shadow-2xl"
+            className="w-full max-w-3xl rounded-[6px] bg-(--surface) border border-(--border) overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#2D2D2D]">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-(--border)">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-[#3DD68C] animate-pulse" />
-                <span className="text-sm font-heading font-bold text-white">
+                <span className="w-2 h-2 rounded-full bg-(--success) animate-pulse" />
+                <span className="text-sm font-heading font-bold text-(--text-primary)">
                   Embed Preview — {previewEntry.platform === 'youtube' ? 'YouTube' : 'Facebook'} Live
                 </span>
               </div>
@@ -896,7 +896,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                   href={previewEntry.rawUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] bg-[#252525] hover:bg-[#303030] border border-[#383838] text-xs font-semibold text-white transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[3px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--border-strong) text-xs font-semibold text-(--text-primary) transition-colors"
                 >
                   <ExternalLink className="w-3 h-3" />
                   Open original
@@ -904,7 +904,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
                 <button
                   aria-label="Close preview"
                   onClick={() => setShowPreviewModal(false)}
-                  className="p-1.5 rounded-[3px] text-[#888888] hover:text-white hover:bg-[#2A2A2A] transition-colors cursor-pointer"
+                  className="p-1.5 rounded-[3px] text-(--text-muted) hover:text-(--text-primary) hover:bg-(--surface-elevated) transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -922,9 +922,9 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
               />
             </div>
 
-            <div className="px-5 py-3 bg-[#141414] border-t border-[#2A2A2A] flex items-center justify-between">
-              <span className="text-[11px] text-[#666666] font-mono truncate max-w-xs">{previewEntry.rawUrl}</span>
-              <div className="flex items-center gap-1.5 text-[11px] text-[#3DD68C] font-semibold">
+            <div className="px-5 py-3 bg-(--bg-base) border-t border-(--border) flex items-center justify-between">
+              <span className="text-xs text-(--text-muted) tabular-nums truncate max-w-xs">{previewEntry.rawUrl}</span>
+              <div className="flex items-center gap-1.5 text-xs text-(--success) font-semibold">
                 <Eye className="w-3 h-3" />
                 Viewers see this embedded in the spectator view
               </div>

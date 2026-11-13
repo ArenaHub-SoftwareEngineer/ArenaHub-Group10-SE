@@ -112,36 +112,36 @@ export const PlayerPerformanceSection: React.FC<PlayerPerformanceSectionProps> =
     totals: { kills: number; deaths: number; assists: number }
   ) => {
     const codeBg = isTeam1
-      ? 'bg-[#202733] text-[#3B82F6] border-[#303E54]'
-      : 'bg-[#332020] text-[#EF4444] border-[#543030]';
+      ? 'bg-(--surface-elevated) text-(--info) border-(--info-border)'
+      : 'bg-(--surface-elevated) text-(--danger) border-(--danger-border)';
 
     return (
-      <div className="rounded-[4px] border border-[#2D2D2D] bg-[#1E1E1E] overflow-hidden flex flex-col">
+      <div className="rounded-[4px] border border-(--border) bg-(--surface-soft) overflow-hidden flex flex-col">
         {/* Team Header Bar */}
-        <div className="p-3 bg-[#181818] border-b border-[#282828] flex items-center justify-between">
+        <div className="p-3 bg-(--bg-base) border-b border-(--border) flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span
-              className={`px-2 py-0.5 rounded-[3px] border font-heading font-black text-xs ${codeBg}`}
+              className={`px-2 py-0.5 rounded-[3px] border font-heading font-bold text-xs ${codeBg}`}
             >
               {collegeCode}
             </span>
             <div>
-              <h4 className="text-sm font-heading font-bold text-white leading-tight">
+              <h4 className="text-sm font-heading font-bold text-(--text-primary) leading-tight">
                 {teamName}
               </h4>
-              <span className="text-[11px] text-[#888888]">
+              <span className="text-xs text-(--text-muted)">
                 {rows.length} Active Competitors
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-xs">
-            <span className="text-[11px] text-[#888888] uppercase font-semibold">Total:</span>
-            <span className="text-[#3DD68C] font-bold">{totals.kills}K</span>
-            <span className="text-[#666666]">/</span>
-            <span className="text-[#E8544B] font-bold">{totals.deaths}D</span>
-            <span className="text-[#666666]">/</span>
-            <span className="text-[#ff6600] font-bold">{totals.assists}A</span>
+          <div className="flex items-center gap-2 tabular-nums text-xs">
+            <span className="text-xs text-(--text-muted) font-semibold">Total:</span>
+            <span className="text-(--success) font-bold">{totals.kills}K</span>
+            <span className="text-(--text-muted)">/</span>
+            <span className="text-(--danger) font-bold">{totals.deaths}D</span>
+            <span className="text-(--text-muted)">/</span>
+            <span className="text-(--brand-ink) font-bold">{totals.assists}A</span>
           </div>
         </div>
 
@@ -149,61 +149,61 @@ export const PlayerPerformanceSection: React.FC<PlayerPerformanceSectionProps> =
         <div className="overflow-x-auto flex-1">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="bg-[#151515] text-[#888888] border-b border-[#262626] text-[10px] uppercase font-heading font-bold tracking-wider">
+              <tr className="bg-(--bg-base) text-(--text-muted) border-b border-(--border) text-xs font-heading font-bold">
                 <th className="py-2.5 px-3">Player</th>
                 <th className="py-2.5 px-2">Role</th>
-                <th className="py-2.5 px-2 text-center text-[#3DD68C]">K</th>
-                <th className="py-2.5 px-2 text-center text-[#E8544B]">D</th>
-                <th className="py-2.5 px-2 text-center text-[#ff6600]">A</th>
+                <th className="py-2.5 px-2 text-center text-(--success)">K</th>
+                <th className="py-2.5 px-2 text-center text-(--danger)">D</th>
+                <th className="py-2.5 px-2 text-center text-(--brand-ink)">A</th>
                 <th className="py-2.5 px-3 text-right">KDA</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#242424]">
+            <tbody className="divide-y divide-(--border)">
               {rows.map(({ player, kills, deaths, assists, kdaRatio, isMvp }) => (
                 <tr
                   key={player.id}
-                  className={`hover:bg-[#252525] transition-colors ${
-                    isMvp ? 'bg-[#ff6600]/10' : ''
+                  className={`hover:bg-(--surface-soft) transition-colors ${
+                    isMvp ? 'bg-(--brand)/10' : ''
                   }`}
                 >
                   <td className="py-2 px-3">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-heading font-black text-white text-xs">
+                      <span className="font-heading font-bold text-(--text-primary) text-xs">
                         {player.ign}
                       </span>
                       {isMvp && (
-                        <span className="px-1 py-0.2 rounded-[2px] bg-[#ff6600] text-white text-[9px] font-heading font-black uppercase flex items-center gap-0.5">
+                        <span className="px-1 py-0.2 rounded-[2px] bg-(--brand) text-white text-xs font-heading font-bold flex items-center gap-0.5">
                           <Zap className="w-2.5 h-2.5 fill-white" />
                           MVP
                         </span>
                       )}
                     </div>
                     {player.name && player.name !== player.ign && (
-                      <span className="text-[10px] text-[#777777] block leading-none truncate max-w-[120px]">
+                      <span className="text-xs text-(--text-muted) block leading-none truncate max-w-[120px]">
                         {player.name}
                       </span>
                     )}
                   </td>
-                  <td className="py-2 px-2 text-[#AAAAAA] text-[11px]">
+                  <td className="py-2 px-2 text-(--text-secondary) text-xs">
                     {player.role}
                   </td>
-                  <td className="py-2 px-2 text-center font-mono font-bold text-[#3DD68C]">
+                  <td className="py-2 px-2 text-center tabular-nums font-bold text-(--success)">
                     {kills}
                   </td>
-                  <td className="py-2 px-2 text-center font-mono font-bold text-[#AAAAAA]">
+                  <td className="py-2 px-2 text-center tabular-nums font-bold text-(--text-secondary)">
                     {deaths}
                   </td>
-                  <td className="py-2 px-2 text-center font-mono font-bold text-[#ff6600]">
+                  <td className="py-2 px-2 text-center tabular-nums font-bold text-(--brand-ink)">
                     {assists}
                   </td>
-                  <td className="py-2 px-3 text-right font-mono font-bold text-white">
+                  <td className="py-2 px-3 text-right tabular-nums font-bold text-(--text-primary)">
                     {kdaRatio.toFixed(2)}
                   </td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-[#666666] text-xs">
+                  <td colSpan={6} className="py-4 text-center text-(--text-muted) text-xs">
                     No player stats recorded for this lineup.
                   </td>
                 </tr>
@@ -212,19 +212,19 @@ export const PlayerPerformanceSection: React.FC<PlayerPerformanceSectionProps> =
             {/* Table Summary Footer */}
             {rows.length > 0 && (
               <tfoot>
-                <tr className="bg-[#151515] border-t border-[#262626] font-heading font-bold text-[11px] text-[#AAAAAA]">
-                  <td className="py-2 px-3 text-white">Team Totals</td>
+                <tr className="bg-(--bg-base) border-t border-(--border) font-heading font-bold text-xs text-(--text-secondary)">
+                  <td className="py-2 px-3 text-(--text-primary)">Team Totals</td>
                   <td className="py-2 px-2"></td>
-                  <td className="py-2 px-2 text-center text-[#3DD68C] font-mono font-bold">
+                  <td className="py-2 px-2 text-center text-(--success) tabular-nums font-bold">
                     {totals.kills}
                   </td>
-                  <td className="py-2 px-2 text-center text-[#AAAAAA] font-mono font-bold">
+                  <td className="py-2 px-2 text-center text-(--text-secondary) tabular-nums font-bold">
                     {totals.deaths}
                   </td>
-                  <td className="py-2 px-2 text-center text-[#ff6600] font-mono font-bold">
+                  <td className="py-2 px-2 text-center text-(--brand-ink) tabular-nums font-bold">
                     {totals.assists}
                   </td>
-                  <td className="py-2 px-3 text-right text-white font-mono font-bold">
+                  <td className="py-2 px-3 text-right text-(--text-primary) tabular-nums font-bold">
                     {(
                       totals.deaths === 0
                         ? totals.kills + totals.assists
@@ -242,33 +242,33 @@ export const PlayerPerformanceSection: React.FC<PlayerPerformanceSectionProps> =
 
   return (
     <div
-      className={`rounded-[4px] border border-[#333333] bg-[#222222] p-5 space-y-4 shadow-xl ${className}`}
+      className={`rounded-[4px] border border-(--border) bg-(--surface-soft) p-5 space-y-4 shadow-xl ${className}`}
     >
       {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2E2E2E] pb-3.5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-(--border) pb-3.5">
         <div>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-[3px] bg-[#33221A] border border-[#ff6600]/50 flex items-center justify-center text-[#ff6600]">
+            <div className="w-7 h-7 rounded-[3px] bg-(--surface-elevated) border border-(--brand)/50 flex items-center justify-center text-(--brand-ink)">
               <Swords className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <h3 className="text-base font-heading font-black text-white tracking-tight uppercase">
+            <h3 className="text-base font-heading font-bold text-(--text-primary) tracking-tight">
               Player Performance
             </h3>
           </div>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-(--text-muted) mt-1">
             Breakdown table of individual kills, deaths, and assists for participating rosters
           </p>
         </div>
 
         {/* Global score strip */}
-        <div className="flex items-center gap-3 bg-[#181818] px-3 py-1.5 rounded-[4px] border border-[#2F2F2F] self-start sm:self-auto text-xs">
-          <div className="flex items-center gap-1.5 font-mono">
-            <span className="font-bold text-[#3B82F6]">{match.team1?.collegeCode || 'T1'}: {team1Totals.kills}</span>
-            <span className="text-[#666666]">-</span>
-            <span className="font-bold text-[#EF4444]">{match.team2?.collegeCode || 'T2'}: {team2Totals.kills}</span>
+        <div className="flex items-center gap-3 bg-(--bg-base) px-3 py-1.5 rounded-[4px] border border-(--border) self-start sm:self-auto text-xs">
+          <div className="flex items-center gap-1.5 tabular-nums">
+            <span className="font-bold text-(--info)">{match.team1?.collegeCode || 'T1'}: {team1Totals.kills}</span>
+            <span className="text-(--text-muted)">-</span>
+            <span className="font-bold text-(--danger)">{match.team2?.collegeCode || 'T2'}: {team2Totals.kills}</span>
           </div>
-          <span className="text-[#666666]">|</span>
-          <span className="text-[11px] text-[#888888] font-mono">
+          <span className="text-(--text-muted)">|</span>
+          <span className="text-xs text-(--text-muted) tabular-nums">
             Total Elims: {team1Totals.kills + team2Totals.kills}
           </span>
         </div>

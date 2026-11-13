@@ -141,7 +141,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 <Brand context="Admin" />
                 <button
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 rounded-[4px] text-[#666666] hover:text-white hover:bg-[#2A2A2A] transition-colors cursor-pointer"
+                  className="p-2 rounded-[4px] text-(--text-muted) hover:text-(--text-primary) hover:bg-(--surface-elevated) transition-colors cursor-pointer"
                 >
                   <X aria-label="Close navigation" className="w-5 h-5" />
                 </button>
@@ -161,7 +161,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                       <Icon className="w-5 h-5" />
                       <span>{tab.label}</span>
                       {tab.id === 'reports' && openReportsCount > 0 && (
-                        <span className="ml-auto w-5 h-5 rounded-full bg-[#E8544B] text-white text-[9px] font-bold flex items-center justify-center">
+                        <span className="ml-auto w-5 h-5 rounded-full bg-(--danger) text-white text-xs font-bold flex items-center justify-center">
                           {openReportsCount}
                         </span>
                       )}
@@ -183,7 +183,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             {/* Hamburger (mobile/tablet) */}
             <button
               onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-2 rounded-[4px] text-[#888888] hover:text-white hover:bg-[#252525] transition-colors cursor-pointer"
+              className="lg:hidden p-2 rounded-[4px] text-(--text-muted) hover:text-(--text-primary) hover:bg-(--surface-soft) transition-colors cursor-pointer"
             >
               <Menu aria-label="Open navigation" className="w-5 h-5" />
             </button>
@@ -191,21 +191,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             {/* Mobile logo + active tab */}
             <div className="lg:hidden flex items-center gap-2">
               <Brand compact />
-              <span className="text-[#555555]">/</span>
-              <span className="text-sm font-medium text-white capitalize">
+              <span className="text-(--text-muted)">/</span>
+              <span className="text-sm font-medium text-(--text-primary) capitalize">
                 {activeTabMeta?.shortLabel || activeTab}
               </span>
             </div>
 
             {/* Desktop breadcrumb */}
-            <div className="hidden lg:flex items-center gap-2 text-xs text-[#888888]">
-              <button className="hover:text-white" onClick={() => onTabChange('overview')}>
+            <div className="hidden lg:flex items-center gap-2 text-xs text-(--text-muted)">
+              <button className="hover:text-(--text-primary)" onClick={() => onTabChange('overview')}>
                 ArenaHub
               </button>
               <span>/</span>
-              <span className="text-[#888888]">Admin</span>
+              <span className="text-(--text-muted)">Admin</span>
               <span>/</span>
-              <span className="text-white font-medium capitalize">
+              <span className="text-(--text-primary) font-medium capitalize">
                 {activeTabMeta?.label || activeTab}
               </span>
             </div>
@@ -232,7 +232,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       </div>
 
       {/* ── Mobile Bottom Navigation Bar ── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#141414]/95 backdrop-blur-md border-t border-[#2A2A2A] flex items-stretch">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-(--bg-base)/95 backdrop-blur-md border-t border-(--border) flex items-stretch">
         {MOBILE_BOTTOM_TABS.map(({ id, label, icon: Icon }) => {
           const active = activeTab === id;
           return (
@@ -241,15 +241,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onClick={() => handleTabChange(id)}
               aria-current={active ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 min-h-[56px] relative transition-colors cursor-pointer ${
-                active ? 'text-white' : 'text-[#555555] hover:text-[#AAAAAA]'
+                active ? 'text-(--text-primary)' : 'text-(--text-muted) hover:text-(--text-secondary)'
               }`}
             >
               <Icon className={`w-5 h-5 ${active ? 'stroke-[2]' : 'stroke-[1.5]'}`} />
-              <span className={`text-[9px] font-semibold tracking-wide ${active ? 'text-white' : ''}`}>
+              <span className={`text-xs font-semibold ${active ? 'text-(--text-primary)' : ''}`}>
                 {label}
               </span>
               {id === 'reports' && openReportsCount > 0 && (
-                <span className="absolute top-1.5 right-1/4 w-4 h-4 rounded-full bg-[#E8544B] text-white text-[8px] font-bold flex items-center justify-center">
+                <span className="absolute top-1.5 right-1/4 w-4 h-4 rounded-full bg-(--danger) text-white text-xs font-bold flex items-center justify-center">
                   {openReportsCount}
                 </span>
               )}

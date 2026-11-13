@@ -165,11 +165,11 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       return {
         badgeTitle: event.title || 'First Blood',
         icon: Skull,
-        badgeBg: 'bg-[#E8544B]',
-        nodeBorder: 'border-[#E8544B]',
-        nodeBg: 'bg-[#351919]',
-        textColor: 'text-[#E8544B]',
-        glowColor: 'shadow-[#E8544B]/30',
+        badgeBg: 'bg-(--danger)',
+        nodeBorder: 'border-(--danger)',
+        nodeBg: 'bg-(--surface-elevated)',
+        textColor: 'text-(--danger)',
+        glowColor: 'shadow-(color:--danger)/30',
       };
     }
 
@@ -177,11 +177,11 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       return {
         badgeTitle: event.title || 'Tower Destroyed',
         icon: Shield,
-        badgeBg: 'bg-[#ff6600]',
-        nodeBorder: 'border-[#ff6600]',
-        nodeBg: 'bg-[#33221A]',
-        textColor: 'text-[#ff6600]',
-        glowColor: 'shadow-[#ff6600]/30',
+        badgeBg: 'bg-(--brand)',
+        nodeBorder: 'border-(--brand)',
+        nodeBg: 'bg-(--surface-elevated)',
+        textColor: 'text-(--brand-ink)',
+        glowColor: 'shadow-(color:--brand)/30',
       };
     }
 
@@ -189,11 +189,11 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       return {
         badgeTitle: event.title || 'Lord/Baron Slain',
         icon: Crown,
-        badgeBg: 'bg-[#A855F7]',
-        nodeBorder: 'border-[#A855F7]',
-        nodeBg: 'bg-[#2B173E]',
-        textColor: 'text-[#C084FC]',
-        glowColor: 'shadow-[#A855F7]/30',
+        badgeBg: 'bg-(--violet)',
+        nodeBorder: 'border-(--violet)',
+        nodeBg: 'bg-(--violet-soft)',
+        textColor: 'text-(--violet)',
+        glowColor: 'shadow-(color:--violet)/30',
       };
     }
 
@@ -201,11 +201,11 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       return {
         badgeTitle: event.title || 'ACE / Wipeout',
         icon: Flame,
-        badgeBg: 'bg-[#E8544B]',
-        nodeBorder: 'border-[#E8544B]',
-        nodeBg: 'bg-[#2E1818]',
-        textColor: 'text-[#FF6B6B]',
-        glowColor: 'shadow-[#E8544B]/40',
+        badgeBg: 'bg-(--danger)',
+        nodeBorder: 'border-(--danger)',
+        nodeBg: 'bg-(--surface-soft)',
+        textColor: 'text-(--danger)',
+        glowColor: 'shadow-(color:--danger)/40',
       };
     }
 
@@ -213,49 +213,49 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       return {
         badgeTitle: event.title || 'Objective Secured',
         icon: Target,
-        badgeBg: 'bg-[#ff6600]',
-        nodeBorder: 'border-[#ff6600]',
-        nodeBg: 'bg-[#18273A]',
-        textColor: 'text-[#60A5FA]',
-        glowColor: 'shadow-[#ff6600]/30',
+        badgeBg: 'bg-(--brand)',
+        nodeBorder: 'border-(--brand)',
+        nodeBg: 'bg-(--info-soft)',
+        textColor: 'text-(--info)',
+        glowColor: 'shadow-(color:--brand)/30',
       };
     }
 
     return {
       badgeTitle: event.title || 'Key Play',
       icon: Swords,
-      badgeBg: 'bg-[#3DD68C]',
-      nodeBorder: 'border-[#3DD68C]',
-      nodeBg: 'bg-[#1A2E23]',
-      textColor: 'text-[#3DD68C]',
-      glowColor: 'shadow-[#3DD68C]/30',
+      badgeBg: 'bg-(--success)',
+      nodeBorder: 'border-(--success)',
+      nodeBg: 'bg-(--surface-soft)',
+      textColor: 'text-(--success)',
+      glowColor: 'shadow-(color:--success)/30',
     };
   };
 
   return (
     <div
-      className={`rounded-[4px] border border-[#333333] bg-[#222222] p-5 shadow-xl relative overflow-hidden ${className}`}
+      className={`rounded-[4px] border border-(--border) bg-(--surface-soft) p-5 shadow-xl relative overflow-hidden ${className}`}
     >
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#2E2E2E] pb-4 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-(--border) pb-4 mb-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="w-7 h-7 rounded-[3px] bg-[#33221A] border border-[#ff6600]/50 flex items-center justify-center text-[#ff6600]">
+            <div className="w-7 h-7 rounded-[3px] bg-(--surface-elevated) border border-(--brand)/50 flex items-center justify-center text-(--brand-ink)">
               <Clock className="w-4 h-4 stroke-[2.2]" />
             </div>
-            <h3 className="text-base font-heading font-black text-white tracking-tight uppercase">
+            <h3 className="text-base font-heading font-bold text-(--text-primary) tracking-tight">
               Match Timeline
             </h3>
 
             {/* Live Automated Feed Pill */}
             {match.status === 'live' && (
-              <span className="px-2 py-0.5 rounded-[3px] bg-[#142A1D] border border-[#1E4D30] text-[#3DD68C] text-[10px] font-heading font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#3DD68C] animate-pulse" />
+              <span className="px-2 py-0.5 rounded-[3px] bg-(--surface-soft) border border-(--success-border) text-(--success) text-xs font-heading font-bold flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-(--success) animate-pulse" />
                 Live In-Game Feed
               </span>
             )}
           </div>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-(--text-muted) mt-1">
             Chronological log of pivotal milestones: First Blood, Turret takedowns, and Lord/Baron objectives
           </p>
         </div>
@@ -264,24 +264,24 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           {/* Automated Telemetry (GSI) Simulator Toggle for Live Matches */}
           {match.status === 'live' && (
-            <div className="flex items-center gap-1.5 bg-[#181818] p-1 rounded-[4px] border border-[#303030] text-xs">
+            <div className="flex items-center gap-1.5 bg-(--bg-base) p-1 rounded-[4px] border border-(--border) text-xs">
               <button
                 onClick={() => setIsAutoTelemetry(!isAutoTelemetry)}
                 title="Toggle automated game client telemetry feed (Game State Integration)"
-                className={`px-2 py-1 rounded-[3px] text-[11px] font-heading font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                className={`px-2 py-1 rounded-[3px] text-xs font-heading font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
                   isAutoTelemetry
-                    ? 'bg-[#142A1D] text-[#ff6600] border border-[#1E4D30]'
-                    : 'bg-[#252525] text-[#888888] hover:text-white'
+                    ? 'bg-(--surface-soft) text-(--brand-ink) border border-(--success-border)'
+                    : 'bg-(--surface-soft) text-(--text-muted) hover:text-(--text-primary)'
                 }`}
               >
-                <Radio className={`w-3 h-3 ${isAutoTelemetry ? 'animate-pulse text-[#ff6600]' : ''}`} />
+                <Radio className={`w-3 h-3 ${isAutoTelemetry ? 'animate-pulse text-(--brand-ink)' : ''}`} />
                 <span>Auto-Telemetry {isAutoTelemetry ? 'ON' : 'OFF'}</span>
               </button>
 
               {simIndex < simulatedUpcomingEvents.length && (
                 <button
                   onClick={handleTriggerSimulatedEvent}
-                  className="px-2 py-1 rounded-[3px] bg-[#2A2A2A] hover:bg-[#333333] text-white text-[10px] font-heading font-bold uppercase tracking-wider transition-colors cursor-pointer border border-[#3A3A3A]"
+                  className="px-2 py-1 rounded-[3px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-(--text-primary) text-xs font-heading font-bold transition-colors cursor-pointer border border-(--border-strong)"
                   title="Simulate immediate arrival of the next in-game event"
                 >
                   + Next Event
@@ -291,13 +291,13 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
           )}
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 bg-[#181818] p-1 rounded-[4px] border border-[#303030] text-xs overflow-x-auto max-w-full">
+          <div className="flex items-center gap-1 bg-(--bg-base) p-1 rounded-[4px] border border-(--border) text-xs overflow-x-auto max-w-full">
             <button
               onClick={() => setActiveFilter('all')}
               className={`px-2.5 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer whitespace-nowrap ${
                 activeFilter === 'all'
-                  ? 'bg-[#ff6600] text-white shadow-sm'
-                  : 'text-[#888888] hover:text-white'
+                  ? 'bg-(--brand) text-white shadow-sm'
+                  : 'text-(--text-muted) hover:text-white'
               }`}
             >
               All ({events.length})
@@ -306,8 +306,8 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
               onClick={() => setActiveFilter('first-blood')}
               className={`px-2 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 activeFilter === 'first-blood'
-                  ? 'bg-[#E8544B] text-white shadow-sm'
-                  : 'text-[#888888] hover:text-[#E8544B]'
+                  ? 'bg-(--danger) text-white shadow-sm'
+                  : 'text-(--text-muted) hover:text-(--danger)'
               }`}
             >
               <Skull className="w-3 h-3" />
@@ -317,8 +317,8 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
               onClick={() => setActiveFilter('tower')}
               className={`px-2 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 activeFilter === 'tower'
-                  ? 'bg-[#ff6600] text-white shadow-sm'
-                  : 'text-[#888888] hover:text-[#ff6600]'
+                  ? 'bg-(--brand) text-white shadow-sm'
+                  : 'text-(--text-muted) hover:text-(--brand-ink)'
               }`}
             >
               <Shield className="w-3 h-3" />
@@ -328,8 +328,8 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
               onClick={() => setActiveFilter('lord')}
               className={`px-2 py-1 rounded-[3px] font-heading font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
                 activeFilter === 'lord'
-                  ? 'bg-[#ff6600] text-white shadow-sm'
-                  : 'text-[#888888] hover:text-[#ff6600]'
+                  ? 'bg-(--brand) text-white shadow-sm'
+                  : 'text-(--text-muted) hover:text-(--brand-ink)'
               }`}
             >
               <Crown className="w-3 h-3" />
@@ -340,14 +340,14 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       </div>
 
       {/* Real-time Automation Info Ribbon */}
-      <div className="mb-4 px-3 py-2 rounded-[3px] bg-[#1A1A1A] border border-[#2D2D2D] flex items-center justify-between text-[11px] text-[#888888]">
+      <div className="mb-4 px-3 py-2 rounded-[3px] bg-(--surface) border border-(--border) flex items-center justify-between text-xs text-(--text-muted)">
         <div className="flex items-center gap-2">
-          <Info className="w-3.5 h-3.5 text-[#ff6600] shrink-0" />
+          <Info className="w-3.5 h-3.5 text-(--brand-ink) shrink-0" />
           <span>
-            <strong className="text-white font-medium">Automated Game State Integration:</strong> Live match milestones are captured automatically via in-game API telemetry webhooks—no human moderator required.
+            <strong className="text-(--text-primary) font-medium">Automated Game State Integration:</strong> Live match milestones are captured automatically via in-game API telemetry webhooks—no human moderator required.
           </span>
         </div>
-        <span className="font-mono text-[10px] text-[#3DD68C] shrink-0 ml-2 hidden sm:inline">
+        <span className="tabular-nums text-xs text-(--success) shrink-0 ml-2 hidden sm:inline">
           Sync: 100% LIVE
         </span>
       </div>
@@ -355,7 +355,7 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
       {/* Horizontal Timeline Track */}
       <div className="relative pt-2 pb-3 overflow-x-auto scrollbar-thin scrollbar-thumb-[#333333]">
         {/* Horizontal rail line */}
-        <div className="absolute top-[34px] left-4 right-4 h-0.5 bg-gradient-to-r from-[#333333] via-[#444444] to-[#ff6600]/50 -z-0 pointer-events-none" />
+        <div className="absolute top-[34px] left-4 right-4 h-0.5 bg-gradient-to-r from-(--surface-elevated) via-(--border-strong) to-(--brand)/50 -z-0 pointer-events-none" />
 
         <div className="flex items-start gap-4 sm:gap-6 min-w-max px-2 relative z-10">
           {filteredEvents.map((event, idx) => {
@@ -383,15 +383,15 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
 
                 {/* Timestamp pill */}
                 <div className="mt-2.5 flex items-center gap-1.5">
-                  <span className="font-mono text-[11px] font-bold text-white bg-[#181818] px-2 py-0.5 rounded-[3px] border border-[#333333] tabular-nums shadow-xs">
+                  <span className="tabular-nums text-xs font-bold text-(--text-primary) bg-(--bg-base) px-2 py-0.5 rounded-[3px] border border-(--border) tabular-nums shadow-xs">
                     {event.time}
                   </span>
                   {event.team && (
                     <span
-                      className={`text-[10px] font-heading font-black px-1.5 py-0.5 rounded-[2px] ${
+                      className={`text-xs font-heading font-bold px-1.5 py-0.5 rounded-[2px] ${
                         isTeam1
-                          ? 'bg-[#202733] text-[#3B82F6] border border-[#303E54]'
-                          : 'bg-[#332020] text-[#EF4444] border border-[#543030]'
+                          ? 'bg-(--surface-elevated) text-(--info) border border-(--info-border)'
+                          : 'bg-(--surface-elevated) text-(--danger) border border-(--danger-border)'
                       }`}
                     >
                       {event.team}
@@ -402,7 +402,7 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
                 {/* Milestone Title Badge */}
                 <div className="mt-2 text-center w-full">
                   <span
-                    className={`inline-block px-2 py-0.5 rounded-[3px] text-white text-[10px] font-heading font-black uppercase tracking-wider ${meta.badgeBg} shadow-sm`}
+                    className={`inline-block px-2 py-0.5 rounded-[3px] text-(--text-primary) text-xs font-heading font-bold ${meta.badgeBg} shadow-sm`}
                   >
                     {meta.badgeTitle}
                   </span>
@@ -410,13 +410,13 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
 
                 {/* Event Description Card */}
                 <div
-                  className={`mt-2 p-2.5 rounded-[4px] bg-[#1A1A1A] border transition-colors w-full text-center ${
+                  className={`mt-2 p-2.5 rounded-[4px] bg-(--surface) border transition-colors w-full text-center ${
                     isSelected
-                      ? 'border-white/50 bg-[#222222]'
-                      : 'border-[#2C2C2C] group-hover:border-[#404040]'
+                      ? 'border-white/50 bg-(--surface-soft)'
+                      : 'border-(--border) group-hover:border-(--border-strong)'
                   }`}
                 >
-                  <p className="text-[11px] text-[#D1D1D1] leading-snug line-clamp-2">
+                  <p className="text-xs text-(--text-secondary) leading-snug line-clamp-2">
                     {event.text}
                   </p>
                 </div>
@@ -428,23 +428,23 @@ export const MatchTimeline: React.FC<MatchTimelineProps> = ({
 
       {/* Selected Event Inspection Banner */}
       {selectedEventId !== null && filteredEvents[selectedEventId] && (
-        <div className="mt-3 p-3.5 rounded-[4px] bg-[#191919] border border-[#383838] flex items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="mt-3 p-3.5 rounded-[4px] bg-(--surface) border border-(--border-strong) flex items-start sm:items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3">
-            <span className="font-mono font-bold text-[#ff6600] bg-[#2A1E17] border border-[#ff6600]/30 px-2 py-1 rounded-[3px] tabular-nums">
+            <span className="tabular-nums font-bold text-(--brand-ink) bg-(--surface-soft) border border-(--brand)/30 px-2 py-1 rounded-[3px] tabular-nums">
               {filteredEvents[selectedEventId].time}
             </span>
             <div>
-              <span className="font-heading font-black text-white text-sm block">
+              <span className="font-heading font-bold text-(--text-primary) text-sm block">
                 {filteredEvents[selectedEventId].title || 'Milestone Detail'}
               </span>
-              <span className="text-[#AAAAAA]">
+              <span className="text-(--text-secondary)">
                 {filteredEvents[selectedEventId].text}
               </span>
             </div>
           </div>
           <button
             onClick={() => setSelectedEventId(null)}
-            className="text-[11px] text-[#888888] hover:text-white transition-colors cursor-pointer shrink-0"
+            className="text-xs text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer shrink-0"
           >
             Dismiss
           </button>

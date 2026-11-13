@@ -12,7 +12,7 @@ export const Brand: React.FC<BrandProps> = ({ compact = false, context, classNam
       <img src="/arenahub-logo.svg" alt="ArenaHub" className="brand-logo" width="424" height="508" />
     </span>
     {context && !compact && (
-      <span className="rounded-md border border-[var(--border)] bg-[var(--surface-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+      <span className="rounded-md border border-[var(--border)] bg-[var(--surface-soft)] px-1.5 py-0.5 text-xs font-semibold tracking-[0.08em] text-[var(--text-muted)]">
         {context}
       </span>
     )}

@@ -106,15 +106,15 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-xs font-semibold text-[#888888] hover:text-white transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 text-xs font-semibold text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>All tournaments</span>
         </button>
 
         <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-[#3DD68C] animate-pulse" />
-          <span className="text-[#3DD68C] font-semibold text-[11px] uppercase tracking-wider">
+          <span className="w-2 h-2 rounded-full bg-(--success) animate-pulse" />
+          <span className="text-(--success) font-semibold text-xs">
             {activeBracket.status === 'published' ? 'Published organizer bracket' : 'Sample bracket'}
           </span>
         </div>
@@ -148,8 +148,8 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           onClick={() => setActiveTab('bracket')}
           className={`px-4 py-1.5 rounded-[4px] text-xs font-semibold transition-all cursor-pointer ${
             activeTab === 'bracket'
-              ? 'bg-white/[0.10] text-white shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-white hover:bg-white/[0.05]'
+              ? 'bg-white/[0.10] text-(--text-primary) shadow-sm'
+              : 'text-[var(--text-muted)] hover:text-(--text-primary) hover:bg-white/[0.05]'
           }`}
         >
           Tournament Bracket
@@ -158,8 +158,8 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           onClick={() => setActiveTab('standings')}
           className={`px-4 py-1.5 rounded-[4px] text-xs font-semibold transition-all cursor-pointer ${
             activeTab === 'standings'
-              ? 'bg-white/[0.10] text-white shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-white hover:bg-white/[0.05]'
+              ? 'bg-white/[0.10] text-(--text-primary) shadow-sm'
+              : 'text-[var(--text-muted)] hover:text-(--text-primary) hover:bg-white/[0.05]'
           }`}
         >
           Standings
@@ -173,14 +173,14 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
         <div className="space-y-6">
           {/* Live Match Banner Alert if any match is currently live */}
           {liveMatches.length > 0 && (
-            <div className="p-3.5 rounded-[6px] bg-[#16251A] border-2 border-[#3DD68C] flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-[#3DD68C]/10">
+            <div className="p-3.5 rounded-[6px] bg-(--surface-soft) border-2 border-(--success) flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-(color:--success)/10">
               <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#3DD68C] animate-pulse" />
+                <span className="w-2.5 h-2.5 rounded-full bg-(--success) animate-pulse" />
                 <div>
-                  <span className="text-[10px] font-black uppercase text-[#3DD68C] tracking-wider block">
+                  <span className="text-xs font-bold text-(--success) block">
                     LIVE MATCH IN PROGRESS
                   </span>
-                  <span className="text-xs font-bold text-white">
+                  <span className="text-xs font-bold text-(--text-primary)">
                     {liveMatches[0].team1?.name || 'Team 1'} ({liveMatches[0].score.team1Score}) vs{' '}
                     {liveMatches[0].team2?.name || 'Team 2'} ({liveMatches[0].score.team2Score}) · {liveMatches[0].roundName}
                   </span>
@@ -189,7 +189,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
 
               <button
                 onClick={() => onSelectMatch(liveMatches[0])}
-                className="px-3.5 py-1.5 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
+                className="px-3.5 py-1.5 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
               >
                 <Radio className="w-3.5 h-3.5" />
                 <span>Watch Live Stream</span>
@@ -199,7 +199,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
 
           {/* ── Dynamic Horizontal Tournament Grid ── */}
           <div className="viewer-bracket-board"><TournamentBracketCanvas key={activeBracket.id} rounds={rounds} onSelectMatch={onSelectMatch} /></div>
-          {false && <div className="p-5 rounded-[6px] bg-[#181920] border border-[#2B2D38] shadow-xl overflow-x-auto">
+          {false && <div className="p-5 rounded-[6px] bg-(--surface) border border-(--border) shadow-xl overflow-x-auto">
             <div className="flex items-start gap-6 min-w-max pb-3">
               {rounds.map((roundMatches, roundIdx) => {
                 const isGrandFinal = roundIdx === rounds.length - 1;
@@ -209,11 +209,11 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
                 return (
                   <div key={roundIdx} className="space-y-4 min-w-[240px] max-w-[260px] flex-1">
                     {/* Round Header */}
-                    <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider pb-1.5 border-b border-[#333333]">
-                      <span className={isGrandFinal ? 'text-[#ff6600]' : 'text-[#AAAAAA]'}>
+                    <div className="flex items-center justify-between text-xs font-bold pb-1.5 border-b border-(--border)">
+                      <span className={isGrandFinal ? 'text-(--brand-ink)' : 'text-(--text-secondary)'}>
                         {roundName}
                       </span>
-                      <span className="text-[10px] text-[#666677] font-mono normal-case">
+                      <span className="text-xs text-(--text-muted) tabular-nums normal-case">
                         {matchFmt}
                       </span>
                     </div>
@@ -239,44 +239,44 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
                             onClick={() => !isByeMatch && onSelectMatch(match)}
                             className={`p-3 rounded-[5px] border transition-all ${
                               isByeMatch
-                                ? 'bg-[#15161D] border-[#252834] opacity-80'
+                                ? 'bg-(--surface) border-(--border) opacity-80'
                                 : isLive
-                                ? 'bg-[#1C2028] border-2 border-[#ff6600] shadow-lg shadow-[#ff6600]/10 cursor-pointer hover:bg-[#222734]'
+                                ? 'bg-(--surface-soft) border-2 border-(--brand) shadow-lg shadow-(color:--brand)/10 cursor-pointer hover:bg-(--surface-elevated)'
                                 : isGrandFinal
-                                ? 'bg-[#1E1F1A] border-[#ff6600]/50 shadow-md cursor-pointer hover:bg-[#262720]'
-                                : 'bg-[#202020] border-[#2F3242] hover:border-[#42485E] cursor-pointer'
+                                ? 'bg-(--surface) border-(--brand)/50 shadow-md cursor-pointer hover:bg-(--surface-soft)'
+                                : 'bg-(--surface-soft) border-(--border-strong) hover:border-(--border-strong) cursor-pointer'
                             }`}
                           >
                             {/* Match Header Badge */}
-                            <div className="flex items-center justify-between text-[10px] mb-2 font-mono">
-                              <span className="text-[#777788] font-bold">{match.matchNumber}</span>
+                            <div className="flex items-center justify-between text-xs mb-2 tabular-nums">
+                              <span className="text-(--text-muted) font-bold">{match.matchNumber}</span>
                               {isByeMatch ? (
-                                <span className="px-1.5 py-0.2 rounded bg-[#3DD68C]/15 text-[#3DD68C] font-bold text-[9px]">
+                                <span className="px-1.5 py-0.2 rounded bg-(--success)/15 text-(--success) font-bold text-xs">
                                   BYE ADVANCE
                                 </span>
                               ) : isLive ? (
-                                <span className="flex items-center gap-1 text-[#3DD68C] font-bold">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#3DD68C] animate-pulse" />
+                                <span className="flex items-center gap-1 text-(--success) font-bold">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-(--success) animate-pulse" />
                                   LIVE
                                 </span>
                               ) : isCompleted ? (
-                                <span className="text-[#888899]">FINAL</span>
+                                <span className="text-(--text-muted)">FINAL</span>
                               ) : (
-                                <span className="text-[#777788]">{match.scheduledTime || 'UPCOMING'}</span>
+                                <span className="text-(--text-muted)">{match.scheduledTime || 'UPCOMING'}</span>
                               )}
                             </div>
 
                             {/* Team 1 Row */}
-                            <div className="flex items-center justify-between py-1 border-b border-[#292C3A]">
+                            <div className="flex items-center justify-between py-1 border-b border-(--border)">
                               <div className="flex items-center gap-1.5 min-w-0 pr-2">
-                                <span className="w-4 h-4 rounded-[2px] bg-[#333333] text-[9px] font-bold text-[#888899] flex items-center justify-center shrink-0">
+                                <span className="w-4 h-4 rounded-[2px] bg-(--surface-elevated) text-xs font-bold text-(--text-muted) flex items-center justify-center shrink-0">
                                   {t1Seed}
                                 </span>
                                 <span
                                   className={`text-xs truncate ${
                                     t1Winning
-                                      ? 'text-[#ff6600] font-bold'
-                                      : 'text-white font-medium'
+                                      ? 'text-(--brand-ink) font-bold'
+                                      : 'text-(--text-primary) font-medium'
                                   }`}
                                 >
                                   {t1Name}
@@ -285,8 +285,8 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
                               <span
                                 className={`text-xs font-bold tabular-nums px-1.5 py-0.5 rounded ${
                                   t1Winning
-                                    ? 'bg-[#ff6600]/10 text-[#ff6600]'
-                                    : 'text-[#888888]'
+                                    ? 'bg-(--brand)/10 text-(--brand-ink)'
+                                    : 'text-(--text-muted)'
                                 }`}
                               >
                                 {isByeMatch ? '✓' : s1}
@@ -296,16 +296,16 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
                             {/* Team 2 Row */}
                             <div className="flex items-center justify-between py-1">
                               <div className="flex items-center gap-1.5 min-w-0 pr-2">
-                                <span className="w-4 h-4 rounded-[2px] bg-[#333333] text-[9px] font-bold text-[#888888] flex items-center justify-center shrink-0">
+                                <span className="w-4 h-4 rounded-[2px] bg-(--surface-elevated) text-xs font-bold text-(--text-muted) flex items-center justify-center shrink-0">
                                   {t2Seed}
                                 </span>
                                 <span
                                   className={`text-xs truncate ${
                                     isByeMatch
-                                      ? 'text-[#777788] uppercase text-[10px] tracking-wider font-semibold'
+                                      ? 'text-(--text-muted) text-xs font-semibold'
                                       : t2Winning
-                                      ? 'text-[#ff6600] font-bold'
-                                      : 'text-[#CCCCCC] font-medium'
+                                      ? 'text-(--brand-ink) font-bold'
+                                      : 'text-(--text-secondary) font-medium'
                                   }`}
                                 >
                                   {t2Name}
@@ -314,8 +314,8 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
                               <span
                                 className={`text-xs font-bold tabular-nums px-1.5 py-0.5 rounded ${
                                   t2Winning
-                                    ? 'bg-[#ff6600]/10 text-[#ff6600]'
-                                    : 'text-[#888888]'
+                                    ? 'bg-(--brand)/10 text-(--brand-ink)'
+                                    : 'text-(--text-muted)'
                                 }`}
                               >
                                 {isByeMatch ? '-' : s2}
@@ -324,7 +324,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
 
                             {/* Click to view live stream prompt */}
                             {isLive && (
-                              <div className="pt-2 mt-1 border-t border-[#33384A] flex items-center justify-between text-[10px] text-[#ff6600] font-semibold">
+                              <div className="pt-2 mt-1 border-t border-(--border-strong) flex items-center justify-between text-xs text-(--brand-ink) font-semibold">
                                 <span>Click to watch match</span>
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </div>
@@ -340,14 +340,14 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           </div>}
 
           {/* Footer note */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#888888] pt-2 px-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-(--text-muted) pt-2 px-1">
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3DD68C]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-(--success)" />
               <span>
                 Bracket updates dynamically in real-time as admins save results and report match scores.
               </span>
             </div>
-            <div className="text-[11px] text-[#666677]">
+            <div className="text-xs text-(--text-muted)">
               Accommodates any tournament size with standard competitive seeding.
             </div>
           </div>

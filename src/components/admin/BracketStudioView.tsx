@@ -129,16 +129,16 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
     <Modal open={isOpen} title="Match details" description={`${match.roundName} · ${match.matchFormat}`} onClose={onClose}>
         {/* Content Table */}
         <div className="p-5 space-y-4">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#888888] px-1">
+          <div className="flex items-center justify-between text-xs font-bold text-(--text-muted) px-1">
             <span>PARTICIPANTS</span>
             <span>SCORE</span>
           </div>
 
           <div className="space-y-2">
             {/* Team 1 Row */}
-            <div className="flex items-center justify-between p-2.5 rounded-[5px] bg-[#1e1e1e] border border-[#333333]">
+            <div className="flex items-center justify-between p-2.5 rounded-[5px] bg-(--surface-soft) border border-(--border)">
               <div className="match-slot-fields flex flex-wrap items-center gap-2 flex-1 min-w-0 pr-3">
-                <span className="w-5 h-5 rounded-[3px] bg-[#333333] text-[10px] font-bold text-[#aaaaaa] flex items-center justify-center shrink-0">
+                <span className="w-5 h-5 rounded-[3px] bg-(--surface-elevated) text-xs font-bold text-(--text-secondary) flex items-center justify-center shrink-0">
                   {t1Seed}
                 </span>
                 <input
@@ -153,7 +153,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   }}
                   aria-label="Team 1 name"
                   placeholder="Team 1 name"
-                  className="min-w-0 flex-1 bg-[#191919] border border-[#383838] focus:border-[#ff6600] rounded-[3px] px-2.5 py-1 text-xs font-semibold text-white outline-none transition-colors"
+                  className="min-w-0 flex-1 bg-(--surface) border border-(--border-strong) focus:border-(--brand) rounded-[3px] px-2.5 py-1 text-xs font-semibold text-(--text-primary) outline-none transition-colors"
                 />
                 <select
                   aria-label="Team 1 slot type"
@@ -173,11 +173,11 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   aria-label={`Decrease ${match.team1?.name || 'Team 1'} score`}
                   disabled={isByeMatch}
                   onClick={() => onScoreChange(match.id, 1, -1)}
-                  className="w-6 h-6 rounded-[3px] bg-[#333333] hover:bg-[#3a3a3a] text-xs text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                  className="w-6 h-6 rounded-[3px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-primary) font-bold flex items-center justify-center cursor-pointer transition-colors"
                 >
                   -
                 </button>
-                <span className="w-7 text-center text-sm font-bold text-white tabular-nums">
+                <span className="w-7 text-center text-sm font-bold text-(--text-primary) tabular-nums">
                   {s1}
                 </span>
                 <button
@@ -185,7 +185,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   aria-label={`Increase ${match.team1?.name || 'Team 1'} score`}
                   disabled={isByeMatch}
                   onClick={() => onScoreChange(match.id, 1, 1)}
-                  className="w-6 h-6 rounded-[3px] bg-[#333333] hover:bg-[#3a3a3a] text-xs text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                  className="w-6 h-6 rounded-[3px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-primary) font-bold flex items-center justify-center cursor-pointer transition-colors"
                 >
                   +
                 </button>
@@ -193,9 +193,9 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
             </div>
 
             {/* Team 2 Row */}
-            <div className="flex items-center justify-between p-2.5 rounded-[5px] bg-[#1e1e1e] border border-[#333333]">
+            <div className="flex items-center justify-between p-2.5 rounded-[5px] bg-(--surface-soft) border border-(--border)">
               <div className="match-slot-fields flex flex-wrap items-center gap-2 flex-1 min-w-0 pr-3">
-                <span className="w-5 h-5 rounded-[3px] bg-[#333333] text-[10px] font-bold text-[#aaaaaa] flex items-center justify-center shrink-0">
+                <span className="w-5 h-5 rounded-[3px] bg-(--surface-elevated) text-xs font-bold text-(--text-secondary) flex items-center justify-center shrink-0">
                   {t2Seed}
                 </span>
                 <input
@@ -210,7 +210,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   }}
                   aria-label="Team 2 name"
                   placeholder="Team 2 name"
-                  className="min-w-0 flex-1 bg-[#191919] border border-[#383838] focus:border-[#ff6600] rounded-[3px] px-2.5 py-1 text-xs font-semibold text-white outline-none transition-colors"
+                  className="min-w-0 flex-1 bg-(--surface) border border-(--border-strong) focus:border-(--brand) rounded-[3px] px-2.5 py-1 text-xs font-semibold text-(--text-primary) outline-none transition-colors"
                 />
                 <select
                   aria-label="Team 2 slot type"
@@ -230,11 +230,11 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   aria-label={`Decrease ${match.team2?.name || 'Team 2'} score`}
                   disabled={isByeMatch}
                   onClick={() => onScoreChange(match.id, 2, -1)}
-                  className="w-6 h-6 rounded-[3px] bg-[#333333] hover:bg-[#3a3a3a] text-xs text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                  className="w-6 h-6 rounded-[3px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-primary) font-bold flex items-center justify-center cursor-pointer transition-colors"
                 >
                   -
                 </button>
-                <span className="w-7 text-center text-sm font-bold text-white tabular-nums">
+                <span className="w-7 text-center text-sm font-bold text-(--text-primary) tabular-nums">
                   {s2}
                 </span>
                 <button
@@ -242,7 +242,7 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
                   aria-label={`Increase ${match.team2?.name || 'Team 2'} score`}
                   disabled={isByeMatch}
                   onClick={() => onScoreChange(match.id, 2, 1)}
-                  className="w-6 h-6 rounded-[3px] bg-[#333333] hover:bg-[#3a3a3a] text-xs text-white font-bold flex items-center justify-center cursor-pointer transition-colors"
+                  className="w-6 h-6 rounded-[3px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-primary) font-bold flex items-center justify-center cursor-pointer transition-colors"
                 >
                   +
                 </button>
@@ -252,22 +252,22 @@ const MatchInfoModal: React.FC<MatchInfoModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-[#333333] bg-[#202020]">
-          <span className="text-[10px] text-[#777777]">
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-(--border) bg-(--surface-soft)">
+          <span className="text-xs text-(--text-muted)">
             Select or type BYE to advance the other team.
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-[4px] border border-[#3a3a3a] text-[#aaaaaa] hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-[4px] border border-(--border-strong) text-(--text-secondary) hover:text-(--text-primary) text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={onSave}
-              className="px-4 py-1.5 rounded-[4px] bg-[#ff6600] hover:bg-[#e65c00] text-black text-xs font-bold transition-colors cursor-pointer"
+              className="px-4 py-1.5 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold transition-colors cursor-pointer"
             >
               Save
             </button>
@@ -310,7 +310,7 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
         <div className="p-6 space-y-5 text-xs">
           {/* Bracket Name */}
           <div>
-            <label className="block text-[11px] font-semibold text-[#888888] uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-(--text-muted) mb-1.5">
               Bracket Name
             </label>
             <input
@@ -318,13 +318,13 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. WMSU Palaro 2026 - MLBB"
-              className="w-full bg-[#191919] border border-[#333333] focus:border-[#ff6600] rounded-[4px] px-3 py-2 text-xs text-white placeholder-[#555566] outline-none transition-colors font-medium"
+              className="w-full bg-(--surface) border border-(--border) focus:border-(--brand) rounded-[4px] px-3 py-2 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none transition-colors font-medium"
             />
           </div>
 
           {/* Bracket Format */}
           <div>
-            <label className="block text-[11px] font-semibold text-[#888888] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-(--text-muted) mb-2">
               Bracket Format
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -337,12 +337,12 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
                     onClick={() => setFormat(f)}
                     className={`py-2.5 px-3 rounded-[5px] border text-left transition-all cursor-pointer ${
                       active
-                        ? 'bg-[#ff6600]/10 border-[#ff6600] text-[#ff6600]'
-                        : 'bg-[#181818] border-[#333333] text-[#888888] hover:text-white hover:border-[#444]'
+                        ? 'bg-(--brand)/10 border-(--brand) text-(--brand-ink)'
+                        : 'bg-(--bg-base) border-(--border) text-(--text-muted) hover:text-white hover:border-(--border-strong)'
                     }`}
                   >
                     <span className="block font-bold text-xs">{f}</span>
-                    <span className="text-[10px] opacity-60">
+                    <span className="text-xs opacity-60">
                       {f === 'Single Elimination' ? '1 loss and out' : f === 'Double Elimination' ? 'Upper, lower, and reset final' : 'Every team plays every opponent'}
                     </span>
                   </button>
@@ -353,7 +353,7 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
 
           {/* Match Format */}
           <div>
-            <label className="block text-[11px] font-semibold text-[#888888] uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-(--text-muted) mb-2">
               Match Format
             </label>
             <div className="grid grid-cols-3 gap-2">
@@ -366,12 +366,12 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
                     onClick={() => setMatchFormat(mf)}
                     className={`py-2 px-3 rounded-[5px] border text-center transition-all cursor-pointer ${
                       active
-                        ? 'bg-[#ff6600]/10 border-[#ff6600] text-[#ff6600]'
-                        : 'bg-[#181818] border-[#333333] text-[#888888] hover:text-white hover:border-[#444]'
+                        ? 'bg-(--brand)/10 border-(--brand) text-(--brand-ink)'
+                        : 'bg-(--bg-base) border-(--border) text-(--text-muted) hover:text-white hover:border-(--border-strong)'
                     }`}
                   >
                     <span className="font-bold text-xs block">{mf}</span>
-                    <span className="text-[9px] opacity-60">
+                    <span className="text-xs opacity-60">
                       {`First to ${seriesWinsNeeded(mf)}`}
                     </span>
                   </button>
@@ -383,10 +383,10 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
           {/* Number of Teams */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-semibold text-[#888888] uppercase tracking-wider">
+              <label className="text-xs font-semibold text-(--text-muted)">
                 Number of Teams<Req />
               </label>
-              <span className="text-[10px] text-[#3DD68C] font-semibold">
+              <span className="text-xs text-(--success) font-semibold">
                 Choose any whole number from 2 to {MAX_BRACKET_TEAMS}
               </span>
             </div>
@@ -403,19 +403,19 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
               placeholder="Enter team count"
               aria-invalid={teamCount !== '' && !validTeamCount}
               aria-describedby="manual-team-count-feedback"
-              className="w-full bg-[#191919] border border-[#3A3E50] focus:border-[#ff6600] rounded-[4px] px-3 py-2 text-sm font-semibold text-white outline-none"
+              className="w-full bg-(--surface) border border-(--border-strong) focus:border-(--brand) rounded-[4px] px-3 py-2 text-sm font-semibold text-(--text-primary) outline-none"
             />
-            <p id="manual-team-count-feedback" className={`mt-2 text-[11px] ${teamCount !== '' && !validTeamCount ? 'text-[#E8544B]' : 'text-[#888888]'}`} role="status">
+            <p id="manual-team-count-feedback" className={`mt-2 text-xs ${teamCount !== '' && !validTeamCount ? 'text-(--danger)' : 'text-(--text-muted)'}`} role="status">
               {teamCount !== '' && !validTeamCount ? `Enter a whole number from 2 to ${formatTeamLimit}.` : format === 'Round Robin' ? 'Every team meets each opponent once, with one fixture per team per round.' : 'Your count determines the full bracket and any earned BYEs.'}
             </p>
 
-            {validTeamCount && format !== 'Round Robin' && <div className="p-2.5 rounded-[4px] bg-[#181922] border border-[#333333] text-[11px] text-[#888888]">
+            {validTeamCount && format !== 'Round Robin' && <div className="p-2.5 rounded-[4px] bg-(--surface) border border-(--border) text-xs text-(--text-muted)">
               {parsedTeamCount % 2 === 0 && (parsedTeamCount & (parsedTeamCount - 1)) === 0 ? (
                 <span>Perfect balanced bracket: <strong>{teamCount} teams</strong> play in a power-of-2 tournament with no byes needed.</span>
               ) : (
                 <span>
                   Automatic BYE seeding active: With <strong>{teamCount} teams</strong>, the top{' '}
-                  <strong className="text-[#ff6600]">
+                  <strong className="text-(--brand-ink)">
                     {Math.pow(2, Math.ceil(Math.log2(parsedTeamCount))) - parsedTeamCount}
                   </strong>{' '}
                   seeds automatically receive earned BYEs directly into the next round.
@@ -426,11 +426,11 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#333333] bg-[#202020]">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-(--border) bg-(--surface-soft)">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-[4px] bg-[#2a2a2a] hover:bg-[#353535] text-white text-xs font-semibold cursor-pointer transition-colors"
+            className="px-4 py-2 rounded-[4px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-(--text-primary) text-xs font-semibold cursor-pointer transition-colors"
           >
             Cancel
           </button>
@@ -446,7 +446,7 @@ const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = ({
                 teamCount: parsedTeamCount,
               })
             }
-            className="px-5 py-2 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-black text-xs font-bold flex items-center gap-2 shadow-md cursor-pointer transition-colors"
+            className="px-5 py-2 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center gap-2 shadow-md cursor-pointer transition-colors"
           >
             <span>Proceed to Preview</span>
             <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -563,8 +563,8 @@ const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCustom(!isCustom)}
-                className={`text-[11px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors ${
-                  isCustom ? 'text-[#ff6600]' : 'text-[#888888] hover:text-white'
+                className={`text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors ${
+                  isCustom ? 'text-(--brand-ink)' : 'text-(--text-muted) hover:text-(--text-primary)'
                 }`}
               >
                 <Plus className="w-3 h-3" />
@@ -580,7 +580,7 @@ const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
                   value={customGameName}
                   onChange={(e) => setCustomGameName(e.target.value)}
                   placeholder="Enter game title (e.g., Tekken 8, CODM)..."
-                  className="mt-2 w-full bg-[#191919] border border-[#333333] focus:border-[#ff6600] rounded-[4px] px-3 py-2 text-xs text-white placeholder-[#555566] outline-none"
+                  className="mt-2 w-full bg-(--surface) border border-(--border) focus:border-(--brand) rounded-[4px] px-3 py-2 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none"
                   autoFocus
                 />
               )}
@@ -699,8 +699,8 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                 style={{ width: `${CARD_WIDTH}px`, height: `${totalTreeHeight}px` }}
               >
                 {/* Round Header */}
-                <div className="absolute -top-1 left-0 right-0 z-10 flex items-center justify-between pb-1 border-b border-[#2C2C30] text-[10px] font-bold uppercase tracking-wider">
-                  <span className={isGrandFinal ? 'text-[#ff6600]' : 'text-[#888888]'}>
+                <div className="absolute -top-1 left-0 right-0 z-10 flex items-center justify-between pb-1 border-b border-(--border) text-xs font-bold">
+                  <span className={isGrandFinal ? 'text-(--brand-ink)' : 'text-(--text-muted)'}>
                     {roundName}
                   </span>
                   <select
@@ -738,19 +738,19 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                     <div
                       key={match.id}
                       onClick={() => onSelectMatch(match)}
-                      className={`absolute left-0 right-0 rounded-[6px] border bg-[#202024] shadow-md transition-all cursor-pointer ${
+                      className={`absolute left-0 right-0 rounded-[6px] border bg-(--surface-soft) shadow-md transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-[#ff6600] ring-2 ring-[#ff6600]/40 bg-[#242424]'
+                          ? 'border-(--brand) ring-2 ring-(color:--brand)/40 bg-(--surface-soft)'
                           : isGrandFinal
-                          ? 'border-[#ff6600]/60 bg-[#1D1E16] shadow-[#ff6600]/10 shadow-lg'
-                          : 'border-[#333338] hover:border-[#4C4C55]'
+                          ? 'border-(--brand)/60 bg-(--surface) shadow-(color:--brand)/10 shadow-lg'
+                          : 'border-(--border) hover:border-(--border-strong)'
                       }`}
                       style={{ top: `${topY}px`, height: `${CARD_HEIGHT}px` }}
                     >
                       {/* Team 1 Row */}
-                      <div className="flex items-center justify-between h-[36px] px-2 border-b border-[#2A2A2E]">
+                      <div className="flex items-center justify-between h-[36px] px-2 border-b border-(--border)">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1 pr-1">
-                          <span className="w-4 h-4 rounded-[3px] bg-[#2A2A30] text-[9px] font-bold text-[#888888] flex items-center justify-center shrink-0">
+                          <span className="w-4 h-4 rounded-[3px] bg-(--surface-elevated) text-xs font-bold text-(--text-muted) flex items-center justify-center shrink-0">
                             {t1Seed}
                           </span>
                           <input
@@ -761,15 +761,15 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                             title="Click to edit team name"
                             className={`w-full bg-transparent px-1 py-0.5 rounded text-xs font-semibold truncate outline-none transition-colors ${
                               t1Winning
-                                ? 'text-[#ff6600] font-bold'
-                                : 'text-white hover:bg-[#18181A] focus:bg-[#141416] focus:ring-1 focus:ring-[#ff6600]'
+                                ? 'text-(--brand-ink) font-bold'
+                                : 'text-(--text-primary) hover:bg-(--surface) focus:bg-(--bg-base) focus:ring-1 focus:ring-(color:--brand)'
                             }`}
                           />
                         </div>
 
                         {/* Score or BYE advance tag */}
                         {team2Bye ? (
-                          <span className="px-1.5 py-0.5 rounded-[2px] bg-[#3DD68C]/20 border border-[#3DD68C]/40 text-[9px] font-bold text-[#3DD68C] uppercase shrink-0">
+                          <span className="px-1.5 py-0.5 rounded-[2px] bg-(--success)/20 border border-(--success)/40 text-xs font-bold text-(--success) shrink-0">
                             ADVANCED
                           </span>
                         ) : !team1Bye && (
@@ -781,13 +781,13 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                               type="button"
                               aria-label={`Decrease ${match.team1?.name || 'Team 1'} score`}
                   onClick={() => onScoreChange(match.id, 1, -1)}
-                              className="w-4 h-4 rounded-[2px] bg-[#2A2A30] hover:bg-[#383842] text-[10px] text-[#888888] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-4 h-4 rounded-[2px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-muted) hover:text-(--text-primary) flex items-center justify-center transition-colors cursor-pointer"
                             >
                               -
                             </button>
                             <span
                               className={`w-5 text-center text-xs font-bold tabular-nums ${
-                                t1Winning ? 'text-[#ff6600]' : 'text-white'
+                                t1Winning ? 'text-(--brand-ink)' : 'text-(--text-primary)'
                               }`}
                             >
                               {s1}
@@ -796,7 +796,7 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                               type="button"
                               aria-label={`Increase ${match.team1?.name || 'Team 1'} score`}
                   onClick={() => onScoreChange(match.id, 1, 1)}
-                              className="w-4 h-4 rounded-[2px] bg-[#2A2A30] hover:bg-[#383842] text-[10px] text-[#888888] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-4 h-4 rounded-[2px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-muted) hover:text-(--text-primary) flex items-center justify-center transition-colors cursor-pointer"
                             >
                               +
                             </button>
@@ -807,11 +807,11 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                       {/* Team 2 Row */}
                       <div className="flex items-center justify-between h-[36px] px-2">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1 pr-1">
-                          <span className="w-4 h-4 rounded-[3px] bg-[#2A2A30] text-[9px] font-bold text-[#888888] flex items-center justify-center shrink-0">
+                          <span className="w-4 h-4 rounded-[3px] bg-(--surface-elevated) text-xs font-bold text-(--text-muted) flex items-center justify-center shrink-0">
                             {t2Seed}
                           </span>
                           {team2Bye ? (
-                            <span className="text-xs text-[#80859A] font-semibold uppercase text-[10px] tracking-wider px-1">
+                            <span className="text-xs text-(--text-muted) font-semibold text-xs px-1">
                               BYE (Automatic Advance)
                             </span>
                           ) : (
@@ -823,15 +823,15 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                               title="Click to edit team name"
                               className={`w-full bg-transparent px-1 py-0.5 rounded text-xs font-semibold truncate outline-none transition-colors ${
                                 t2Winning
-                                  ? 'text-[#ff6600] font-bold'
-                                  : 'text-white hover:bg-[#18181A] focus:bg-[#141416] focus:ring-1 focus:ring-[#ff6600]'
+                                  ? 'text-(--brand-ink) font-bold'
+                                  : 'text-(--text-primary) hover:bg-(--surface) focus:bg-(--bg-base) focus:ring-1 focus:ring-(color:--brand)'
                               }`}
                             />
                           )}
                         </div>
 
                         {/* Score and +/- buttons */}
-                        {team1Bye && <span className="px-1.5 py-0.5 rounded-[2px] bg-[#3DD68C]/20 border border-[#3DD68C]/40 text-[9px] font-bold text-[#3DD68C] uppercase shrink-0">Advanced</span>}
+                        {team1Bye && <span className="px-1.5 py-0.5 rounded-[2px] bg-(--success)/20 border border-(--success)/40 text-xs font-bold text-(--success) shrink-0">Advanced</span>}
                         {!isByeMatch && (
                           <div
                             className="flex items-center gap-1 shrink-0"
@@ -841,13 +841,13 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                               type="button"
                               aria-label={`Decrease ${match.team2?.name || 'Team 2'} score`}
                   onClick={() => onScoreChange(match.id, 2, -1)}
-                              className="w-4 h-4 rounded-[2px] bg-[#2A2A30] hover:bg-[#383842] text-[10px] text-[#888888] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-4 h-4 rounded-[2px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-muted) hover:text-(--text-primary) flex items-center justify-center transition-colors cursor-pointer"
                             >
                               -
                             </button>
                             <span
                               className={`w-5 text-center text-xs font-bold tabular-nums ${
-                                t2Winning ? 'text-[#ff6600]' : 'text-white'
+                                t2Winning ? 'text-(--brand-ink)' : 'text-(--text-primary)'
                               }`}
                             >
                               {s2}
@@ -856,7 +856,7 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
                               type="button"
                               aria-label={`Increase ${match.team2?.name || 'Team 2'} score`}
                   onClick={() => onScoreChange(match.id, 2, 1)}
-                              className="w-4 h-4 rounded-[2px] bg-[#2A2A30] hover:bg-[#383842] text-[10px] text-[#888888] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                              className="w-4 h-4 rounded-[2px] bg-(--surface-elevated) hover:bg-(--surface-elevated) text-xs text-(--text-muted) hover:text-(--text-primary) flex items-center justify-center transition-colors cursor-pointer"
                             >
                               +
                             </button>
@@ -951,7 +951,7 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
           className="relative shrink-0"
           style={{ width: '150px', height: `${totalTreeHeight}px` }}
         >
-          <div className="absolute top-0 left-0 right-0 z-10 pb-1 border-b border-[#2C2C30] text-[10px] font-bold uppercase tracking-wider text-[#F7B731]">
+          <div className="absolute top-0 left-0 right-0 z-10 pb-1 border-b border-(--border) text-xs font-bold text-(--warning)">
             Champion
           </div>
 
@@ -961,14 +961,14 @@ const HorizontalBracketTree: React.FC<HorizontalBracketTreeProps> = ({
 
             return (
               <div
-                className="absolute left-0 right-0 rounded-[6px] border border-[#F7B731]/40 bg-[#1D1A10] p-3 text-center shadow-lg shadow-[#F7B731]/10"
+                className="absolute left-0 right-0 rounded-[6px] border border-(--warning)/40 bg-(--bg-base) p-3 text-center shadow-lg shadow-(color:--warning)/10"
                 style={{ top: `${topY}px` }}
               >
-                <Trophy className="w-6 h-6 text-[#F7B731] mx-auto mb-1" />
-                <span className="text-[10px] uppercase font-bold text-[#F7B731] block">
+                <Trophy className="w-6 h-6 text-(--warning) mx-auto mb-1" />
+                <span className="text-xs font-bold text-(--warning) block">
                   WINNER
                 </span>
-                <span className="text-xs font-bold text-white block truncate mt-0.5">
+                <span className="text-xs font-bold text-(--text-primary) block truncate mt-0.5">
                   {championTeam?.name || 'TBD'}
                 </span>
               </div>
@@ -1585,12 +1585,12 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
         onClick={() => onSelect(value)}
         className={`flex-1 flex flex-col items-center justify-center py-2.5 px-2 rounded-[6px] border text-center transition-all cursor-pointer ${
           active
-            ? 'bg-[#ff6600]/10 border-[#ff6600]/60 text-[#ff6600]'
-            : 'bg-[#1A1A1A] border-[#2D2D2D] text-[#888888] hover:border-[#444444] hover:text-white'
+            ? 'bg-(--brand)/10 border-(--brand)/60 text-(--brand-ink)'
+            : 'bg-(--surface) border-(--border) text-(--text-muted) hover:border-(--border-strong) hover:text-white'
         }`}
       >
-        <span className={`text-xs font-bold ${active ? 'text-[#ff6600]' : ''}`}>{label}</span>
-        {desc && <span className="text-[9px] opacity-60 mt-0.5">{desc}</span>}
+        <span className={`text-xs font-bold ${active ? 'text-(--brand-ink)' : ''}`}>{label}</span>
+        {desc && <span className="text-xs opacity-60 mt-0.5">{desc}</span>}
       </button>
     );
   };
@@ -1800,13 +1800,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
               {/* AI conversation panel */}
               {aiMessages.length > 0 && (
                 <div className="studio-assistant border overflow-hidden">
-                  <div className="px-3 py-2 border-b border-[#222222] flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#777777]">
+                  <div className="px-3 py-2 border-b border-(--border) flex items-center justify-between">
+                    <span className="text-xs font-bold text-(--text-muted)">
                       Bracket assistant
                     </span>
                     <button
                       onClick={() => setAiMessages([])}
-                      className="text-[#555555] hover:text-white transition-colors cursor-pointer"
+                      className="text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1822,8 +1822,8 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                         <div
                           className={`max-w-[94%] text-xs leading-relaxed ${
                             m.sender === 'user'
-                              ? 'bg-[#252525] text-white font-medium px-3 py-2.5 rounded-[10px]'
-                              : 'text-white w-full'
+                              ? 'bg-(--surface-soft) text-(--text-primary) font-medium px-3 py-2.5 rounded-[10px]'
+                              : 'text-(--text-primary) w-full'
                           }`}
                         >
                           {m.sender === 'user' ? (
@@ -1835,25 +1835,25 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                                   <button
                                     type="button"
                                     onClick={() => setIsThinkingOpen((open) => !open)}
-                                    className="flex items-center gap-2 py-1 text-[#B8B8B8] hover:text-white transition-colors cursor-pointer"
+                                    className="flex items-center gap-2 py-1 text-(--text-secondary) hover:text-(--text-primary) transition-colors cursor-pointer"
                                     aria-expanded={isThinkingOpen}
                                   >
                                     {streamingId === m.id ? (
-                                      <LoaderCircle className="w-3.5 h-3.5 animate-spin text-[#ff6600]" />
+                                      <LoaderCircle className="w-3.5 h-3.5 animate-spin text-(--brand-ink)" />
                                     ) : (
-                                      <Sparkles className="w-3.5 h-3.5 text-[#ff6600]" />
+                                      <Sparkles className="w-3.5 h-3.5 text-(--brand-ink)" />
                                     )}
                                     <span className="font-semibold">
                                       {streamingId === m.id ? 'Thinking' : 'Thinking complete'}
                                     </span>
-                                    <span className="text-[10px] text-[#6F6F6F]">{generationSeconds}s</span>
+                                    <span className="text-xs text-(--text-muted)">{generationSeconds}s</span>
                                     <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isThinkingOpen ? 'rotate-180' : ''}`} />
                                   </button>
                                   {isThinkingOpen && (
-                                    <div className="ml-1.5 mt-1 border-l border-[#363636] pl-3 space-y-2 text-[11px] text-[#858585]">
+                                    <div className="ml-1.5 mt-1 border-l border-(--border-strong) pl-3 space-y-2 text-xs text-(--text-muted)">
                                       {generationActivity.map((step, index) => (
                                         <div key={`${step}-${index}`} className="flex items-start gap-2">
-                                          <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${index === generationActivity.length - 1 && isGenerating ? 'bg-[#ff6600]' : 'bg-[#555555]'}`} />
+                                          <span className={`mt-1.5 w-1.5 h-1.5 rounded-full shrink-0 ${index === generationActivity.length - 1 && isGenerating ? 'bg-(--brand)' : 'bg-(--surface-elevated)'}`} />
                                           <span>{step}</span>
                                         </div>
                                       ))}
@@ -1862,7 +1862,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                                 </div>
                               )}
                               {streamingId !== m.id && (
-                                <div className="pt-1 text-[#E6E6E6]">
+                                <div className="pt-1 text-(--text-primary)">
                                   <CleanFormattedText text={m.text} isStreaming={false} />
                                 </div>
                               )}
@@ -1881,26 +1881,26 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
           {/* ── MANUAL MODE (Clean Pop-Up Launch Card) ── */}
           {buildMode === 'manual' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-[5px] bg-[#17181F] border border-[#333333] text-center space-y-3">
-                <Layers className="w-8 h-8 text-[#ff6600] mx-auto" />
+              <div className="p-4 rounded-[5px] bg-(--surface) border border-(--border) text-center space-y-3">
+                <Layers className="w-8 h-8 text-(--brand-ink) mx-auto" />
                 <div>
-                  <h4 className="text-xs font-bold text-white">Manual Bracket</h4>
-                  <p className="text-[11px] text-[#777777] mt-1 leading-relaxed">
+                  <h4 className="text-xs font-bold text-(--text-primary)">Manual Bracket</h4>
+                  <p className="text-xs text-(--text-muted) mt-1 leading-relaxed">
                     Set up your bracket format and team count in a quick pop-up. You can click each box on the canvas to name teams.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowManualModal(true)}
-                  className="w-full py-2.5 px-4 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-black text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  className="w-full py-2.5 px-4 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>Configure Manual Bracket</span>
                 </button>
               </div>
 
-              <div className="p-3 rounded-[4px] bg-[#14151B] border border-[#252733] text-[11px] text-[#888888] space-y-1">
-                <span className="font-semibold text-[#ff6600] block">Flexible Tournament Sizes</span>
+              <div className="p-3 rounded-[4px] bg-(--bg-base) border border-(--border) text-xs text-(--text-muted) space-y-1">
+                <span className="font-semibold text-(--brand-ink) block">Flexible Tournament Sizes</span>
                 <p>Choose any count from 2 to {MAX_BRACKET_TEAMS}. Top seeds receive automatic BYEs when needed.</p>
               </div>
             </div>
@@ -1983,20 +1983,20 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
 
         <div className="min-w-0">
           {!currentDraft ? (
-            <div className="rounded-[6px] bg-[#1E1E1E] border border-[#2D2D2D] p-16 text-center flex flex-col items-center justify-center min-h-[460px] shadow-xl">
-              <div className="w-14 h-14 rounded-[6px] bg-[#181818] border border-[#2D2D2D] flex items-center justify-center text-[#ff6600] mb-4">
+            <div className="rounded-[6px] bg-(--surface-soft) border border-(--border) p-16 text-center flex flex-col items-center justify-center min-h-[460px] shadow-xl">
+              <div className="w-14 h-14 rounded-[6px] bg-(--bg-base) border border-(--border) flex items-center justify-center text-(--brand-ink) mb-4">
                 <Grid className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-heading font-black text-white tracking-tight mb-2">
+              <h3 className="text-xl font-heading font-bold text-(--text-primary) tracking-tight mb-2">
                 Your bracket canvas is ready
               </h3>
-              <p className="text-xs text-[#666666] max-w-sm mb-4">
+              <p className="text-xs text-(--text-muted) max-w-sm mb-4">
                 Describe a tournament, create one manually, or import a roster. Your connected bracket will appear here.
               </p>
               <button
                 type="button"
                 onClick={() => setShowManualModal(true)}
-                className="px-4 py-2 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] text-black text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 <span>Create Manual Bracket</span>
@@ -2017,7 +2017,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                       onChange={(e) =>
                         setCurrentDraft({ ...currentDraft, title: e.target.value })
                       }
-                      className="bg-[#121214] border border-[#ff6600] rounded px-2 py-0.5 text-base font-heading font-bold text-white outline-none w-full max-w-md"
+                      className="bg-(--bg-base) border border-(--brand) rounded px-2 py-0.5 text-base font-heading font-bold text-(--text-primary) outline-none w-full max-w-md"
                     />
                   ) : (
                     <div className="flex items-center gap-2 min-w-0">
@@ -2027,7 +2027,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                       <button
                         type="button"
                         onClick={() => setIsEditingTitle(true)}
-                        className="text-[#666666] hover:text-white transition-colors p-1"
+                        className="text-(--text-muted) hover:text-(--text-primary) transition-colors p-1"
                         aria-label="Rename bracket"
                       >
                         <Edit2 className="w-3.5 h-3.5" />

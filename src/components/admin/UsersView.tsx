@@ -53,25 +53,25 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-heading font-black text-white tracking-tight">
+          <h2 className="text-2xl font-heading font-bold text-(--text-primary) tracking-tight">
             Users
           </h2>
-          <span className="text-xs text-[#888888]">
+          <span className="text-xs text-(--text-muted)">
             Registered accounts · account status changes apply to ArenaHub access
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Segmented Filter Pills */}
-          <div className="flex items-center bg-[#222222] p-1 rounded-[4px] border border-[#333333]">
+          <div className="flex items-center bg-(--surface-soft) p-1 rounded-[4px] border border-(--border)">
             {(['all', 'active', 'suspended', 'banned'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setFilter(tab)}
                 className={`px-3 py-1 rounded-[3px] text-xs font-semibold capitalize transition-colors ${
                   filter === tab
-                    ? 'bg-[#191919] text-white shadow-xs'
-                    : 'text-[#888888] hover:text-white'
+                    ? 'bg-(--surface) text-(--text-primary) shadow-xs'
+                    : 'text-(--text-muted) hover:text-(--text-primary)'
                 }`}
               >
                 {tab}
@@ -81,23 +81,23 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
 
           {/* Search Box */}
           <div className="relative">
-            <Search className="w-3.5 h-3.5 text-[#888888] absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-(--text-muted) absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search users"
-              className="bg-[#222222] border border-[#333333] rounded-[4px] pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#666666] outline-hidden w-48 sm:w-60"
+              className="bg-(--surface-soft) border border-(--border) rounded-[4px] pl-8 pr-3 py-1.5 text-xs text-(--text-primary) placeholder-(--text-muted) outline-hidden w-48 sm:w-60"
             />
           </div>
         </div>
       </div>
 
       {/* Users Table */}
-      <div className="rounded-[4px] border border-[#333333] bg-[#222222] overflow-x-auto shadow-xl">
+      <div className="rounded-[4px] border border-(--border) bg-(--surface-soft) overflow-x-auto shadow-xl">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="border-b border-[#2E2E2E] text-[10px] font-bold text-[#888888] uppercase tracking-wider">
+            <tr className="border-b border-(--border) text-xs font-bold text-(--text-muted)">
               <th className="py-3 px-4">USER</th>
               <th className="py-3 px-4">COLLEGE</th>
               <th className="py-3 px-4">STATUS</th>
@@ -106,20 +106,20 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
               <th className="py-3 px-4 text-right">ACTIONS</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#282828]">
+          <tbody className="divide-y divide-(--border)">
             {filteredUsers.map((user) => (
-              <tr key={user.id} className="hover:bg-[#282828] transition-colors">
+              <tr key={user.id} className="hover:bg-(--surface-elevated) transition-colors">
                 {/* User Info */}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#3B3B36] border border-[#4C4C46] flex items-center justify-center font-heading font-bold text-xs text-[#EDEDEB] shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-(--surface-elevated) border border-(--border-strong) flex items-center justify-center font-heading font-bold text-xs text-(--text-primary) shrink-0">
                       {user.avatarInitials}
                     </div>
                     <div>
-                      <span className="font-semibold text-white block">
+                      <span className="font-semibold text-(--text-primary) block">
                         {user.name}
                       </span>
-                      <span className="text-[11px] text-[#888888] block">
+                      <span className="text-xs text-(--text-muted) block">
                         {user.email}
                       </span>
                     </div>
@@ -127,19 +127,19 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                 </td>
 
                 {/* College */}
-                <td className="py-3 px-4 font-semibold text-white">
+                <td className="py-3 px-4 font-semibold text-(--text-primary)">
                   {user.collegeName.replace('College of ', '')}
                 </td>
 
                 {/* Status Badge */}
                 <td className="py-3 px-4">
                   <span
-                    className={`inline-block px-2.5 py-0.5 rounded-[3px] text-[10px] font-bold uppercase tracking-wider ${
+                    className={`inline-block px-2.5 py-0.5 rounded-[3px] text-xs font-bold ${
                       user.status === 'active'
-                        ? 'bg-[#18281E] border border-[#234A30] text-[#3DD68C]'
+                        ? 'bg-(--surface-soft) border border-(--success-border) text-(--success)'
                         : user.status === 'suspended'
-                        ? 'bg-[#292815] border border-[#47431B] text-[#ff6600]'
-                        : 'bg-[#2E1818] border border-[#522525] text-[#E8544B]'
+                        ? 'bg-(--surface-soft) border border-(--warning-border) text-(--brand-ink)'
+                        : 'bg-(--surface-soft) border border-(--danger-border) text-(--danger)'
                     }`}
                   >
                     {user.status === 'suspended'
@@ -154,7 +154,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                 </td>
 
                 {/* Joined Date */}
-                <td className="py-3 px-4 text-[#888888] font-mono text-[11px]">
+                <td className="py-3 px-4 text-(--text-muted) tabular-nums text-xs">
                   {user.joinedDate}
                 </td>
 
@@ -172,9 +172,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                           setSelectedUser(user);
                           setActionType('suspend');
                         }}
-                        className="px-2.5 py-1 rounded-[3px] bg-[#191919] hover:bg-[#252525] border border-[#333333] text-[11px] font-semibold text-[#B3B3B3] hover:text-white transition-colors"
+                        className="px-2.5 py-1 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-secondary) hover:text-(--text-primary) transition-colors"
                       >
-                        <PauseCircle className="w-3 h-3 inline mr-1 text-[#ff6600]" />
+                        <PauseCircle className="w-3 h-3 inline mr-1 text-(--brand-ink)" />
                         Suspend
                       </button>
 
@@ -183,7 +183,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                           setSelectedUser(user);
                           setActionType('ban');
                         }}
-                        className="px-2.5 py-1 rounded-[3px] bg-[#191919] hover:bg-[#252525] border border-[#333333] text-[11px] font-semibold text-[#E8544B] transition-colors"
+                        className="px-2.5 py-1 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--danger) transition-colors"
                       >
                         <Ban className="w-3 h-3 inline mr-1" />
                         Ban
@@ -195,7 +195,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                         setSelectedUser(user);
                         setActionType('restore');
                       }}
-                      className="px-2.5 py-1 rounded-[3px] bg-[#18281E] hover:bg-[#203628] border border-[#234A30] text-[11px] font-semibold text-[#ff6600] transition-colors"
+                      className="px-2.5 py-1 rounded-[3px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--success-border) text-xs font-semibold text-(--brand-ink) transition-colors"
                     >
                       <RotateCcw className="w-3 h-3 inline mr-1" />
                       Restore

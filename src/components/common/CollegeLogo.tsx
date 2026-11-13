@@ -7,7 +7,7 @@ export interface CollegeLogoProps {
 }
 
 const SIZE_MAP = {
-  sm: 'w-7 h-7 text-[10px]',
+  sm: 'w-7 h-7 text-xs',
   md: 'w-10 h-10 text-xs',
   lg: 'w-14 h-14 text-sm',
   xl: 'w-20 h-20 text-base',

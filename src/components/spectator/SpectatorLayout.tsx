@@ -136,7 +136,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
                 <button
                   type="button" aria-label="Close navigation"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-2 rounded-[4px] text-[#666666] hover:text-white hover:bg-[#2A2A2A] transition-colors cursor-pointer"
+                  className="p-2 rounded-[4px] text-(--text-muted) hover:text-(--text-primary) hover:bg-(--surface-elevated) transition-colors cursor-pointer"
                 >
                   <X aria-hidden="true" className="w-5 h-5" />
                 </button>
@@ -192,7 +192,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
             <button
               type="button" aria-label="Open navigation" aria-expanded={isMobileMenuOpen}
               onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden p-2 rounded-[4px] text-[#888888] hover:text-white hover:bg-[#252525] transition-colors cursor-pointer"
+              className="md:hidden p-2 rounded-[4px] text-(--text-muted) hover:text-(--text-primary) hover:bg-(--surface-soft) transition-colors cursor-pointer"
             >
               <Menu aria-hidden="true" className="w-5 h-5" />
             </button>
@@ -201,12 +201,12 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
             <span className="md:hidden"><Brand /></span>
 
             {/* Breadcrumb (desktop) */}
-            <div className="hidden md:flex items-center gap-2 text-sm text-[#888888]">
-              <span className="hover:text-white cursor-pointer" onClick={() => onTabChange('home')}>
+            <div className="hidden md:flex items-center gap-2 text-sm text-(--text-muted)">
+              <span className="hover:text-(--text-primary) cursor-pointer" onClick={() => onTabChange('home')}>
                 ArenaHub
               </span>
               <span>/</span>
-              <span className="text-white font-medium">{breadcrumb}</span>
+              <span className="text-(--text-primary) font-medium">{breadcrumb}</span>
             </div>
           </div>
 
@@ -214,7 +214,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
             {/* College badge (desktop only) */}
             <div className="hidden md:flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)]" />
-              <span className="font-medium text-white text-[11px]">
+              <span className="font-medium text-(--text-primary) text-xs">
                 {isGuest ? 'Sample arena' : hasCampusEmail(currentUser.email) ? 'WMSU' : 'Spectator'}
               </span>
               <span className="nav-meta-badge">
@@ -243,7 +243,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
       </div>
 
       {/* ── Mobile Bottom Navigation Bar (hidden on lg+) ── */}
-      <nav aria-label="Viewer shortcuts" className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-[#141414]/95 backdrop-blur-md border-t border-[#2A2A2A] flex items-stretch safe-area-pb">
+      <nav aria-label="Viewer shortcuts" className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-(--bg-base)/95 backdrop-blur-md border-t border-(--border) flex items-stretch safe-area-pb">
         {NAV_ITEMS.filter(item => ['home', 'current-live', 'brackets', 'schedule'].includes(item.id)).map(({ id, label, icon: Icon }) => {
           const active =
             id === 'current-live'
@@ -257,11 +257,11 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
               onClick={() => handleTabChange(id)}
               aria-current={active ? 'page' : undefined}
               className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 min-h-[56px] relative transition-colors cursor-pointer ${
-                active ? 'text-white' : 'text-[#666666] hover:text-[#AAAAAA]'
+                active ? 'text-(--text-primary)' : 'text-(--text-muted) hover:text-(--text-secondary)'
               }`}
             >
               <Icon className={`w-5 h-5 ${active ? 'stroke-[2]' : 'stroke-[1.5]'}`} />
-              <span className={`text-[11px] font-medium ${active ? 'text-white' : ''}`}>
+              <span className={`text-xs font-medium ${active ? 'text-(--text-primary)' : ''}`}>
                 {label}
               </span>
               {active && (

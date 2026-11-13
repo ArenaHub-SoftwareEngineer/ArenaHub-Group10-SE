@@ -168,38 +168,38 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
     const setCollapsed = team === 'team1' ? setCollapseTeam1 : setCollapseTeam2;
 
     return (
-      <div className="rounded-[4px] border border-[#333333] bg-[#222222] overflow-hidden">
+      <div className="rounded-[4px] border border-(--border) bg-(--surface-soft) overflow-hidden">
         {/* Team Header */}
         <button
           aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-between p-4 hover:bg-[#282828] transition-colors cursor-pointer"
+          className="w-full flex items-center justify-between p-4 hover:bg-(--surface-elevated) transition-colors cursor-pointer"
         >
           <div className="flex items-center gap-3">
             <span
-              className="px-2.5 py-1 rounded-[3px] font-heading font-black text-xs tracking-wider"
+              className="px-2.5 py-1 rounded-[3px] font-heading font-bold text-xs"
               style={{ backgroundColor: `${accentColor}18`, color: accentColor, border: `1px solid ${accentColor}40` }}
             >
               {teamCode}
             </span>
-            <span className="text-sm font-heading font-bold text-white">
+            <span className="text-sm font-heading font-bold text-(--text-primary)">
               {team === 'team1'
                 ? selectedMatch?.team1?.name || 'Team 1'
                 : selectedMatch?.team2?.name || 'Team 2'}
             </span>
-            <span className="text-xs text-[#888888]">— {rows.length} players</span>
+            <span className="text-xs text-(--text-muted)">— {rows.length} players</span>
           </div>
           {collapsed ? (
-            <ChevronDown className="w-4 h-4 text-[#888888]" />
+            <ChevronDown className="w-4 h-4 text-(--text-muted)" />
           ) : (
-            <ChevronUp className="w-4 h-4 text-[#888888]" />
+            <ChevronUp className="w-4 h-4 text-(--text-muted)" />
           )}
         </button>
 
         {!collapsed && (
-          <div className="overflow-x-auto border-t border-[#2D2D2D]">
+          <div className="overflow-x-auto border-t border-(--border)">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-[#2D2D2D] bg-[#1A1A1A]">
+                <tr className="border-b border-(--border) bg-(--surface)">
                   {[
                     'Player / IGN',
                     'Role',
@@ -211,34 +211,34 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                     'Dmg (K)',
                     'Notes',
                   ].map((h) => (
-                    <th key={h} className="px-3 py-2.5 text-[10px] font-bold text-[#888888] uppercase tracking-wider whitespace-nowrap">
+                    <th key={h} className="px-3 py-2.5 text-xs font-bold text-(--text-muted) whitespace-nowrap">
                       {h}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#242424]">
+              <tbody className="divide-y divide-(--border)">
                 {rows.map((row, i) => (
-                  <tr key={row.playerId} className="hover:bg-[#252525] transition-colors">
+                  <tr key={row.playerId} className="hover:bg-(--surface-soft) transition-colors">
                     {/* Player Name */}
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
                         <div
-                          className="w-6 h-6 rounded-[3px] flex items-center justify-center text-[9px] font-black shrink-0"
+                          className="w-6 h-6 rounded-[3px] flex items-center justify-center text-xs font-bold shrink-0"
                           style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
                         >
                           <User className="w-3 h-3" />
                         </div>
                         <div>
-                          <div className="font-semibold text-white text-[11px] leading-tight">{row.ign || row.playerName}</div>
-                          {row.ign && <div className="text-[10px] text-[#666666]">{row.playerName}</div>}
+                          <div className="font-semibold text-(--text-primary) text-xs leading-tight">{row.ign || row.playerName}</div>
+                          {row.ign && <div className="text-xs text-(--text-muted)">{row.playerName}</div>}
                         </div>
                       </div>
                     </td>
 
                     {/* Role */}
                     <td className="px-3 py-2">
-                      <span className="px-1.5 py-0.5 rounded-[2px] bg-[#252525] border border-[#333333] text-[10px] font-bold text-[#AAAAAA] uppercase tracking-wider">
+                      <span className="px-1.5 py-0.5 rounded-[2px] bg-(--surface-soft) border border-(--border) text-xs font-bold text-(--text-secondary)">
                         {row.role}
                       </span>
                     </td>
@@ -250,7 +250,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} hero or agent`} value={row.hero}
                         onChange={(e) => updateRow(team, i, 'hero', e.target.value)}
                         placeholder="e.g. Chou"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-white placeholder-[#555555] outline-none focus:border-[#ff6600]/60 w-24 transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 w-24 transition-colors"
                       />
                     </td>
 
@@ -262,7 +262,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} kills`} value={row.kills}
                         onChange={(e) => updateRow(team, i, 'kills', e.target.value)}
                         placeholder="0"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-[#3DD68C] placeholder-[#555555] outline-none focus:border-[#3DD68C]/60 w-14 tabular-nums transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--success) placeholder-(--text-muted) outline-none focus:border-(--success)/60 w-14 tabular-nums transition-colors"
                       />
                     </td>
 
@@ -274,7 +274,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} deaths`} value={row.deaths}
                         onChange={(e) => updateRow(team, i, 'deaths', e.target.value)}
                         placeholder="0"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-[#E8544B] placeholder-[#555555] outline-none focus:border-[#E8544B]/60 w-14 tabular-nums transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--danger) placeholder-(--text-muted) outline-none focus:border-(--danger)/60 w-14 tabular-nums transition-colors"
                       />
                     </td>
 
@@ -286,7 +286,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} assists`} value={row.assists}
                         onChange={(e) => updateRow(team, i, 'assists', e.target.value)}
                         placeholder="0"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-[#3B82F6] placeholder-[#555555] outline-none focus:border-[#ff6600]/60 w-14 tabular-nums transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--info) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 w-14 tabular-nums transition-colors"
                       />
                     </td>
 
@@ -297,7 +297,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} gold in thousands`} value={row.gold}
                         onChange={(e) => updateRow(team, i, 'gold', e.target.value)}
                         placeholder="12.4"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-[#FACC15] placeholder-[#555555] outline-none focus:border-[#FACC15]/60 w-16 tabular-nums transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--warning) placeholder-(--text-muted) outline-none focus:border-(--warning)/60 w-16 tabular-nums transition-colors"
                       />
                     </td>
 
@@ -308,7 +308,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} damage in thousands`} value={row.damage}
                         onChange={(e) => updateRow(team, i, 'damage', e.target.value)}
                         placeholder="43.2"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-[#ff6600] placeholder-[#555555] outline-none focus:border-[#ff6600]/60 w-16 tabular-nums transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--brand-ink) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 w-16 tabular-nums transition-colors"
                       />
                     </td>
 
@@ -319,7 +319,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                         aria-label={`${teamCode} ${row.ign || row.playerName} notes`} value={row.notes}
                         onChange={(e) => updateRow(team, i, 'notes', e.target.value)}
                         placeholder="Optional notes…"
-                        className="bg-[#1A1A1A] border border-[#2E2E2E] rounded-[3px] px-2 py-1 text-[11px] text-white placeholder-[#555555] outline-none focus:border-[#666666] w-36 transition-colors"
+                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none focus:border-(--border-strong) w-36 transition-colors"
                       />
                     </td>
                   </tr>
@@ -337,11 +337,11 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
       {/* Page Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-heading font-black text-white flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-[#ff6600]" />
+          <h2 className="text-xl font-heading font-bold text-(--text-primary) flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-(--brand-ink)" />
             Match Player Data Entry
           </h2>
-          <p className="text-xs text-[#888888] mt-1">
+          <p className="text-xs text-(--text-muted) mt-1">
             Save per-game player stats and compare KDA using the data you enter.
           </p>
         </div>
@@ -349,12 +349,12 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
         <div className="flex items-center gap-2">
           <button
             onClick={handleSave}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[4px] bg-[#222222] hover:bg-[#2A2A2A] border border-[#333333] text-xs font-semibold text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[4px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--border) text-xs font-semibold text-(--text-primary) transition-colors cursor-pointer"
           >
             {isSaved ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#ff6600]" />
-                <span className="text-[#ff6600]">Saved</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-(--brand-ink)" />
+                <span className="text-(--brand-ink)">Saved</span>
               </>
             ) : (
               <>
@@ -367,7 +367,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
           <button
             onClick={handleAnalyze}
             disabled={isAnalyzing}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-[4px] bg-[#ff6600] hover:bg-[#ff8533] disabled:opacity-60 text-black text-xs font-bold uppercase tracking-wider transition-all shadow-lg shadow-[#ff6600]/20 hover:shadow-[#ff6600]/30 cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) disabled:opacity-60 text-black text-xs font-bold transition-all shadow-lg shadow-(color:--brand)/20 hover:shadow-(color:--brand)/30 cursor-pointer"
           >
             {isAnalyzing ? (
               <>
@@ -386,14 +386,14 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
 
       {/* Match Selector + Game Number */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-[4px] bg-[#222222] border border-[#333333] p-4 space-y-2">
-          <label className="text-[10px] font-bold text-[#888888] uppercase tracking-wider block">
+        <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 space-y-2">
+          <label className="text-xs font-bold text-(--text-muted) block">
             Select Match
           </label>
           <select aria-label="Select match"
             value={selectedMatchId}
             onChange={(e) => handleMatchChange(e.target.value)}
-            className="w-full bg-[#1A1A1A] border border-[#2E2E2E] rounded-[4px] px-3 py-2 text-sm text-white outline-none focus:border-[#ff6600]/60 transition-colors cursor-pointer"
+            className="w-full bg-(--surface) border border-(--border) rounded-[4px] px-3 py-2 text-sm text-(--text-primary) outline-none focus:border-(--brand)/60 transition-colors cursor-pointer"
           >
             {matches.filter(m => !m.team1?.isBye && !m.team2?.isBye).map((m) => (
               <option key={m.id} value={m.id}>
@@ -402,17 +402,17 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
             ))}
           </select>
 
-          <div className="pt-1 flex items-center gap-3 text-xs text-[#888888]">
+          <div className="pt-1 flex items-center gap-3 text-xs text-(--text-muted)">
             <span>Round:</span>
-            <span className="text-white font-semibold">{selectedMatch?.roundName || '—'}</span>
+            <span className="text-(--text-primary) font-semibold">{selectedMatch?.roundName || '—'}</span>
             <span>·</span>
             <span>Format:</span>
-            <span className="text-white font-semibold">{selectedMatch?.matchFormat || 'Bo3'}</span>
+            <span className="text-(--text-primary) font-semibold">{selectedMatch?.matchFormat || 'Bo3'}</span>
           </div>
         </div>
 
-        <div className="rounded-[4px] bg-[#222222] border border-[#333333] p-4 space-y-2">
-          <label className="text-[10px] font-bold text-[#888888] uppercase tracking-wider block">
+        <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 space-y-2">
+          <label className="text-xs font-bold text-(--text-muted) block">
             Game Number (within series)
           </label>
           <div className="flex flex-wrap items-center gap-2">
@@ -422,26 +422,26 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
                 onClick={() => setGameNumber(g)}
                 className={`w-10 h-10 rounded-[4px] border text-sm font-bold transition-all cursor-pointer ${
                   gameNumber === g
-                    ? 'bg-[#ff6600] border-[#ff6600] text-black'
-                    : 'bg-[#1A1A1A] border-[#2E2E2E] text-[#888888] hover:border-[#ff6600]/50 hover:text-white'
+                    ? 'bg-(--brand) border-(--brand) text-black'
+                    : 'bg-(--surface) border-(--border) text-(--text-muted) hover:border-(--brand)/50 hover:text-white'
                 }`}
               >
                 {g}
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-[#666666]">
+          <p className="text-xs text-(--text-muted)">
             Entering stats for Game {gameNumber} of the {selectedMatch?.matchFormat || 'Bo3'} series
           </p>
         </div>
       </div>
 
       {/* Hint Banner */}
-      <div className="flex items-start gap-3 p-3.5 rounded-[4px] bg-[#1A1A1A] border border-[#2E2E2E]">
-        <AlertCircle className="w-4 h-4 text-[#ff6600] shrink-0 mt-0.5" />
-        <div className="text-xs text-[#AAAAAA] leading-relaxed">
-          <span className="text-white font-semibold">How to use:</span> Fill in player stats from the scoreboard at end of each game. KDA (Kills / Deaths / Assists), hero/agent used, and gold/damage dealt are used by the summary to calculate KDA. After entering data for at least 3 players, click{' '}
-          <span className="text-[#ff6600] font-semibold">Summarize stats</span> to compare the entered stats.
+      <div className="flex items-start gap-3 p-3.5 rounded-[4px] bg-(--surface) border border-(--border)">
+        <AlertCircle className="w-4 h-4 text-(--brand-ink) shrink-0 mt-0.5" />
+        <div className="text-xs text-(--text-secondary) leading-relaxed">
+          <span className="text-(--text-primary) font-semibold">How to use:</span> Fill in player stats from the scoreboard at end of each game. KDA (Kills / Deaths / Assists), hero/agent used, and gold/damage dealt are used by the summary to calculate KDA. After entering data for at least 3 players, click{' '}
+          <span className="text-(--brand-ink) font-semibold">Summarize stats</span> to compare the entered stats.
         </div>
       </div>
 
@@ -460,8 +460,8 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
       )}
 
       {/* Match-level Notes */}
-      <div className="rounded-[4px] bg-[#222222] border border-[#333333] p-4 space-y-2">
-        <label className="text-[10px] font-bold text-[#888888] uppercase tracking-wider block flex items-center gap-1.5">
+      <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 space-y-2">
+        <label className="text-xs font-bold text-(--text-muted) block flex items-center gap-1.5">
           <Swords className="w-3.5 h-3.5" />
           Organizer observations
         </label>
@@ -470,32 +470,32 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
           onChange={(e) => setMatchNotes(e.target.value)}
           rows={3}
           placeholder="e.g. CCS ran a dive comp in Game 1, COE responded with poke. Dragon secured at 08:00. Notable: CCS Jungler played extremely aggressively…"
-          className="w-full bg-[#1A1A1A] border border-[#2E2E2E] rounded-[4px] px-3 py-2.5 text-xs text-white placeholder-[#555555] outline-none focus:border-[#ff6600]/60 resize-none leading-relaxed transition-colors"
+          className="w-full bg-(--surface) border border-(--border) rounded-[4px] px-3 py-2.5 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 resize-none leading-relaxed transition-colors"
         />
-        <p className="text-[10px] text-[#666666]">
+        <p className="text-xs text-(--text-muted)">
           Observations are saved with the selected game and shown alongside calculated stats.
         </p>
       </div>
 
       {/* Stats summary Output */}
       {aiAnalysis && (
-        <div className="rounded-[4px] border border-[#ff6600]/25 bg-[#1A1A14] p-5 space-y-3 animate-in fade-in duration-300">
+        <div className="rounded-[4px] border border-(--brand)/25 bg-(--bg-base) p-5 space-y-3 animate-in fade-in duration-300">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-[4px] bg-[#ff6600]/15 border border-[#ff6600]/30 flex items-center justify-center">
-                <Sparkles className="w-3.5 h-3.5 text-[#ff6600]" />
+              <div className="w-7 h-7 rounded-[4px] bg-(--brand)/15 border border-(--brand)/30 flex items-center justify-center">
+                <Sparkles className="w-3.5 h-3.5 text-(--brand-ink)" />
               </div>
-              <span className="text-sm font-heading font-bold text-[#ff6600]">Match stats summary</span>
-              <span className="px-1.5 py-0.5 rounded-[2px] bg-[#ff6600]/10 border border-[#ff6600]/25 text-[9px] font-bold text-[#ff6600] uppercase tracking-wider">
+              <span className="text-sm font-heading font-bold text-(--brand-ink)">Match stats summary</span>
+              <span className="px-1.5 py-0.5 rounded-[2px] bg-(--brand)/10 border border-(--brand)/25 text-xs font-bold text-(--brand-ink)">
                 Game {gameNumber} · {selectedMatch?.matchNumber}
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] text-[#888888] font-mono">Based on entered stats</span>
+              <span className="text-xs text-(--text-muted) tabular-nums">Based on entered stats</span>
               <button
                 onClick={handleAnalyze}
                 disabled={isAnalyzing}
-                className="p-1.5 rounded-[3px] text-[#888888] hover:text-[#ff6600] hover:bg-[#252520] transition-colors cursor-pointer"
+                className="p-1.5 rounded-[3px] text-(--text-muted) hover:text-(--brand-ink) hover:bg-(--surface-soft) transition-colors cursor-pointer"
                 title="Regenerate analysis"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -505,27 +505,27 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
 
           <div className="grid grid-cols-3 gap-3 text-xs">
             {[
-              { label: 'Data Points', value: `${[...team1Rows, ...team2Rows].filter(r => r.kills !== '').length * 3}`, icon: <BarChart3 className="w-3 h-3" />, color: 'text-[#3B82F6]' },
-              { label: 'Players Analyzed', value: `${[...team1Rows, ...team2Rows].filter(r => r.kills !== '' || r.deaths !== '' || r.assists !== '').length}/10`, icon: <User className="w-3 h-3" />, color: 'text-[#3DD68C]' },
-              { label: 'Summary', value: 'Calculated', icon: <Zap className="w-3 h-3" />, color: 'text-[#ff6600]' },
+              { label: 'Data Points', value: `${[...team1Rows, ...team2Rows].filter(r => r.kills !== '').length * 3}`, icon: <BarChart3 className="w-3 h-3" />, color: 'text-(--info)' },
+              { label: 'Players Analyzed', value: `${[...team1Rows, ...team2Rows].filter(r => r.kills !== '' || r.deaths !== '' || r.assists !== '').length}/10`, icon: <User className="w-3 h-3" />, color: 'text-(--success)' },
+              { label: 'Summary', value: 'Calculated', icon: <Zap className="w-3 h-3" />, color: 'text-(--brand-ink)' },
             ].map((stat) => (
-              <div key={stat.label} className="bg-[#141414] border border-[#252525] rounded-[4px] p-2.5 text-center">
+              <div key={stat.label} className="bg-(--bg-base) border border-(--border) rounded-[4px] p-2.5 text-center">
                 <div className={`flex items-center justify-center gap-1 ${stat.color} mb-1`}>
                   {stat.icon}
                 </div>
-                <div className={`font-mono font-bold text-sm ${stat.color}`}>{stat.value}</div>
-                <div className="text-[#666666] text-[10px]">{stat.label}</div>
+                <div className={`tabular-nums font-bold text-sm ${stat.color}`}>{stat.value}</div>
+                <div className="text-(--text-muted) text-xs">{stat.label}</div>
               </div>
             ))}
           </div>
 
-          <div className="bg-[#141414] border border-[#262620] rounded-[4px] p-4 font-mono text-xs text-[#CCCCCC] leading-relaxed whitespace-pre-wrap">
+          <div className="bg-(--bg-base) border border-(--border) rounded-[4px] p-4 tabular-nums text-xs text-(--text-secondary) leading-relaxed whitespace-pre-wrap">
             {aiAnalysis}
           </div>
 
           <div className="flex items-center gap-2 pt-1">
-            <Trophy className="w-3.5 h-3.5 text-[#888888]" />
-            <span className="text-[10px] text-[#666666]">
+            <Trophy className="w-3.5 h-3.5 text-(--text-muted)" />
+            <span className="text-xs text-(--text-muted)">
               Analysis generated for WMSU Palaro 2026 · {selectedMatch?.roundName} · {new Date().toLocaleTimeString()}
             </span>
           </div>

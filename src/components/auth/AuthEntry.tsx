@@ -36,7 +36,7 @@ export function AuthEntry() {
             className="arena-outline text-xs flex items-center gap-1.5"
             onClick={() => handleOpenAuth('qr')}
           >
-            <QrCode className="w-3.5 h-3.5 text-[#ff6600]" />
+            <QrCode className="w-3.5 h-3.5 text-(--brand-ink)" />
             <span>Scan QR</span>
           </button>
           <button className="arena-primary text-xs" onClick={() => handleOpenAuth('signin')}>
@@ -70,7 +70,7 @@ export function AuthEntry() {
               className="arena-outline flex items-center gap-2"
               onClick={() => handleOpenAuth('qr')}
             >
-              <QrCode className="w-4 h-4 text-[#ff6600]" />
+              <QrCode className="w-4 h-4 text-(--brand-ink)" />
               <span>Scan spectator QR</span>
             </button>
           </div>

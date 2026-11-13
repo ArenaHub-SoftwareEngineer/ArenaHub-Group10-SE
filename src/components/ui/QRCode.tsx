@@ -128,11 +128,11 @@ export const QRCode: React.FC<QRCodeProps> = ({
 
       {/* Central ArenaHub badge */}
       <div
-        className="absolute inset-0 m-auto flex items-center justify-center rounded-sm bg-[#191919] border-2 border-white shadow-md pointer-events-none"
+        className="absolute inset-0 m-auto flex items-center justify-center rounded-sm bg-(--surface) border-2 border-white shadow-md pointer-events-none"
         style={{ width: size * 0.22, height: size * 0.22 }}
       >
-        <span className="font-heading font-black text-xs text-[#ff6600] tracking-tighter">
-          A<span className="text-[#ff6600]">H</span>
+        <span className="font-heading font-bold text-xs text-(--brand-ink) tracking-tighter">
+          A<span className="text-(--brand-ink)">H</span>
         </span>
       </div>
     </div>

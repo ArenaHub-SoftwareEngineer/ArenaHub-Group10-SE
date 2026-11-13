@@ -50,11 +50,11 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, c
   };
 
   return <div className="space-y-6 max-w-7xl">
-    <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-medium text-[#888888] hover:text-white"><ArrowLeft size={14} />All live matches</button>
+    <button onClick={onBack} className="inline-flex items-center gap-2 text-xs font-medium text-(--text-muted) hover:text-(--text-primary)"><ArrowLeft size={14} />All live matches</button>
     <header className="dashboard-page-heading">
       <div className="flex items-center gap-2">
         {gameName && <p className="viewer-bracket-game">{gameName}</p>}
-        {match.streamTitle && <span className="text-[11px] font-bold text-[#ff6600] px-2 py-0.5 rounded bg-[#ff6600]/10 border border-[#ff6600]/30">{match.streamTitle}</span>}
+        {match.streamTitle && <span className="text-xs font-bold text-(--brand-ink) px-2 py-0.5 rounded bg-(--brand)/10 border border-(--brand)/30">{match.streamTitle}</span>}
       </div>
       <h1>{match.team1?.name || 'Awaiting team'} vs {match.team2?.name || 'Awaiting team'}</h1>
       <p>{match.roundName} · {match.matchFormat}</p>

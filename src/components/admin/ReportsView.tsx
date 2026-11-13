@@ -39,26 +39,26 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-heading font-black text-white tracking-tight">
+          <h2 className="text-2xl font-heading font-bold text-(--text-primary) tracking-tight">
             Reports
           </h2>
-          <span className="text-xs text-[#888888]">
+          <span className="text-xs text-(--text-muted)">
             Community-flagged content awaiting review
           </span>
         </div>
 
         {/* Segmented Filter */}
-        <div className="flex items-center bg-[#222222] p-1 rounded-[4px] border border-[#333333]">
+        <div className="flex items-center bg-(--surface-soft) p-1 rounded-[4px] border border-(--border)">
           <button
             onClick={() => setActiveTab('open')}
             className={`px-3 py-1 rounded-[3px] text-xs font-semibold flex items-center gap-1.5 transition-colors ${
               activeTab === 'open'
-                ? 'bg-[#191919] text-[#ff6600] shadow-xs'
-                : 'text-[#888888] hover:text-white'
+                ? 'bg-(--surface) text-(--brand-ink) shadow-xs'
+                : 'text-(--text-muted) hover:text-(--text-primary)'
             }`}
           >
             <span>Open</span>
-            <span className="w-4 h-4 rounded-full bg-[#E8544B] text-white text-[9px] font-bold flex items-center justify-center font-mono">
+            <span className="w-4 h-4 rounded-full bg-(--danger) text-white text-xs font-bold flex items-center justify-center tabular-nums">
               {reports.filter((r) => r.status === 'open').length}
             </span>
           </button>
@@ -67,8 +67,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
             onClick={() => setActiveTab('resolved')}
             className={`px-3 py-1 rounded-[3px] text-xs font-semibold transition-colors ${
               activeTab === 'resolved'
-                ? 'bg-[#191919] text-white shadow-xs'
-                : 'text-[#888888] hover:text-white'
+                ? 'bg-(--surface) text-(--text-primary) shadow-xs'
+                : 'text-(--text-muted) hover:text-(--text-primary)'
             }`}
           >
             Resolved
@@ -79,56 +79,56 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
       {/* Reports List */}
       <div className="space-y-4">
         {filteredReports.length === 0 ? (
-          <div className="p-12 text-center rounded-[4px] bg-[#222222] border border-[#333333] text-xs text-[#888888]">
-            <ShieldCheck className="w-8 h-8 text-[#3DD68C] mx-auto mb-2" />
+          <div className="p-12 text-center rounded-[4px] bg-(--surface-soft) border border-(--border) text-xs text-(--text-muted)">
+            <ShieldCheck className="w-8 h-8 text-(--success) mx-auto mb-2" />
             No {activeTab} reports in the moderation queue.
           </div>
         ) : (
           filteredReports.map((report) => (
             <div
               key={report.id}
-              className="rounded-[4px] bg-[#222222] border border-[#333333] p-5 space-y-4 shadow-xl hover:border-[#444444] transition-colors"
+              className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-5 space-y-4 shadow-xl hover:border-(--border-strong) transition-colors"
             >
               {/* Header row: ID, Tag, Content Type, Timestamp */}
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
-                  <span className="font-mono font-medium text-[#888888]">
+                  <span className="tabular-nums font-medium text-(--text-muted)">
                     {report.id}
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider ${
+                    className={`px-2 py-0.5 rounded-[2px] text-xs font-bold ${
                       report.type === 'HARASSMENT'
-                        ? 'bg-[#3A2A1A] text-[#F59E0B] border border-[#523B22]'
+                        ? 'bg-(--brand-soft) text-(--warning) border border-(--brand-border)'
                         : report.type === 'SPAM / SCAM'
-                        ? 'bg-[#2E1818] text-[#E8544B] border border-[#522525]'
-                        : 'bg-[#2A2A2A] text-[#B3B3B3] border border-[#444444]'
+                        ? 'bg-(--surface-soft) text-(--danger) border border-(--danger-border)'
+                        : 'bg-(--surface-elevated) text-(--text-secondary) border border-(--border-strong)'
                     }`}
                   >
                     {report.type}
                   </span>
-                  <span className="text-[#CCCCCC] font-medium">
+                  <span className="text-(--text-secondary) font-medium">
                     {report.contentType}
                   </span>
                 </div>
 
-                <div className="text-[11px] text-[#888888]">
+                <div className="text-xs text-(--text-muted)">
                   <span>{report.timeAgo}</span>
                   <span className="mx-1.5">·</span>
-                  <span className="font-mono text-white">{report.flagCount} reports</span>
+                  <span className="tabular-nums text-(--text-primary)">{report.flagCount} reports</span>
                 </div>
               </div>
 
               {/* Flagged Quote */}
-              <div className="p-3.5 rounded-[4px] bg-[#1A1A1A] border-l-2 border-[#E8544B] text-xs text-white font-medium">
+              <div className="p-3.5 rounded-[4px] bg-(--surface) border-l-2 border-(--danger) text-xs text-(--text-primary) font-medium">
                 "{report.contentSnippet}"
               </div>
 
               {/* Attribution & Actions */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                <div className="text-xs text-[#888888]">
-                  Posted by <strong className="text-white font-semibold">{report.postedBy}</strong>
+                <div className="text-xs text-(--text-muted)">
+                  Posted by <strong className="text-(--text-primary) font-semibold">{report.postedBy}</strong>
                   <span className="mx-1.5">·</span>
-                  flagged by <strong className="text-[#CCCCCC]">{report.reportedBy}</strong>
+                  flagged by <strong className="text-(--text-secondary)">{report.reportedBy}</strong>
                 </div>
 
                 {report.status === 'open' && (
@@ -138,9 +138,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
                         setSelectedReport(report);
                         setActionType('remove');
                       }}
-                      className="px-3 py-1.5 rounded-[3px] bg-[#191919] hover:bg-[#252525] border border-[#333333] text-xs font-semibold text-[#CCCCCC] hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-secondary) hover:text-(--text-primary) flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      <Trash2 className="w-3.5 h-3.5 text-[#E8544B]" />
+                      <Trash2 className="w-3.5 h-3.5 text-(--danger)" />
                       <span>Remove content</span>
                     </button>
 
@@ -149,7 +149,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
                         setSelectedReport(report);
                         setActionType('remove_and_ban');
                       }}
-                      className="px-3 py-1.5 rounded-[3px] bg-[#2E1818] hover:bg-[#3D1E1E] border border-[#522525] text-xs font-semibold text-[#E8544B] flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="px-3 py-1.5 rounded-[3px] bg-(--surface-soft) hover:bg-(--danger-soft) border border-(--danger-border) text-xs font-semibold text-(--danger) flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
                       <Ban className="w-3.5 h-3.5" />
                       <span>Remove & ban</span>
@@ -160,7 +160,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
                         setSelectedReport(report);
                         setActionType('dismiss');
                       }}
-                      className="px-3 py-1.5 rounded-[3px] bg-[#191919] hover:bg-[#252525] border border-[#333333] text-xs font-semibold text-[#888888] hover:text-white transition-colors cursor-pointer"
+                      className="px-3 py-1.5 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer"
                     >
                       Dismiss
                     </button>

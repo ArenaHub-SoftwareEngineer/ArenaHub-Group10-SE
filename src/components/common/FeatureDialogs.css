@@ -22,25 +22,25 @@
 .feature-privacy>svg { flex-shrink: 0; margin-top: 2px; color: var(--brand-ink); }
 .feature-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 14px; }
 .feature-card-grid .arena-outline { margin-top: 16px; }
-.feature-card-grid h3 { font-size: 17px; }
+.feature-card-grid h3 { font-size: 18px; }
 .feature-dialog .roster-player-editor { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; background: var(--surface-soft); }
 .roster-player-editor legend { padding: 0 6px; font-size: 12px; font-weight: 650; color: var(--brand-ink); }
 .roster-player-editor .arena-text-button { justify-self: start; }
 .feature-dialog .operations-status { display: inline-block; margin: 12px 0; }
 .operations-checkin>.arena-primary { margin-left: 8px; }
 .feature-dialog .video-workbench { border: 0; border-radius: 0; padding: 0; }
-.feature-dialog .video-review-heading h2 { font-size: 23px; }
+.feature-dialog .video-review-heading h2 { font-size: 24px; }
 .feature-dialog .case-history { margin-top: 24px; }
 .fairplay-report-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 24px 0; }
 .fairplay-report-filters label { flex: 1; min-width: 170px; }
 .fairplay-report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
 .fairplay-report-card { padding: 22px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-.fairplay-report-card h3 { margin: 12px 0 8px; font-size: 17px; overflow-wrap: anywhere; }
+.fairplay-report-card h3 { margin: 12px 0 8px; font-size: 18px; overflow-wrap: anywhere; }
 .fairplay-report-card .field-hint { margin: 8px 0 16px; }
 .fairplay-game-grid .directory-game { position: relative; }
 .fairplay-game-grid .directory-game small { display: block; }
 .fairplay-private-image { width: 100%; max-height: 520px; object-fit: contain; border: 1px solid var(--border); border-radius: 10px; margin: 14px 0; }
-.notification-detail h3 { font-size: 22px; margin: 12px 0; }
+.notification-detail h3 { font-size: 24px; margin: 12px 0; }
 .notification-detail>p { font-size: 14px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
 .notification-detail time { color: var(--text-muted); font-size: 12px; }
 .feature-dialog .case-decision { margin-top: 20px; }
@@ -54,7 +54,7 @@
   .feature-section-bar { flex-direction: column; }
   .feature-summary { gap: 7px; }
   .feature-summary>div { padding: 12px 9px; }
-  .feature-summary strong { font-size: 23px; }
-  .feature-summary span { font-size: 10px; }
+  .feature-summary strong { font-size: 24px; }
+  .feature-summary span { font-size: 12px; }
   .operations-checkin>.arena-primary { margin: 8px 8px 0 0; }
 }

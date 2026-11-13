@@ -11,7 +11,7 @@ export const CleanFormattedText: React.FC<CleanFormattedTextProps> = ({
 }) => {
   if (!text) {
     return isStreaming ? (
-      <span className="inline-block w-0.5 h-4 bg-[#ff6600] ml-0.5 align-text-bottom animate-pulse" />
+      <span className="inline-block w-0.5 h-4 bg-(--brand) ml-0.5 align-text-bottom animate-pulse" />
     ) : null;
   }
 
@@ -69,7 +69,7 @@ export const CleanFormattedText: React.FC<CleanFormattedTextProps> = ({
           return (
             <div
               key={idx}
-              className="font-bold text-[var(--formatted-emphasis,white)] text-[15px] pt-2 pb-0.5 tracking-tight"
+              className="font-bold text-[var(--formatted-emphasis,white)] text-base pt-2 pb-0.5 tracking-tight"
             >
               {formattedLine}
             </div>
@@ -79,7 +79,7 @@ export const CleanFormattedText: React.FC<CleanFormattedTextProps> = ({
         if (isBullet) {
           return (
             <div key={idx} className="flex items-start gap-2.5 my-0.5 pl-0.5">
-              <span className="text-[#ff6600] text-xs mt-1 shrink-0 select-none">•</span>
+              <span className="text-(--brand-ink) text-xs mt-1 shrink-0 select-none">•</span>
               <div className="flex-1 text-[var(--formatted-text,#E2E2DE)] leading-relaxed">
                 {formattedLine}
               </div>
@@ -92,13 +92,13 @@ export const CleanFormattedText: React.FC<CleanFormattedTextProps> = ({
           <p key={idx} className="leading-relaxed">
             {formattedLine}
             {isStreaming && isLastLine && (
-              <span className="inline-block w-0.5 h-4 bg-[#ff6600] ml-0.5 align-text-bottom animate-pulse" />
+              <span className="inline-block w-0.5 h-4 bg-(--brand) ml-0.5 align-text-bottom animate-pulse" />
             )}
           </p>
         );
       })}
       {isStreaming && lines.length === 0 && (
-        <span className="inline-block w-0.5 h-4 bg-[#ff6600] ml-0.5 align-text-bottom animate-pulse" />
+        <span className="inline-block w-0.5 h-4 bg-(--brand) ml-0.5 align-text-bottom animate-pulse" />
       )}
     </div>
   );

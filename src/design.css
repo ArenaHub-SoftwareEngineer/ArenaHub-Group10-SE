@@ -1,0 +1,147 @@
+/*
+ * ArenaHub design system (redesign 2026-11). Loaded last, so it is the single source of truth.
+ *
+ * - One font: Google Sans Flex (the font Kaggle uses), never italic, never the code font except for real codes.
+ * - One type scale: 12 / 14 / 16 / 18 / 20 / 24 / 30 / 36 px. Nothing smaller than 12px.
+ * - One palette, by role: surfaces, text, borders, brand orange, and status colours (success, warning,
+ *   danger, info, violet), each with -soft (tinted background) and -border variants.
+ * - Pages are light. "Stages" are dark panels for the visual parts: brackets, the stream player, the 3D match
+ *   arena. A stage redefines the same tokens, so any component looks right in either place.
+ */
+
+/* ---------- Light pages (the whole signed-in app and the welcome page) ---------- */
+.app-shell, .auth-entry, .auth-entry-dialog, .auth-status-screen {
+  color-scheme: light;
+  --bg-base: #f8f9fa;
+  --sidebar: #ffffff;
+  --topbar: #ffffff;
+  --surface: #ffffff;
+  --surface-soft: #f1f3f4;
+  --surface-elevated: #e8eaed;
+  --surface-hover: #f1f3f4;
+  --border: #e0e3e7;
+  --border-strong: #c4c8cd;
+  --text-primary: #202124;
+  --text-secondary: #474b50;
+  --text-muted: #5f6368;
+  --brand: #ff6600;
+  --brand-hover: #e85d00;
+  --brand-ink: #b34700;
+  --brand-soft: #fff1e6;
+  --brand-border: #ffcfad;
+  --on-brand: #1f1206;
+  --success: #137333; --success-soft: #e6f4ea; --success-border: #a8dab5;
+  --warning: #8a5300; --warning-soft: #fef7e0; --warning-border: #f3d58a;
+  --danger: #c5221f;  --danger-soft: #fce8e6;  --danger-border: #f4b7b2;
+  --info: #1a5fb4;    --info-soft: #e8f0fe;    --info-border: #aecbfa;
+  --violet: #7b3fc4;  --violet-soft: #f3e8fd;  --violet-border: #d7b7f7;
+  --focus: #1a73e8;
+  --shadow-1: 0 1px 2px rgba(60, 64, 67, .12), 0 1px 3px 1px rgba(60, 64, 67, .08);
+  --shadow-2: 0 2px 6px 2px rgba(60, 64, 67, .12), 0 1px 2px rgba(60, 64, 67, .16);
+  --radius-sm: 8px; --radius: 12px; --radius-lg: 16px; --radius-xl: 24px;
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+}
+
+/* ---------- Dark stages: brackets, stream player, 3D arena ---------- */
+.stage, .stage-board, .broadcast-player-shell, .monitor3d, .multi-video-grid {
+  color-scheme: dark;
+  --bg-base: #0f1114;
+  --surface: #17191d;
+  --surface-soft: #1e2126;
+  --surface-elevated: #272b31;
+  --surface-hover: #23272c;
+  --border: #2c3036;
+  --border-strong: #3c4148;
+  --text-primary: #f1f3f4;
+  --text-secondary: #c4c7cc;
+  --text-muted: #9aa0a6;
+  --brand-ink: #ff8f4d;
+  --brand-soft: rgba(255, 102, 0, .16);
+  --brand-border: rgba(255, 133, 51, .45);
+  --success: #5bd38f; --success-soft: rgba(91, 211, 143, .14); --success-border: rgba(91, 211, 143, .4);
+  --warning: #f5c04a; --warning-soft: rgba(245, 192, 74, .14); --warning-border: rgba(245, 192, 74, .4);
+  --danger: #f28b82;  --danger-soft: rgba(242, 139, 130, .14); --danger-border: rgba(242, 139, 130, .4);
+  --info: #8ab4f8;    --info-soft: rgba(138, 180, 248, .14);   --info-border: rgba(138, 180, 248, .4);
+  --violet: #c58af9;  --violet-soft: rgba(197, 138, 249, .14); --violet-border: rgba(197, 138, 249, .4);
+  --focus: #8ab4f8;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .5);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, .45);
+  color: var(--text-primary);
+}
+.stage, .stage-board { background-color: var(--surface); }
+
+/* ---------- Typography ---------- */
+.app-shell, .auth-entry, .auth-entry-dialog, .auth-status-screen, .stage {
+  font-family: var(--font-arena);
+  font-size: 14px;
+  line-height: 1.5;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+}
+.app-shell :is(h1, h2, h3, h4, h5, h6) { color: var(--text-primary); letter-spacing: -.01em; }
+.app-shell h1 { font-size: clamp(24px, 2.6vw, 30px); line-height: 1.2; font-weight: 600; }
+.app-shell h2 { font-size: 20px; line-height: 1.3; font-weight: 600; }
+.app-shell h3 { font-size: 16px; line-height: 1.4; font-weight: 600; }
+.app-shell h4 { font-size: 14px; line-height: 1.4; font-weight: 600; }
+.app-shell :is(small, .text-xs) { line-height: 1.45; }
+/* Real codes keep the code font; everything else uses Google Sans Flex. */
+.app-shell :is(code, kbd, .monitor-code, .monitor-command) { font-family: "JetBrains Mono", ui-monospace, Consolas, monospace; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* ---------- Focus: one visible ring, everywhere ---------- */
+.app-shell :is(button, a, [role=tab], [role=button], summary):focus-visible,
+.auth-entry :is(button, a):focus-visible, .auth-entry-dialog :is(button, a, [role=tab]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.app-shell :is(input, select, textarea):focus,
+.app-shell :is(input, select, textarea):focus-visible {
+  border-color: var(--focus) !important;
+  box-shadow: 0 0 0 1px var(--focus) !important;
+  outline: none !important;
+}
+.app-shell :is(input, textarea)::placeholder { color: var(--text-muted); opacity: .85; }
+
+/* ---------- Motion primitives (quiet, quick, and off for reduced motion) ---------- */
+.app-shell :is(button, a, .ah-card, .ah-chip) {
+  transition: background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease), box-shadow var(--dur-2) var(--ease), transform var(--dur-2) var(--ease);
+}
+.ah-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.ah-card-interactive { cursor: pointer; }
+.ah-card-interactive:hover { box-shadow: var(--shadow-2); border-color: transparent; transform: translateY(-2px); }
+.ah-card-interactive:active { transform: translateY(0); box-shadow: var(--shadow-1); }
+@media (prefers-reduced-motion: reduce) {
+  .app-shell *, .stage * { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }
+  .ah-card-interactive:hover { transform: none; }
+}
+html[data-motion=reduced] .ah-card-interactive:hover { transform: none; }
+
+/* Chips: the familiar filter row (YouTube, Kaggle). */
+.ah-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.ah-chips::-webkit-scrollbar { display: none; }
+.ah-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border-radius: 8px; background: var(--surface-soft); color: var(--text-primary); font-size: 14px; font-weight: 500;
+  border: 1px solid transparent; white-space: nowrap; cursor: pointer;
+}
+.ah-chip:hover { background: var(--surface-elevated); }
+.ah-chip[aria-pressed=true], .ah-chip[aria-selected=true] { background: var(--text-primary); color: var(--surface); }
+
+/* Tooltips for icon-only controls: <button data-tip="Notifications">. Pure CSS, shown on hover and focus. */
+.app-shell [data-tip] { position: relative; }
+.app-shell [data-tip]::after {
+  content: attr(data-tip); position: absolute; left: 50%; top: calc(100% + 8px); transform: translate(-50%, -4px);
+  padding: 4px 8px; border-radius: 6px; background: #3c4043; color: #fff; font-size: 12px; font-weight: 500;
+  white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease); z-index: 60;
+}
+.app-shell [data-tip]:is(:hover, :focus-visible)::after { opacity: 1; transform: translate(-50%, 0); transition-delay: 350ms; }
+.app-shell [data-tip-side=right]::after { left: calc(100% + 10px); top: 50%; transform: translate(-4px, -50%); }
+.app-shell [data-tip-side=right]:is(:hover, :focus-visible)::after { transform: translate(0, -50%); }
+@media (hover: none) { .app-shell [data-tip]::after { display: none; } }
+
+/* Scrollbars that match the theme */
+.app-shell, .stage { scrollbar-color: var(--border-strong) transparent; }

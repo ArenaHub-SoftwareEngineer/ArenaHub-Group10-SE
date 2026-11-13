@@ -107,15 +107,15 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
                     setCollegeId(c.id);
                     setGameId(null);
                   }}
-                  className="group hover:border-[#ff6600]/60 transition-all"
+                  className="group hover:border-(--brand)/60 transition-all"
                 >
                   <div className="flex items-center gap-3 w-full">
                     <CollegeLogo code={c.code} size="lg" className="transition-transform group-hover:scale-105" />
                     <div className="flex flex-col">
-                      <span className="font-mono text-xs font-bold text-[#ff6600] tracking-wider uppercase">
+                      <span className="tabular-nums text-xs font-bold text-(--brand-ink)">
                         {c.code}
                       </span>
-                      <span className="text-[11px] text-[var(--text-muted)] leading-tight">
+                      <span className="text-xs text-[var(--text-muted)] leading-tight">
                         WMSU Unit
                       </span>
                     </div>
