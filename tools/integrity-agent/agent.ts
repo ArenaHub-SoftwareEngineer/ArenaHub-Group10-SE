@@ -3,7 +3,7 @@
 // official Game State Integration. It never reads or touches the game's memory, so it cannot
 // trigger Valve Anti-Cheat.
 //
-// Usage: node arenahub-agent.cjs --server http://192.168.1.5:3000 --code ABCD2345 [--yes]
+// Usage: node arenahub-agent.cjs --server http://192.168.1.5:3210 --code ABCD2345 [--yes]
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { hostname, release, tmpdir } from 'node:os';
@@ -18,7 +18,7 @@ const args = parseArgs(process.argv.slice(2));
 const server = String(args.server || '').replace(/\/$/, '');
 const code = String(args.code || '');
 if (!/^https?:\/\/[^\s/]+$/.test(server) || !/^[A-Za-z0-9]{8}$/.test(code)) {
-  console.log('Usage: arenahub-agent --server http://<laptop address>:3000 --code <8-character code>\nThe referee screen shows both.');
+  console.log('Usage: arenahub-agent --server http://<laptop address>:3210 --code <8-character code>\nThe referee screen shows both.');
   process.exit(1);
 }
 if (process.platform !== 'win32') { console.log('The ArenaHub PC agent runs on Windows only.'); process.exit(1); }

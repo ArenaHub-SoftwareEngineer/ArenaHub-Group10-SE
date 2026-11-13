@@ -173,7 +173,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   const sessionOr404 = (req: express.Request, res: express.Response) => { const row = store.session(String(req.params.id)); if (!row) res.status(404).json({ error: 'Session not found.' }); return row; };
 
   staff.get('/server-info', (req, res) => {
-    const port = req.socket.localPort || Number(env.PORT || 3000);
+    const port = req.socket.localPort || Number(env.PORT || 3210);
     res.json({ urls: env.INTEGRITY_PUBLIC_URL ? [env.INTEGRITY_PUBLIC_URL] : lanUrls(port), signals: SIGNAL_CATALOG, downloads: available() });
   });
   staff.get('/config', (_req, res) => { res.json(store.config()); });

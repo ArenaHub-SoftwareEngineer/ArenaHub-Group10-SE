@@ -8,7 +8,7 @@ A small Android app that pairs a player's phone with an ArenaHub match and repor
 
 ## Build (free)
 
-**On the event laptop:** run `npm run build:companion` from the project folder. It writes `dist-agent/arenahub-companion.apk`. While the ArenaHub server is running, phones can download it from `http://<laptop address>:3000/api/integrity/downloads/arenahub-companion.apk`, and the pairing panel shows that link.
+**On the event laptop:** run `npm run build:companion` from the project folder. It writes `dist-agent/arenahub-companion.apk`. While the ArenaHub server is running, phones can download it from `http://<laptop address>:3210/api/integrity/downloads/arenahub-companion.apk`, and the pairing panel shows that link.
 
 The command uses build tools that were set up once in `%LOCALAPPDATA%`: `ArenaHubBuild\jdk17` (Temurin JDK 17), `ArenaHubBuild\gradle-8.10.2`, and `Android\Sdk` (command-line tools, `platforms;android-35`, `build-tools;34.0.0`). It copies the project to `ArenaHubBuild\companion` first, because Android's build tools fail when the project path has non-ASCII characters and this repo's folder name has a long dash.
 

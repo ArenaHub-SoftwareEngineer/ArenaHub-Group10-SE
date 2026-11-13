@@ -32,7 +32,7 @@ It does three things instead:
 2. **Build the Android app.** See `companion/android/README.md`. Copy `app-debug.apk` to a shared folder, a USB drive or a group chat. Players install it once.
 3. **Allow phones to reach the laptop.** Open PowerShell as Administrator once and run:
    ```powershell
-   New-NetFirewallRule -DisplayName "ArenaHub LAN 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -Profile Private
+   New-NetFirewallRule -DisplayName "ArenaHub LAN 3210" -Direction Inbound -Protocol TCP -LocalPort 3210 -Action Allow -Profile Private
    ```
    Then, in Windows Settings > Network, mark the event network as **Private**. The rule never opens the port on public networks.
 4. **Review the blocklists.** Open Admin > Match monitor > Blocklists and thresholds. The starter lists are a guide only, because cheat tools rename themselves often. A trailing `*` matches the start of a name.
@@ -51,16 +51,16 @@ It does three things instead:
    npm run build
    $env:HOST = "0.0.0.0"; npm start
    ```
-3. On the laptop itself, open `http://localhost:3000`. Sign in with a staff account and go to **Admin > Match monitor**. Use the laptop for the staff page, because Google sign-in only works on `localhost`, not on the Wi-Fi address.
+3. On the laptop itself, open `http://localhost:3210`. Sign in with a staff account and go to **Admin > Match monitor**. Use the laptop for the staff page, because Google sign-in only works on `localhost`, not on the Wi-Fi address.
 4. **Pair each player.** For each player:
    1. Choose the match, the game and the player.
-   2. Check the laptop address. It fills itself in, for example `http://192.168.137.1:3000`.
+   2. Check the laptop address. It fills itself in, for example `http://192.168.137.1:3210`.
    3. Press **Create pairing code**.
 
    Each code works once and expires after 5 minutes.
    - **Android:** the player scans the QR code with the phone camera. That opens the Companion. The player reads the notice, ticks the box, presses Start, and allows "entire screen" recording. A "monitoring is ON" notification stays visible for the whole match.
    - **iPhone:** choose **iPhone** under Device before creating the code. The player scans the QR code with the iPhone camera, which opens a page in Safari. They agree, start the iPhone's built-in screen recording from Control Center, play, then return to the page and upload the video. The upload must finish before the monitoring window closes, so do not press End monitoring on an iPhone session until its recording has arrived. A session that ends with no recording is flagged "No recording uploaded".
-   - **PC:** the player runs the command shown under the QR code, for example `arenahub-agent.exe --server http://192.168.137.1:3000 --code ABCD2345`, and types YES. For Dota 2, the player must **restart Dota 2** after pairing so it loads the live-data connection.
+   - **PC:** the player runs the command shown under the QR code, for example `arenahub-agent.exe --server http://192.168.137.1:3210 --code ABCD2345`, and types YES. For Dota 2, the player must **restart Dota 2** after pairing so it loads the live-data connection.
 5. **During the match**, the session list refreshes every 5 seconds:
    - "Not reporting" means the device went quiet for more than 45 seconds.
    - Coloured edges show the level: watch (blue), review (amber), urgent (red).
@@ -113,6 +113,7 @@ The observation counts in the Behaviour category and appears in the case summary
 | Problem | Fix |
 |---|---|
 | The phone shows "Cannot reach ..." | Same network? Firewall rule added? Network set to Private? Try the laptop hotspot. |
+| `localhost:3210` shows a different app | Another project is using the port. Start ArenaHub on a free one: `$env:PORT = "3300"` before `npm start`, and open the firewall for that port. ArenaHub moved off 3000 because FloodSight uses it and its offline cache keeps showing FloodSight at `localhost:3000`. |
 | No laptop address is shown | The server was started without `HOST=0.0.0.0`, or the laptop is not on Wi-Fi. |
 | "That pairing code is wrong, already used or expired" | Create a new code. |
 | Dota 2 live data is empty | The player must restart Dota 2 after pairing. Steam must be installed normally. |

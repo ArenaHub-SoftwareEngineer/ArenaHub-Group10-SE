@@ -211,7 +211,7 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
         <label>Player (IGN)<input required maxLength={80} list="monitor-players" value={player} onChange={e => setPlayer(e.target.value)} /><datalist id="monitor-players">{players.map(p => <option key={p} value={p} />)}</datalist></label>
         {game === 'dota2' && <label>Steam ID (17 digits, optional)<input inputMode="numeric" maxLength={17} value={steamId} onChange={e => setSteamId(e.target.value.replace(/\D/g, ''))} placeholder="7656119..." /></label>}
         <label>Monitoring window (hours)<input type="number" min={0.5} max={12} step={0.5} value={hours} onChange={e => setHours(Number(e.target.value))} /></label>
-        <label>Laptop address devices will use<input required list="monitor-urls" value={server} onChange={e => setServer(e.target.value)} placeholder="http://192.168.x.x:3000" /><datalist id="monitor-urls">{urls.map(u => <option key={u} value={u} />)}</datalist></label>
+        <label>Laptop address devices will use<input required list="monitor-urls" value={server} onChange={e => setServer(e.target.value)} placeholder="http://192.168.x.x:3210" /><datalist id="monitor-urls">{urls.map(u => <option key={u} value={u} />)}</datalist></label>
         {!urls.length && <p className="field-hint">No Wi-Fi address found. Start the server in LAN mode (see docs/INTEGRITY_SETUP.md) and connect this laptop to the event Wi-Fi or hotspot.</p>}
         <div className="feature-dialog-actions"><button className="arena-primary" disabled={busy}>{busy ? 'Creating...' : 'Create pairing code'}</button></div>
       </form>
