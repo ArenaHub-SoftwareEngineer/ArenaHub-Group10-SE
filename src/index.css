@@ -995,3 +995,9 @@ html[data-motion=reduced] :is(.feedback-note, .arena-chat button) { transform: n
 /* Red asterisk after the label of a field that must be filled in (components/ui/Req.tsx). */
 .required-mark { color:var(--danger, var(--danger)); margin-left: 3px; font-weight: 700; }
 .required-legend { font-size: 12px; color: var(--text-muted); }
+
+/* Teams directory: a game with no teams for this college is shown, but not clickable. */
+.directory-game.is-empty { cursor: default; }
+.directory-game.is-empty > img { filter: grayscale(1); opacity: .45; }
+.directory-game.is-empty small { color: var(--text-muted); }
+.directory-college-record { color: var(--text-secondary); font-variant-numeric: tabular-nums; }

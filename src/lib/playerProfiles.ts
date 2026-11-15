@@ -38,16 +38,25 @@ export function publicPlayerProfile(player: Player, team: Team) {
     isSample: !!player.isSampleProfile, rank: playerRank(player,team.gameId,team.gameMode), recordedRank: playerRank({rank:player.rank},team.gameId,team.gameMode), teamName: team.name, teamCode: team.collegeCode };
 }
 export type PublicPlayerProfile = ReturnType<typeof publicPlayerProfile>;
-/** Published rosters replace fictional fixtures for that game's player directory. */
-export function directoryTeams(samples:Team[],brackets:BracketDraft[]):Team[] {
-  const published=new Map<string,Team>(),activeGames=new Set<string>();
-  for(const bracket of brackets.filter(b=>b.status==='published'))for(const match of bracket.matches)for(const team of [match.team1,match.team2]){
-    if(!team || team.isBye || isRetiredGame(team))continue;
-    const game=rankGame(team.gameId,team.gameMode)||team.gameId;activeGames.add(game);
+/** Every real team in a published bracket or Battle Royale event. There are no sample teams. */
+export function directoryTeams(brackets:BracketDraft[]):Team[] {
+  const published=new Map<string,Team>();
+  const add=(team:Team)=>{
+    const game=rankGame(team.gameId,team.gameMode)||team.gameId;
     const key=`${game}:${team.id}`,prior=published.get(key);
     if(!prior || (!prior.players.length && team.players.length))published.set(key,team);
+  };
+  for(const bracket of brackets.filter(b=>b.status==='published')){
+    for(const match of bracket.matches)for(const team of [match.team1,match.team2])if(team && !team.isBye && !isRetiredGame(team))add(team);
+    // Battle Royale squads have no public player list yet; they still belong in their college's directory.
+    for(const squad of bracket.placement?.teams||[])add({id:squad.id,name:squad.name,collegeId:'',collegeCode:squad.collegeCode,gameId:'game-codm-br',gameMode:'br',seed:0,winRate:0,record:'',players:[]});
   }
-  return [...samples.filter(team=>!isRetiredGame(team) && !activeGames.has(rankGame(team.gameId,team.gameMode)||team.gameId)),...published.values()];
+  return [...published.values()];
+}
+
+/** Teams carry a college code; generated college ids do not match the configured colleges, so match on the code. */
+export function teamInCollege(team:Pick<Team,'collegeId'|'collegeCode'>,college:{id:string;code:string}):boolean {
+  return team.collegeId===college.id || (!!team.collegeCode && team.collegeCode.trim().toUpperCase()===college.code.toUpperCase());
 }
 /** The entire bracket document, including its draft field, is publicly readable. */
 export function publicBracket(draft: BracketDraft): BracketDraft {

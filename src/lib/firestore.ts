@@ -398,7 +398,7 @@ class FirestoreService {
 
   // --- Colleges and teams (computed from published records) ---
   public getColleges(): College[] { return collegeStandings(this.getPublishedBrackets()); }
-  public getTeams(): Team[] { return directoryTeams([], this.getPublishedBrackets()); }
+  public getTeams(): Team[] { return directoryTeams(this.getPublishedBrackets()); }
 
   // --- Users ---
   public getUsers(): User[] { return this.users; }

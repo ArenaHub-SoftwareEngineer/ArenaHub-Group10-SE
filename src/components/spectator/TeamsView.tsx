@@ -6,6 +6,8 @@ import { ArrowLeft, ChevronRight, Users } from '../ui/Icons';
 import { PlayerRoster } from './PlayerRoster';
 import { CollegeLogo } from '../common/CollegeLogo';
 import { GameArtworkTiles } from '../common/GameArtworkTiles';
+import { teamInCollege } from '../../lib/playerProfiles';
+import { CAMPUS_SHORT_NAME } from '../../lib/institution';
 
 const games = Object.fromEntries(RANK_GAMES.map(g=>[g.id,g]));
 
@@ -16,9 +18,10 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
   const [guideOpen,setGuideOpen] = useState(false);
   const visibleTeams = teams.filter(t=>!isRetiredGame(t));
   const college = colleges.find(c => c.id === collegeId);
-  const collegeTeams = visibleTeams.filter(t => t.collegeId === collegeId && !t.isBye);
+  const collegeTeams = college ? visibleTeams.filter(t => teamInCollege(t, college) && !t.isBye) : [];
   const teamGame = (t:Team)=>rankGame(t.gameId,t.gameMode) || t.gameId;
-  const gameIds = [...new Set(collegeTeams.map(teamGame))];
+  // Every game is listed, so a college with no Dota 2 team sees that plainly instead of a missing tile.
+  const gameIds = [...new Set([...RANK_GAMES.map(g => g.id as string), ...collegeTeams.map(teamGame)])];
   const selectedTeams = collegeTeams.filter(t => teamGame(t) === gameId);
 
   return (
@@ -55,16 +58,22 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
               {selectedTeams.length ? (
                 selectedTeams.map(team => <PlayerRoster key={team.id} team={team} />)
               ) : (
-                <p className="roster-empty">No roster has been added for this game.</p>
+                <p className="roster-empty">No teams registered for {games[gameId]?.name || 'this game'} yet.</p>
               )}
             </>
           ) : (
             <div className="directory-games">
               {gameIds.map(id => {
                 const game = games[id];
-                const count = collegeTeams
-                  .filter(t => teamGame(t) === id)
-                  .reduce((n, t) => n + t.players.length, 0);
+                const name = game?.name || id.replace('game-', '');
+                const gameTeams = collegeTeams.filter(t => teamGame(t) === id);
+                const players = gameTeams.reduce((n, t) => n + t.players.length, 0);
+                if (!gameTeams.length) return (
+                  <div key={id} className="directory-game is-empty">
+                    {game && <img src={game.image} alt="" loading="lazy" />}
+                    <div><span><strong>{name}</strong><small>No teams registered for {name} yet</small></span></div>
+                  </div>
+                );
                 return (
                   <button
                     key={id}
@@ -75,8 +84,8 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
                     {game && <img src={game.image} alt="" loading="lazy" />}
                     <div>
                       <span>
-                        <strong>{game?.name || id.replace('game-', '')}</strong>
-                        <small>{count} players</small>
+                        <strong>{name}</strong>
+                        <small>{gameTeams.length} team{gameTeams.length === 1 ? '' : 's'}{players ? ` · ${players} player${players === 1 ? '' : 's'}` : ''}</small>
                       </span>
                       <ChevronRight size={19} />
                     </div>
@@ -84,9 +93,6 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
                 );
               })}
             </div>
-          )}
-          {!gameId && !gameIds.length && (
-            <p className="roster-empty">No game rosters have been added yet.</p>
           )}
         </>
       ) : (
@@ -98,7 +104,8 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
           </header>
           <div className="directory-colleges">
             {colleges.map(c => {
-              const entries = visibleTeams.filter(t => t.collegeId === c.id && !t.isBye);
+              const entries = visibleTeams.filter(t => teamInCollege(t, c) && !t.isBye);
+              const played = c.stats.wins + c.stats.losses;
               return (
                 <button
                   type="button"
@@ -116,15 +123,19 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
                         {c.code}
                       </span>
                       <span className="text-xs text-[var(--text-muted)] leading-tight">
-                        WMSU Unit
+                        {CAMPUS_SHORT_NAME} college
                       </span>
                     </div>
                   </div>
                   <strong>{c.name}</strong>
                   <small>
                     <Users size={13} />
-                    {entries.length} game roster{entries.length === 1 ? '' : 's'}
+                    {entries.length ? `${entries.length} team${entries.length === 1 ? '' : 's'}` : 'No teams registered yet'}
                   </small>
+                  {/* Record from completed, published matches only (lib/colleges.ts). */}
+                  {played > 0 && <small className="directory-college-record">
+                    {c.stats.wins}W {c.stats.losses}L in series · {c.stats.status === 'Eliminated' ? 'Eliminated' : 'Still competing'}
+                  </small>}
                   <ChevronRight className="directory-college-arrow" size={17} />
                 </button>
               );
