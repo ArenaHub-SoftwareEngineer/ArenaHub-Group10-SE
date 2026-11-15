@@ -69,6 +69,44 @@ test('organizer runs a Battle Royale lobby and viewers see placement standings',
   expect(ours(viewerErrors)).toEqual([]);
 });
 
+test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and publish dialog', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'Bracket Studio is an organizer desktop tool.');
+  test.setTimeout(90_000);
+  const { page, errors } = await open(browser, ORGANIZER);
+  await page.evaluate(() => { window.location.hash = '#/admin/bracket-studio'; });
+  // Build settings is a <details> that closes once a bracket is on the canvas.
+  const builder = page.locator('details.studio-builder').filter({ has: page.locator('summary', { hasText: 'Build settings' }) });
+  const openBuilder = async () => { if (!(await builder.evaluate(el => (el as HTMLDetailsElement).open))) await builder.locator('summary').click(); };
+  await openBuilder();
+  await page.getByRole('button', { name: 'Prompt', exact: true }).click();
+
+  await page.getByLabel(/Tournament prompt/).fill('Create a seeded 6-team single-elimination bracket with Bo3 matches.');
+  await page.getByRole('button', { name: 'Generate bracket' }).click();
+  await expect(page.getByRole('heading', { name: /Single elimination/ })).toBeVisible({ timeout: 30_000 });
+  await openBuilder();
+  await expect(page.getByText('Thinking complete')).toBeVisible();
+  await expect(page.getByText('Bracket assistant')).toBeVisible();
+
+  // The conversation lives in BracketAIDraft and survives switching build modes.
+  await page.getByRole('button', { name: 'Manual', exact: true }).click();
+  await expect(page.getByText('Bracket assistant')).toHaveCount(0);
+  // Choosing Manual opens the setup dialog straight away.
+  await expect(page.getByRole('dialog', { name: 'Create Manual Bracket' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+  await page.getByRole('button', { name: 'Prompt', exact: true }).click();
+  await expect(page.getByText('Bracket assistant')).toBeVisible();
+
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Save bracket image' }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.png$/);
+
+  await page.getByRole('button', { name: 'Publish Bracket' }).first().click();
+  await expect(page.getByRole('dialog', { name: 'Publish Bracket' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).or(page.getByRole('dialog').getByRole('button', { name: 'Cancel' })).first().click();
+  await expect(page.getByRole('dialog', { name: 'Publish Bracket' })).toHaveCount(0);
+  expect(ours(errors)).toEqual([]);
+});
+
 test('staff pin, slow mode, mute and unmute in live chat', async ({ browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-1440', 'Two signed-in browsers; the chat panel is the same at both widths.');
   test.setTimeout(120_000);
