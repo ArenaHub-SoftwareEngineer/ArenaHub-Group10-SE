@@ -8,6 +8,7 @@ import { recordNoShow, recordSanction, reviewCheckIn, reviewRegistration, saveMa
 import { ClipboardList, ShieldCheck, Users } from '../ui/Icons';
 import { Modal } from '../ui/Modal';
 import { Req } from '../ui/Req';
+import { errorMessage } from '../../lib/errors';
 import './FeatureDialogs.css';
 
 const when = (value: any) => value?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || 'Not set';
@@ -68,7 +69,7 @@ export function TournamentOperations({ brackets, staff = false, initialEntityId 
   const perform = async (action: () => Promise<unknown>, message: string) => {
     setDialogError(''); setSuccess(''); setBusy(true);
     try { await action(); setSuccess(message); setDialog(null); }
-    catch (e) { setDialogError(e instanceof Error ? e.message : 'This change could not be saved.'); }
+    catch (e) { setDialogError(errorMessage(e, 'This change could not be saved.')); }
     finally { setBusy(false); }
   };
   const editRoster = (registration?: Registration) => {

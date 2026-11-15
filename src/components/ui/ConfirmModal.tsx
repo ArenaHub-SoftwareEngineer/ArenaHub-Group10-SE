@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
+import { errorMessage } from '../../lib/errors';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     if (busy) return;
     setBusy(true); setError('');
     try { await onConfirm(); }
-    catch (error) { setError(error instanceof Error ? error.message : 'The action could not be completed. Please try again.'); }
+    catch (error) { setError(errorMessage(error, 'The action could not be completed. Please try again.')); }
     finally { setBusy(false); }
   };
   return <Modal open={isOpen} title={title} description={description} onClose={onCancel} busy={busy}>

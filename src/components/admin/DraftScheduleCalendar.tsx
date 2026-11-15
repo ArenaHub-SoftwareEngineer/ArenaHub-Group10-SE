@@ -5,6 +5,7 @@ import type { Match } from '../../lib/types';
 import { calendarMonth, dayLabel, MatchCalendar, scheduledMatchesByDay } from '../common/MatchCalendar';
 import { Modal } from '../ui/Modal';
 import { Req } from '../ui/Req';
+import { errorMessage } from '../../lib/errors';
 
 export function DraftScheduleCalendar({ matches, onApply }: {
   matches: Match[];
@@ -44,7 +45,7 @@ export function DraftScheduleCalendar({ matches, onApply }: {
       setFeedback(`Match scheduled for ${dayLabel.format(new Date(`${editor.date}T00:00:00Z`))} at ${editor.time} Manila time.`);
       setEditor(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add this match to the schedule.');
+      setError(errorMessage(err, 'Could not add this match to the schedule.'));
     }
   }
 

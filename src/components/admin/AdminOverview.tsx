@@ -10,6 +10,7 @@ import { AlertCircle, CalendarDays, ChevronRight, GitBranch, QrCode, Radio, User
 import { GameArtworkTiles } from '../common/GameArtworkTiles';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
+import { errorMessage } from '../../lib/errors';
 
 type Entry = { bracket: BracketDraft; match: Match };
 type Props = {
@@ -68,7 +69,7 @@ export function AdminOverview({ brackets, auditLogs, accountCount, reportCount, 
         showToast('Score updated on this device. Viewer sync failed.', 'error');
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Could not update the score.', 'error');
+      showToast(errorMessage(error, 'Could not update the score.'), 'error');
     } finally {
       setScoring(false);
     }

@@ -13,6 +13,7 @@ import type { GenerationFeedbackData } from '../BracketGenerationFeedbackModal';
 import { extractTeamsFromPrompt, MAX_BRACKET_TEAMS, detectTournamentSizeFromPrompt } from '../../../lib/bracketUtils';
 import { Sparkles, X, ChevronDown, ArrowUp, LoaderCircle } from '../../ui/Icons';
 import type { StreamMessage } from './shared';
+import { errorMessage } from '../../../lib/errors';
 
 interface BracketAIDraftProps {
   hidden: boolean;
@@ -134,7 +135,7 @@ export const BracketAIDraft: React.FC<BracketAIDraftProps> = ({ hidden, onDraft,
     if (!pending) return;
     let draft: BracketDraft;
     try { draft = aiService.buildBracket(pending.request, pending.prompt); }
-    catch (error) { showToast(error instanceof Error ? error.message : 'The bracket could not be built.', 'error'); return; }
+    catch (error) { showToast(errorMessage(error, 'The bracket could not be built.'), 'error'); return; }
     onDraft(draft);
     const treeSize = Math.max(2, Math.pow(2, Math.ceil(Math.log2(draft.teamsCount))));
     const explanation = `Built a ${draft.teamsCount}-team ${draft.format} bracket for ${pending.request.game}.`;

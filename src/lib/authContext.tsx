@@ -40,6 +40,7 @@ import { registerEmailAccount } from './accountRegistration';
 import { institutionalGoogleProvider, enforceGoogleInstitution } from './googleAuth';
 import { GOOGLE_DOMAIN_ERROR } from './institution';
 import { sendWithReturn } from './emailLinks';
+import { errorMessage } from './errors';
 
 export { isFirebaseConfigured };
 
@@ -293,7 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           const data = snapshot.data();
           setAhUser(previous => ({ ...(previous || profile), name: data.name || profile.name, email: data.email || profile.email, avatarInitials: data.avatarInitials || makeInitials(data.name || profile.name), collegeName: data.collegeName || profile.collegeName, status: data.status || profile.status, spectatorInviteApproved: data.spectatorInviteApproved === true }));
         }, () => { if (currentGeneration === generation) setProfileError('Your account profile could not be reached. Check your connection and retry.'); });
-        } catch (error) { if (currentGeneration !== generation) return; setProfileError(error instanceof Error ? error.message : 'Your account profile could not load.'); }
+        } catch (error) { if (currentGeneration !== generation) return; setProfileError(errorMessage(error, 'Your account profile could not load.')); }
       } else setAhUser(null);
 
       setLoading(false);
@@ -349,7 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (!result.verificationSent) setVerificationNotice('Your account was created, but the verification email could not be sent. Use Resend verification email to try again.');
         return { verificationSent: result.verificationSent };
       } catch (err: unknown) {
-        const error = (err as { code?: string }).code ? authErrorMessage(err) : err instanceof Error ? err.message : 'Account creation could not be completed.';
+        const error = (err as { code?: string }).code ? authErrorMessage(err) : errorMessage(err, 'Account creation could not be completed.');
         if (auth.currentUser?.email === normalizedEmail && !String((err as any).code).includes('email-already-in-use')) setProfileError('Your account was created, but account setup could not finish. Retry loading your profile; you do not need to create another account.');
         return { error };
       } finally { setAffiliationPending(false); }

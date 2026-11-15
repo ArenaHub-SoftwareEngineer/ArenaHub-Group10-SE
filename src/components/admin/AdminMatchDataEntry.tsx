@@ -10,6 +10,7 @@ import { firestoreService } from '../../lib/firestore';
 import { Match, Team, seriesGameCount } from '../../lib/types';
 import { useToast } from '../ui/Toast';
 import { MatchHighlightsEditor } from './MatchHighlightsEditor';
+import { errorMessage } from '../../lib/errors';
 import {
   Swords,
   Sparkles,
@@ -139,7 +140,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
       firestoreService.saveMatchPlayerStats(selectedMatch.id, stats, gameNumber, matchNotes);
       await firestoreService.syncBracketsToCloud();
       setIsSaved(true); showToast('Game stats saved to the published match.', 'success');
-    } catch (error) { setIsSaved(false); showToast(error instanceof Error ? error.message : 'Stats could not be shared. Retry saving.', 'error'); }
+    } catch (error) { setIsSaved(false); showToast(errorMessage(error, 'Stats could not be shared. Retry saving.'), 'error'); }
   };
 
   const handleAnalyze = () => {

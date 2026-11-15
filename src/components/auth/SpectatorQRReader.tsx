@@ -2,6 +2,7 @@ import { CAMPUS_SHORT_NAME } from '../../lib/institution';
 import React, { useEffect, useRef, useState } from 'react';
 import { checkSpectatorInvite, pendingSpectatorInvite, rememberSpectatorInvite, clearSpectatorInvite } from '../../lib/campusAccess';
 import { parseInviteInput } from '../../lib/inviteInput';
+import { errorMessage } from '../../lib/errors';
 import { Camera, Upload, QrCode, X, CheckCircle2 } from '../ui/Icons';
 import { Req } from '../ui/Req';
 
@@ -74,7 +75,7 @@ export function SpectatorQRReader({ onVerified, admissionMode = false }: { onVer
       if (!mounted.current) return;
       if (!data) throw new Error('No QR code was found. Use a clear image showing the whole code, or paste its invitation link.');
       await accept(data);
-    } catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : 'The QR image could not be read.'); }
+    } catch (e) { if (mounted.current) setError(errorMessage(e, 'The QR image could not be read.')); }
     finally { if (mounted.current) setBusy(false); }
   };
   return <section className="auth-qr-reader"><div className="auth-qr-intro"><QrCode size={28} /><h3>Join with a student invitation</h3><p>Scan a current QR shared by an approved {CAMPUS_SHORT_NAME} student. Then sign in or create your own account.</p></div>

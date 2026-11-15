@@ -4,6 +4,7 @@ import { firestoreService } from '../../lib/firestore';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useToast } from '../ui/Toast';
 import { Trash2, Ban, Check, ShieldCheck } from '../ui/Icons';
+import { errorMessage } from '../../lib/errors';
 
 interface ReportsViewProps {
   reports: ContentReport[];
@@ -21,7 +22,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
     if (!selectedReport || !actionType) return;
 
     try { await firestoreService.resolveReport(selectedReport.id, actionType); }
-    catch (error) { showToast(error instanceof Error ? error.message : 'The action could not be completed.', 'error'); throw error; }
+    catch (error) { showToast(errorMessage(error, 'The action could not be completed.'), 'error'); throw error; }
 
     if (actionType === 'remove_and_ban') {
       showToast(`Content removed and user ${selectedReport.postedBy} banned!`, 'error');

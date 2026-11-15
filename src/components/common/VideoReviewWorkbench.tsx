@@ -5,6 +5,7 @@ import { frameTime, reviewSampleTimes, validateFrameFindings, type FrameFinding,
 import { Upload, ShieldCheck, Play, Pause, ChevronLeft, ChevronRight, X, Check, Download } from '../ui/Icons';
 import { readEvidence, type EvidenceFile } from '../../lib/evidenceStorage';
 import type { Match } from '../../lib/types';
+import { errorMessage } from '../../lib/errors';
 
 type CapturedFrame = ReviewFrame & { state: 'captured' | 'analyzing' | 'reviewed'; finding?: FrameFinding };
 function waitForVideo(video: HTMLVideoElement, event: 'loadedmetadata' | 'seeked', signal: AbortSignal) {
@@ -94,7 +95,7 @@ export function VideoReviewWorkbench({ matches, game, staff, attachment, caseId,
         setFrames(working); setModelName(payload.model); setSelected(batch[0].timestamp);
       }
       setStage(`Review complete · ${working.length} sampled frames returned by the model`);
-    } catch (e) { setError(controller.signal.aborted ? 'Review stopped. Completed frames and results are still available.' : e instanceof Error ? e.message : 'Video review failed.'); setFrames(current => current.map(frame => frame.state === 'analyzing' ? { ...frame, state: 'captured' } : frame)); setStage(''); }
+    } catch (e) { setError(controller.signal.aborted ? 'Review stopped. Completed frames and results are still available.' : errorMessage(e, 'Video review failed.')); setFrames(current => current.map(frame => frame.state === 'analyzing' ? { ...frame, state: 'captured' } : frame)); setStage(''); }
     finally { setBusy(false); }
   };
   const save = async () => {
@@ -106,7 +107,7 @@ export function VideoReviewWorkbench({ matches, game, staff, attachment, caseId,
         await onSaveReview(caseId, frames.flatMap(f => f.finding ? [f.finding] : []), notes.trim());
         setSaved('Organizer review saved with the case.');
       } else { if (!matchId) throw new Error('Choose the match shown in this clip.'); await onSubmit(matchId, file, notes); setSaved('Video submitted privately to the organizers.'); }
-    } catch (e) { setError(e instanceof Error ? e.message : 'The review could not be saved.'); } finally { setSaving(false); }
+    } catch (e) { setError(errorMessage(e, 'The review could not be saved.')); } finally { setSaving(false); }
   };
   const selectedFrame = frames.find(frame => frame.timestamp === selected);
   const seek = (seconds: number) => { if (video.current) { video.current.pause(); video.current.currentTime = Math.max(0, Math.min(duration, seconds)); } };

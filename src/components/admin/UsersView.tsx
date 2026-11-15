@@ -7,6 +7,7 @@ import { firestoreService } from '../../lib/firestore';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useToast } from '../ui/Toast';
 import { Search, Ban, PauseCircle, RotateCcw } from '../ui/Icons';
+import { errorMessage } from '../../lib/errors';
 
 interface UsersViewProps {
   users: User[];
@@ -44,7 +45,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
       showToast(`User ${selectedUser.name} status restored to active`, 'success');
     }
 
-    } catch (error) { showToast(error instanceof Error ? error.message : 'Account status could not be updated.', 'error'); throw error; }
+    } catch (error) { showToast(errorMessage(error, 'Account status could not be updated.'), 'error'); throw error; }
     setSelectedUser(null);
     setActionType(null);
   };

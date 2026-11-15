@@ -5,6 +5,7 @@ import type { Match } from '../../lib/types';
 import { DraftScheduleCalendar } from './DraftScheduleCalendar';
 import { Calendar, Upload } from '../ui/Icons';
 import { Req } from '../ui/Req';
+import { errorMessage } from '../../lib/errors';
 
 export function StreamScheduleEditor({ matches, publishedIds, onApplyDraft }: {
   matches: Match[];
@@ -47,7 +48,7 @@ export function StreamScheduleEditor({ matches, publishedIds, onApplyDraft }: {
     try {
       setPreview(parseStreamSchedule(source, matches));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not read the schedule.');
+      setError(errorMessage(err, 'Could not read the schedule.'));
     }
   }
 
@@ -76,7 +77,7 @@ export function StreamScheduleEditor({ matches, publishedIds, onApplyDraft }: {
       }
       setPreview([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save the schedule.');
+      setError(errorMessage(err, 'Could not save the schedule.'));
     } finally {
       setBusy(false);
     }

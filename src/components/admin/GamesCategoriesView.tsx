@@ -8,6 +8,7 @@ import { DEFAULT_GAMES } from '../../lib/catalogDefaults';
 const DEFAULT_BANNER = DEFAULT_GAMES[0].bannerImage;
 import { RANK_GAMES } from '../../lib/gameRanks';
 import { Req } from '../ui/Req';
+import { errorMessage } from '../../lib/errors';
 import {
   Plus,
   Image as ImageIcon,
@@ -133,7 +134,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
     }
 
     setIsModalOpen(false);
-    } catch (error) { setFormError(error instanceof Error ? error.message : 'The shared game settings could not be saved.'); }
+    } catch (error) { setFormError(errorMessage(error, 'The shared game settings could not be saved.')); }
   };
 
   const confirmDeleteGame = async () => {
@@ -142,7 +143,7 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
     await firestoreService.removeGame(gameToDelete.id);
     showToast(`Removed "${gameToDelete.name}" from games list`, 'info');
     setGameToDelete(null);
-    } catch (error) { showToast(error instanceof Error ? error.message : 'The game could not be removed.', 'error'); }
+    } catch (error) { showToast(errorMessage(error, 'The game could not be removed.'), 'error'); }
   };
 
   return (

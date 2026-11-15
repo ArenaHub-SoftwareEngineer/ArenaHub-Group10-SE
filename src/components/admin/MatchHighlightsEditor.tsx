@@ -4,6 +4,7 @@ import { firestoreService } from '../../lib/firestore';
 import { matchMvp, MAX_TIMELINE_EVENTS, mvpCandidates, sortedTimeline, timelineEvent, TIMELINE_TYPES } from '../../lib/matchHighlights';
 import { useToast } from '../ui/Toast';
 import { Plus, Save, Trash2 } from '../ui/Icons';
+import { errorMessage } from '../../lib/errors';
 import '../spectator/matchHighlights.css';
 
 /** Organizer entry for a match's key moments and its MVP. Viewers see them on the watch page. */
@@ -33,14 +34,14 @@ export const MatchHighlightsEditor: React.FC<{ match: Match }> = ({ match }) => 
       const next = sortedTimeline([...events, timelineEvent(match, draft)]);
       setEvents(next);
       setDraft(d => ({ ...d, time: '', text: '' }));
-    } catch (err) { setError(err instanceof Error ? err.message : 'Check the event.'); }
+    } catch (err) { setError(errorMessage(err, 'Check the event.')); }
   };
   const save = async () => {
     setError(''); setSaving(true);
     try {
       await firestoreService.saveMatchHighlights(match.id, sortedTimeline(events), matchMvp(match, mvp, highlight));
       showToast('Timeline and MVP saved to the published match.', 'success');
-    } catch (err) { setError(err instanceof Error ? err.message : 'Could not save. Retry.'); }
+    } catch (err) { setError(errorMessage(err, 'Could not save. Retry.')); }
     finally { setSaving(false); }
   };
 

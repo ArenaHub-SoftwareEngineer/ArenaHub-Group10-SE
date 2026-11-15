@@ -8,6 +8,7 @@ import { MatchArena } from './MatchArena';
 import { Modal } from '../ui/Modal';
 import { Copy, QrCode, RefreshCw, ShieldAlert, ShieldCheck } from '../ui/Icons';
 import { Req } from '../ui/Req';
+import { errorMessage } from '../../lib/errors';
 import '../../monitor.css';
 
 interface SessionView {
@@ -92,7 +93,7 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
   const load = useCallback(() => call<SessionDetail>(`/sessions/${id}`).then(d => { setDetail(d); setError(''); }).catch(e => setError(e.message)), [id]);
   useEffect(() => { void load(); const timer = setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
   useEffect(() => { if (detail) { setNote(n => n || detail.reviewNote); setHold(h => h || detail.hold); } }, [detail?.id]);
-  const act = async (work: () => Promise<unknown>, done: string) => { setBusy(true); setError(''); setNotice(''); try { await work(); setNotice(done); await load(); onChanged(); } catch (e) { setError(e instanceof Error ? e.message : 'That action failed.'); } finally { setBusy(false); } };
+  const act = async (work: () => Promise<unknown>, done: string) => { setBusy(true); setError(''); setNotice(''); try { await work(); setNotice(done); await load(); onChanged(); } catch (e) { setError(errorMessage(e, 'That action failed.')); } finally { setBusy(false); } };
   const unverified = detail?.signals.filter(s => s.id === 'game-signature-unverified') || [];
   return <Modal open title={detail ? `${detail.playerName} · ${detail.gameLabel}` : 'Monitor session'} description={detail ? `${detail.matchLabel} · ${CONNECTION_LABEL[detail.connection]}` : 'Loading'} busy={busy} onClose={onClose} className="feature-dialog feature-dialog-wide">
     <div className="feature-dialog-body monitor-detail">
@@ -167,7 +168,7 @@ function SettingsPanel() {
     {config && <form className="module-form" onSubmit={e => { e.preventDefault(); setBusy(true); setError(''); setNotice(''); try {
       const next: MonitorConfig = { ...config, android: { ...config.android, blockedPackages: textToEntries(android) }, pc: { blockedProcesses: textToEntries(pc) }, thresholds };
       void call<MonitorConfig>('/config', { method: 'PUT', body: next }).then(c => { setConfig(c); setNotice('Saved. Devices pick up the new lists on their next report.'); }).catch(err => setError(err.message)).finally(() => setBusy(false));
-    } catch (err) { setError(err instanceof Error ? err.message : 'Check the lists.'); setBusy(false); } }}>
+    } catch (err) { setError(errorMessage(err, 'Check the lists.')); setBusy(false); } }}>
       <label>Android apps (package names)<textarea rows={8} value={android} onChange={e => setAndroid(e.target.value)} spellCheck={false} /></label>
       <label>PC programs (process names)<textarea rows={8} value={pc} onChange={e => setPc(e.target.value)} spellCheck={false} /></label>
       <div className="monitor-thresholds">{(['watch', 'review', 'urgent'] as const).map(k => <label key={k}>{k} at score<input type="number" min={1} max={100} value={thresholds[k]} onChange={e => setThresholds(t => ({ ...t, [k]: Number(e.target.value) }))} /></label>)}</div>
@@ -218,7 +219,7 @@ export function MatchMonitorView({ matches }: { matches: Match[] }) {
       const label = match ? `${match.matchNumber} · ${match.team1?.name} vs ${match.team2?.name}` : customLabel.trim();
       const result = await call<Pairing>('/pairings', { body: { matchId: match?.id || `scrim-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}`, matchLabel: label, game, platform, team: team.trim(), record: platform === 'ios' ? false : record, playerName: player.trim(), expectedSteamId: game === 'dota2' ? steamId.trim() : '', hours, serverUrl: server.trim().replace(/\/$/, '') } });
       setPairing({ ...result, playerName: player.trim() }); setPlayer(''); setSteamId(''); void refresh();
-    } catch (err) { setError(err instanceof Error ? err.message : 'Pairing failed.'); } finally { setBusy(false); }
+    } catch (err) { setError(errorMessage(err, 'Pairing failed.')); } finally { setBusy(false); }
   };
   const serverBase = server.trim().endsWith('/') ? server.trim().slice(0, -1) : server.trim();
   const counts = { online: sessions.filter(s => ['online', 'paired'].includes(s.connection)).length, lost: sessions.filter(s => s.connection === 'lost').length, declined: sessions.filter(s => s.connection === 'declined').length, flagged: sessions.filter(s => ['review', 'urgent'].includes(s.risk.level)).length };

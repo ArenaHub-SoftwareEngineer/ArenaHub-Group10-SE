@@ -4,6 +4,7 @@ import { firestoreService } from '../../lib/firestore';
 import { useToast } from '../ui/Toast';
 import { Link as LinkIcon, Plus, Star, Trash2 as Trash } from '../ui/Icons';
 import { Req } from '../ui/Req';
+import { errorMessage } from '../../lib/errors';
 
 interface FeaturedViewProps {
   tournaments: Tournament[];
@@ -25,7 +26,7 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
 
   const run = async (work: () => Promise<void>, success: string) => {
     try { await work(); showToast(success, 'success'); }
-    catch (error) { showToast(error instanceof Error ? error.message : 'The spotlight change could not be saved.', 'error'); }
+    catch (error) { showToast(errorMessage(error, 'The spotlight change could not be saved.'), 'error'); }
   };
 
   const add = async (event: React.FormEvent) => {

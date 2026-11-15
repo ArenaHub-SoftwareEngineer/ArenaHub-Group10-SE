@@ -12,6 +12,7 @@ import { ConfirmModal } from '../ui/ConfirmModal';
 import { useToast } from '../ui/Toast';
 import { Req } from '../ui/Req';
 import { Plus, Save, Trophy } from '../ui/Icons';
+import { errorMessage } from '../../lib/errors';
 import '../spectator/placement.css';
 
 type Row = { placement: string; kills: string };
@@ -54,7 +55,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
   const review = (e: React.FormEvent) => {
     e.preventDefault(); setFormError('');
     try { setPending(createPlacementEvent({ title, teams: parseSquads(squads), games, config })); }
-    catch (error) { setFormError(error instanceof Error ? error.message : 'Check the event details.'); }
+    catch (error) { setFormError(errorMessage(error, 'Check the event details.')); }
   };
   const publish = async () => {
     if (!pending) return;
@@ -128,7 +129,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
         if (nextGame) setGameId(nextGame.id);
       }
       showToast(`${game.label} saved${status === 'completed' ? ' and standings updated' : ''}.`, 'success');
-    } catch (error) { setEntryError(error instanceof Error ? error.message : 'Could not save these results.'); }
+    } catch (error) { setEntryError(errorMessage(error, 'Could not save these results.')); }
     finally { setSaving(false); }
   };
 

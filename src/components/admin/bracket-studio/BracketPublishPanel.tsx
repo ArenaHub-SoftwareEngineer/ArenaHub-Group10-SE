@@ -6,6 +6,7 @@ import { publicationGameKey } from '../../../lib/bracketPublication';
 import { scheduleDate, timeOrder } from '../../../lib/calendar';
 import { Req } from '../../ui/Req';
 import { Check, Plus } from '../../ui/Icons';
+import { errorMessage } from '../../../lib/errors';
 
 // ── Publish Bracket to Game Modal ─────────────────────────────────────────────
 export interface PublishBracketModalProps {
@@ -66,7 +67,7 @@ export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
     try {
       await onConfirm(finalGameName, isCustom ? 'game-custom' : selectedGameId);
     } catch (error) {
-      setPublishError(error instanceof Error ? error.message : 'Publishing failed. Try again.');
+      setPublishError(errorMessage(error, 'Publishing failed. Try again.'));
     } finally { setPublishing(false); }
   };
 
