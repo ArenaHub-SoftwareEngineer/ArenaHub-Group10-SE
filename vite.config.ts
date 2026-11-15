@@ -21,7 +21,9 @@ export default defineConfig(({ mode }) => {
           api.disable('x-powered-by');
           api.use('/api/ai', createAiRouter(env));
           api.use('/api/fair-play', createFairPlayRouter(env));
-          api.use('/api/integrity', createIntegrityRouter(env));
+          // Test mode (emulators, Playwright) never touches the event laptop's real match monitor database in data/,
+          // even when Playwright reuses a dev server that was started without INTEGRITY_DATA_DIR.
+          api.use('/api/integrity', createIntegrityRouter(mode === 'test' && !env.INTEGRITY_DATA_DIR ? { ...env, INTEGRITY_DATA_DIR: '.test-data/integrity' } : env));
           server.middlewares.use((req, res, next) => api(req as express.Request, res as express.Response, next));
         },
       },

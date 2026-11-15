@@ -25,6 +25,7 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 120_000,
     // Browser tests must never write into the event laptop's real match monitor database.
-    env: { INTEGRITY_DATA_DIR: 'test-results/integrity-data' },
+    // Outside test-results/: Playwright empties that folder at start, and a reused server holds this database open.
+    env: { INTEGRITY_DATA_DIR: '.test-data/integrity' },
   },
 });

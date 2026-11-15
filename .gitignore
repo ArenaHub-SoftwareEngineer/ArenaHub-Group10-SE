@@ -19,3 +19,5 @@ dist-agent/
 # Local demo mode (npm run demo): its own build and the emulator accounts and data
 dist-demo/
 .emulator-data/
+# Match monitor data written by browser tests (vite --mode test)
+.test-data/

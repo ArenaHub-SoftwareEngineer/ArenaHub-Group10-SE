@@ -139,11 +139,13 @@ test('the iPhone page checks in and can still upload a recording', async ({ brow
 test('a player who declines is shown to staff as an alert', async ({ page, browser, request }, testInfo) => {
   const staff = await staffHeaders(request);
   const matchId = `decline-${testInfo.project.name}-${Date.now()}`;
+  // A label unique to this run: monitor data persists between runs, so earlier 'Decline test' alerts may still be listed.
+  const label = `Decline test ${Date.now() % 100000}`;
   await signIn(page, ORGANIZER);
   await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
   await expect(page.getByRole('heading', { name: /watch the devices/i })).toBeVisible({ timeout: 20_000 });
 
-  const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId, matchLabel: 'Decline test', game: 'mlbb', platform: 'ios', team: 'COE Titans', playerName: 'Fable', serverUrl: 'http://192.168.50.10:3210' } })).json();
+  const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId, matchLabel: label, game: 'mlbb', platform: 'ios', team: 'COE Titans', playerName: 'Fable', serverUrl: 'http://192.168.50.10:3210' } })).json();
   const phone = await browser.newPage({ userAgent: IPHONE });
   await phone.goto(`/join.html?c=${pair.code}`);
   phone.once('dialog', dialog => void dialog.accept());
@@ -152,11 +154,11 @@ test('a player who declines is shown to staff as an alert', async ({ page, brows
   await phone.close();
 
   const alert = page.getByRole('alert', { name: 'Needs your attention' });
-  await expect(alert).toContainText('Fable (COE Titans) declined monitoring for Decline test', { timeout: 15_000 });
+  await expect(alert).toContainText(`Fable (COE Titans) declined monitoring for ${label}`, { timeout: 15_000 });
   await expect(page).toHaveTitle(/^\(\d+\) /);
-  await alert.locator('li', { hasText: 'Fable' }).getByRole('button', { name: 'Done' }).click();
-  await expect(alert.locator('li', { hasText: 'Fable' })).toHaveCount(0);
-  await expect(page.locator('.monitor-session', { hasText: 'Fable' }).first()).toContainText('Declined');
+  await alert.locator('li', { hasText: label }).getByRole('button', { name: 'Done' }).click();
+  await expect(alert.locator('li', { hasText: label })).toHaveCount(0);
+  await expect(page.locator('.monitor-session', { hasText: label }).first()).toContainText('Declined');
 });
 
 test('a signed-in student is refused by the match monitor API', async ({ request }) => {
