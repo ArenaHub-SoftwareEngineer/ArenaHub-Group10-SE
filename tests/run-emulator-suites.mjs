@@ -13,6 +13,7 @@ const suites = [
   ['chat kick', 'node --test tests/chat-kick.integration.test.mjs'],
   ['migration', 'npx tsx --test tests/migration.integration.test.ts'],
   ['roles', 'npx tsx --test tests/set-role.integration.test.ts'],
+  ['server auth', 'npx tsx --test tests/server-auth.integration.test.ts'],
 ];
 
 if (process.argv.includes('--inside')) {
