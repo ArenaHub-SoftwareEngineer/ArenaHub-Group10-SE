@@ -18,7 +18,7 @@ npm run build
 npm start
 ```
 
-The production server listens on `http://localhost:3000`. The Vite development server includes the same AI endpoint. Static Firebase hosting alone does not run the Node API; it falls back to the local arena guide unless an API server is separately configured.
+The production server listens on `http://localhost:3210`. The Vite development server includes the same AI endpoint. Static Firebase hosting alone does not run the Node API; it falls back to the local arena guide unless an API server is separately configured. See [docs/DEPLOY.md](docs/DEPLOY.md), [docs/ENV_CHECKLIST.md](docs/ENV_CHECKLIST.md) and, for staff access, [docs/ROLES.md](docs/ROLES.md).
 
 ## Configuration
 

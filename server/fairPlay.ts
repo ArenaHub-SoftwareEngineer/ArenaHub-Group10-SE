@@ -1,4 +1,5 @@
 import { hasCampusEmail } from '../src/lib/institution.ts';
+import { originAllowed } from './cors.ts';
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { REVIEW_GAMES, validateFrameFindings, type ReviewFrame, type ReviewGame } from '../src/lib/videoReview.ts';
@@ -21,8 +22,8 @@ export function createFairPlayRouter(env: Record<string, string | undefined>, de
   const router = express.Router(), fetcher = dependencies.fetcher || fetch;
   const limits = new Map<string, { count: number; reset: number; active: number }>();
   router.use((req, res, next) => {
-    const origin = req.get('origin');
-    if (origin) { try { if (new URL(origin).host !== req.get('host')) { res.status(403).json({ error: 'Open video review from your ArenaHub website.' }); return; } } catch { res.status(403).json({ error: 'Invalid request origin.' }); return; } }
+    // Same host, or a site listed in CORS_ORIGINS (server/cors.ts).
+    if (!originAllowed(req, env)) { res.status(403).json({ error: 'Open video review from your ArenaHub website.' }); return; }
     next();
   });
   router.use(express.json({ limit: '2mb' }));

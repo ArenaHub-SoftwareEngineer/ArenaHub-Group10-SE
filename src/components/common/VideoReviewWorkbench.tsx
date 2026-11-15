@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { apiUrl } from '../../lib/apiBase';
 import { auth } from '../../lib/firebase';
 import { frameTime, reviewSampleTimes, validateFrameFindings, type FrameFinding, type ReviewFrame, type ReviewGame } from '../../lib/videoReview';
 import { Upload, ShieldCheck, Play, Pause, ChevronLeft, ChevronRight, X, Check, Download } from '../ui/Icons';
@@ -85,7 +86,7 @@ export function VideoReviewWorkbench({ matches, game, staff, attachment, caseId,
         const batch = working.slice(offset, offset + 6);
         working = working.map((frame, i) => i >= offset && i < offset + 6 ? { ...frame, state: 'analyzing' } : frame);
         setFrames(working); setSelected(batch[0].timestamp); setStage(`Model reviewing ${frameTime(batch[0].timestamp)}–${frameTime(batch.at(-1)!.timestamp)} · ${offset} of ${working.length} frames returned`);
-        const response = await fetch('/api/fair-play/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ game, matchId: caseId ? matches[0]?.id : matchId, frames: batch.map(({ timestamp, image }) => ({ timestamp, image })) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(75000)]) });
+        const response = await fetch(apiUrl('/api/fair-play/analyze'), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ game, matchId: caseId ? matches[0]?.id : matchId, frames: batch.map(({ timestamp, image }) => ({ timestamp, image })) }), signal: AbortSignal.any([controller.signal, AbortSignal.timeout(75000)]) });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.error || 'The model could not review this batch.');
         const results = validateFrameFindings(payload, batch);

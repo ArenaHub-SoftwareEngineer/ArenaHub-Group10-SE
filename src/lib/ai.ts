@@ -7,6 +7,7 @@
  */
 
 import { auth } from './firebase';
+import { apiUrl } from './apiBase';
 import { firestoreService } from './firestore';
 import { AIParsedBracketParams, BracketDraft, Match, Team, MatchFormat, ExtractedTeam } from "./types";
 import {
@@ -118,7 +119,7 @@ class AIService {
         })),
       });
 
-      const response = await fetch('/api/ai', {
+      const response = await fetch(apiUrl('/api/ai'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ query, context: reference, history }),

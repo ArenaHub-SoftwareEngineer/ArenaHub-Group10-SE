@@ -1,23 +1,9 @@
-import express from 'express';
 import { config } from 'dotenv';
-import { resolve } from 'node:path';
-import { createAiRouter } from './ai';
-import { createFairPlayRouter } from './fairPlay';
-import { createIntegrityRouter } from './integrity';
-import { publicAccessGuard } from './publicAccess';
+import { createApp } from './app';
 config({ path: '.env' }); config({ path: '.env.local', override: true });
-const app = express();
-app.disable('x-powered-by');
-app.set('trust proxy', 'loopback');
-// Online mode (npm run online): requests through the public tunnel may only reach the player pages.
-app.use(publicAccessGuard(process.env));
-app.use('/api/ai', createAiRouter(process.env));
-app.use('/api/fair-play', createFairPlayRouter(process.env));
-app.use('/api/integrity', createIntegrityRouter(process.env));
+
 // SITE_DIR lets the local demo (npm run demo) serve its own build, so dist/ (what gets deployed) never holds it.
-const site = resolve(process.env.SITE_DIR || 'dist');
-app.use(express.static(site));
-app.get('*', (_req, res) => res.sendFile(resolve(site, 'index.html')));
+const app = createApp(process.env, { site: process.env.SITE_DIR || 'dist' });
 // Port 3210, not 3000: other local projects (FloodSight) use 3000 and leave a service worker on localhost:3000
 // that keeps serving their cached page, so ArenaHub needs its own origin.
 // HOST=0.0.0.0 lets phones and PCs on the event Wi-Fi reach this laptop (LAN mode). The default stays local only.

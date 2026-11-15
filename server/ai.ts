@@ -1,5 +1,6 @@
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
+import { originAllowed } from './cors.ts';
 
 /** Provider credentials stay in the Node process. The browser receives text only. */
 export function createAiRouter(env: Record<string, string | undefined>) {
@@ -15,8 +16,8 @@ export function createAiRouter(env: Record<string, string | undefined>) {
     }
 
     const token = req.get('authorization')?.replace(/^Bearer /, '') || '';
-    const origin = req.get('origin');
-    if (origin) { try { if (new URL(origin).host !== req.get('host')) { res.status(403).json({ error: 'Open the assistant from ArenaHub.' }); return; } } catch { res.status(403).json({ error: 'Invalid origin.' }); return; } }
+    // Same host, or a site listed in CORS_ORIGINS (server/cors.ts).
+    if (!originAllowed(req, env)) { res.status(403).json({ error: 'Open the assistant from ArenaHub.' }); return; }
     if (!token || ['local-dev-token', 'demo-token'].includes(token)) { res.status(401).json({ error: 'Sign in to use the online assistant.' }); return; }
     const { query, context, history = [] } = req.body || {};
 

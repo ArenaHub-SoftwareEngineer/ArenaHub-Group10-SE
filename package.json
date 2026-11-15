@@ -26,6 +26,7 @@
     "test:all": "npm run lint && npm test && npm run test:api && npm run test:video-api && npm run test:integrity-api && npm run build && npm run test:emulators",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "set-role": "node scripts/set-role.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "migrate:brackets": "tsx scripts/migrate-brackets.ts",
     "test:integrity-api": "tsx --test tests/integrity-api.test.ts",
     "agent": "tsx tools/integrity-agent/agent.ts",
