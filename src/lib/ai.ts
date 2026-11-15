@@ -84,6 +84,29 @@ class AIService {
     yield { delta: local.text, done: true, source: OFFLINE_SOURCE, references: local.references };
   }
 
+  /**
+   * Asks Arena AI a question in a match's live chat. The server posts the reply into the chat itself,
+   * so every viewer sees it; this only reports whether it will. Never answers on the device: an
+   * offline answer would be visible to the asker alone.
+   */
+  public async askInChat(matchId: string, question: string): Promise<{ ok: true } | { ok: false; message: string }> {
+    const token = await idToken();
+    if (!token) return { ok: false, message: 'Sign in with your campus account to ask Arena AI.' };
+    try {
+      const response = await fetch(apiUrl('/api/ai/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ matchId, question }),
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (response.ok) return { ok: true };
+      const message = (await response.json().catch(() => null))?.error;
+      return { ok: false, message: typeof message === 'string' ? message : 'Arena AI could not answer in chat right now.' };
+    } catch {
+      return { ok: false, message: 'Arena AI could not be reached. Check your connection.' };
+    }
+  }
+
   /** Reads a bracket prompt into parameters or a clarifying question. Never builds the bracket. */
   public async readBracketPrompt(prompt: string, signal?: AbortSignal): Promise<DraftResolution> {
     const token = await idToken();

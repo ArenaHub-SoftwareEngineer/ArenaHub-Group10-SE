@@ -136,3 +136,29 @@ test('a kick lets staff find and remove the viewer messages; viewers cannot list
   await assertFails(deleteDoc(doc(student(), 'matchChat', 'kick', 'messages', 'k3')));
   await assertSucceeds(deleteDoc(doc(staff, 'matchChat', 'kick', 'mutes', 'student')));
 });
+
+test('Arena AI replies are server-only: clients cannot write isAI or read the request counters', async () => {
+  // A real student, real profile name, but claiming to be the assistant.
+  await assertFails(send(student(), 'ai-only', 'student', 'Chat Student', { extra: { isAI: true } }));
+  await assertFails(send(mod(), 'ai-only', 'mod', 'Chat Moderator', { extra: { isAI: true, badge: 'staff' } }));
+  await assertFails(send(db('impostor'), 'ai-only', 'impostor', 'Arena AI'));
+  // Replies posted by the server (firebase-admin bypasses the rules) are readable like any message.
+  await seed(store => setDoc(doc(store, 'matchChat', 'ai-only', 'messages', 'reply'), { author: 'Arena AI', text: 'Live, not final.', isAI: true, createdAt: Timestamp.now() }));
+  await assertSucceeds(getDoc(doc(student(), 'matchChat', 'ai-only', 'messages', 'reply')));
+  // Staff can delete a wrong reply.
+  await assertSucceeds(deleteDoc(doc(mod(), 'matchChat', 'ai-only', 'messages', 'reply')));
+  await seed(store => setDoc(doc(store, 'aiRate', 'user_student_20261115120000'), { count: 5 }));
+  for (const database of [student(), mod()]) {
+    await assertFails(getDoc(doc(database, 'aiRate', 'user_student_20261115120000')));
+    await assertFails(setDoc(doc(database, 'aiRate', 'user_student_20261115120000'), { count: 0 }));
+  }
+});
+
+test('only staff turn Arena AI on or off in a chat, with an audit event', async () => {
+  await assertSucceeds(setState(mod(), 'mod', 'ai-toggle', { aiEnabled: false }));
+  await assertSucceeds(setState(mod(), 'mod', 'ai-toggle', { aiEnabled: true }));
+  await assertFails(setState(mod(), 'mod', 'ai-toggle', { aiEnabled: 'yes' }));
+  await assertFails(setState(student(), 'student', 'ai-toggle', { aiEnabled: false }));
+  // Without the audit event in the same write, even staff are refused.
+  await assertFails(setDoc(doc(mod(), 'matchChat', 'ai-toggle'), { slowModeSec: 0, pinned: null, aiEnabled: false, updatedBy: 'mod', auditId: 'missing', updatedAt: serverTimestamp() }));
+});

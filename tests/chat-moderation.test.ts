@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  auditLine, DEFAULT_MUTE_MINUTES, formatCountdown, isReservedChatName, isStaffRole, MUTE_PRESETS, muteSecondsLeft,
+  arenaQuestion, auditLine, DEFAULT_MUTE_MINUTES, formatCountdown, isReservedChatName, isStaffRole, MUTE_PRESETS, muteSecondsLeft,
   slowModeLabel, slowModeSecondsLeft, SLOW_MODE_OPTIONS,
 } from '../src/lib/chatModeration';
 import { readFileSync } from 'node:fs';
@@ -57,4 +57,12 @@ test('client options stay in step with firestore.rules', () => {
   const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
   assert.ok(rules.includes(`slowModeSec in [${SLOW_MODE_OPTIONS.join(', ')}]`), 'slow-mode values differ between client and rules');
   assert.ok(rules.includes("duration.value(24, 'h')"), 'the rules cap mutes at 24 hours');
+});
+
+test('@Arena questions are recognised only at the start of a message', () => {
+  assert.equal(arenaQuestion('@Arena what is the score?'), 'what is the score?');
+  assert.equal(arenaQuestion('  @arena ai, who is winning'), 'who is winning');
+  assert.equal(arenaQuestion('@ARENA-AI: next match?'), 'next match?');
+  for (const text of ['@Arena', '@Arena   ', 'hey @Arena score?', '@arenahub fans unite', 'Arena what is the score']) assert.equal(arenaQuestion(text), null, text);
+  assert.equal(arenaQuestion('@Arena ' + 'x'.repeat(600))?.length, 500);
 });

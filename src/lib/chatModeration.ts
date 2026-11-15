@@ -50,6 +50,13 @@ export function slowModeLabel(sec: number) {
   return sec < 60 ? `${sec} seconds` : `${sec / 60} minute${sec === 60 ? '' : 's'}`;
 }
 
+/** "@Arena what's the score" -> "what's the score". Null when the message is not a question for Arena AI. */
+export function arenaQuestion(text: string): string | null {
+  const match = text.trim().match(/^@arena(?:[\s_-]*ai)?(?![a-z0-9])[\s,:-]*(.*)$/is);
+  const question = match?.[1].trim();
+  return question ? question.slice(0, 500) : null;
+}
+
 export type ModerationAction =
   | { kind: 'mute'; minutes: number }
   | { kind: 'kick' }
@@ -57,12 +64,14 @@ export type ModerationAction =
   | { kind: 'delete' }
   | { kind: 'pin' }
   | { kind: 'unpin' }
-  | { kind: 'slow-mode'; seconds: number };
+  | { kind: 'slow-mode'; seconds: number }
+  | { kind: 'ai'; enabled: boolean };
 
 /** Audit line written with every moderation action. Uses ids, never names or emails. */
 export function auditLine(matchId: string, action: ModerationAction, target = '') {
   const detail = action.kind === 'mute' ? ` ${action.minutes} min`
     : action.kind === 'kick' ? ` ${KICK_HOURS} h`
-    : action.kind === 'slow-mode' ? ` ${action.seconds} s` : '';
+    : action.kind === 'slow-mode' ? ` ${action.seconds} s`
+    : action.kind === 'ai' ? (action.enabled ? ' on' : ' off') : '';
   return `Chat ${action.kind}${detail} in match ${matchId}${target ? ` (target ${target})` : ''}`.slice(0, 1500);
 }

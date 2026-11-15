@@ -192,16 +192,23 @@ service cloud.firestore {
         && p.author is string && p.author.size() <= 80 && p.text is string && p.text.size() <= 500
         && get(/databases/$(database)/documents/matchChat/$(matchId)/messages/$(p.messageId)).data.text == p.text);
     }
-    // Chat state: slow mode and the pinned message. Staff only, always audited.
+    // Chat state: slow mode, the pinned message and whether Arena AI answers @Arena. Staff only, always audited.
     match /matchChat/{matchId} {
       allow get: if admitted();
       allow create, update: if activeStaff()
-        && request.resource.data.keys().hasOnly(['slowModeSec', 'pinned', 'updatedBy', 'auditId', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['slowModeSec', 'pinned', 'aiEnabled', 'updatedBy', 'auditId', 'updatedAt'])
+        && request.resource.data.get('aiEnabled', true) is bool
         && request.resource.data.slowModeSec in [0, 10, 30, 60, 120]
         && validPin(matchId, request.resource.data.pinned)
         && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
         && auditedNow(request.resource.data.auditId);
     }
+    // Arena AI request counters. Server only (firebase-admin); no client may read or change a limit.
+    match /aiRate/{id} {
+      allow read, write: if false;
+    }
+    // Arena AI replies (isAI: true, author "Arena AI") are written by the server through firebase-admin.
+    // Clients can write neither: isAI is not an allowed key and the name is reserved.
     match /matchChat/{matchId}/messages/{messageId} {
       allow read: if campusStudent() || activeSpectator();
       allow create: if campusStudent()

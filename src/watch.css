@@ -130,8 +130,13 @@
 .watch-chat-message time { color: var(--text-muted); font-size: 11px; margin-right: 6px; font-variant-numeric: tabular-nums; }
 .watch-chat-badge { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 18px; background: var(--brand-soft); color: var(--brand-ink); vertical-align: 1px; }
 .watch-chat-message.is-staff p strong { color: var(--brand-ink); }
+/* Arena AI replies, posted by the server. Outline badge so it never reads as a staff badge. */
+.watch-chat-message.is-ai .watch-chat-avatar { background: var(--brand-soft); color: var(--brand-ink); }
+.watch-chat-badge.is-ai { background: transparent; border: 1px solid var(--brand-ink); line-height: 16px; }
+.watch-chat-asking { display: flex; align-items: center; gap: 6px; margin: 4px 12px; color: var(--text-muted); font-size: 12px; }
+.watch-chat-staffbar .watch-chat-ai-toggle input { width: 16px; height: 16px; accent-color: var(--brand); }
 .watch-chat-slow { display: inline-flex; align-items: center; gap: 4px; }
-.watch-chat-staffbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.watch-chat-staffbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
 .watch-chat-staffbar label { display: flex; align-items: center; gap: 6px; }
 .watch-chat-staffbar select { height: 28px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 12px; padding: 0 6px; }
 .watch-chat-mutes-toggle { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); cursor: pointer; }

@@ -1,18 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { User } from '../../lib/types';
 import {
-  deleteChatMessage, kickChatUser, lastMessageAt, muteChatUser, pinChatMessage, sendMatchChat, setSlowMode, unmuteChatUser,
+  deleteChatMessage, kickChatUser, lastMessageAt, muteChatUser, pinChatMessage, sendMatchChat, setChatAi, setSlowMode, unmuteChatUser,
   unpinChatMessage, watchChatState, watchMatchChat, watchMatchMutes, watchMyMute,
   type ChatMute, type ChatState, type LiveChatMessage,
 } from '../../lib/matchChat';
 import {
-  DEFAULT_MUTE_MINUTES, formatChatTime, formatCountdown, isStaffRole, KICK_HOURS, MUTE_PRESETS, muteSecondsLeft,
+  arenaQuestion, DEFAULT_MUTE_MINUTES, formatChatTime, formatCountdown, isStaffRole, KICK_HOURS, MUTE_PRESETS, muteSecondsLeft,
   SLOW_MODE_OPTIONS, slowModeLabel, slowModeSecondsLeft,
 } from '../../lib/chatModeration';
 import { reportLiveMessage } from '../../lib/communityReports';
+import { aiService } from '../../lib/ai';
 import { useToast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
-import { Clock, Flag, Pin, Send, Shield, X } from '../ui/Icons';
+import { Clock, Flag, Pin, Send, Shield, Sparkles, X } from '../ui/Icons';
 
 interface LiveChatPanelProps { matchId: string; currentUser: User; readOnly: boolean; canPost: boolean }
 
@@ -31,7 +32,9 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
   const [available, setAvailable] = useState(false);
   const [error, setError] = useState('');
-  const [state, setState] = useState<ChatState>({ slowModeSec: 0, pinned: null });
+  const [state, setState] = useState<ChatState>({ slowModeSec: 0, pinned: null, aiEnabled: true });
+  const [asking, setAsking] = useState(false);
+  const [aiPending, setAiPending] = useState<boolean | null>(null);
   const [myMute, setMyMute] = useState<ChatMute | null>(null);
   const [mutes, setMutes] = useState<Array<ChatMute & { uid: string }>>([]);
   const [lastSent, setLastSent] = useState<number | undefined>();
@@ -88,6 +91,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
       const name = currentUser.name.trim();
       await sendMatchChat(matchId, currentUser.id, anonymous || !name || name.includes('@') ? 'Anonymous' : name, text, staff);
       setInput(''); setLastSent(Date.now()); setNow(Date.now());
+      const question = state.aiEnabled ? arenaQuestion(text) : null;
+      if (question) {
+        setAsking(true);
+        void aiService.askInChat(matchId, question).then(result => { if (!result.ok) showToast(result.message, 'error'); }).finally(() => setAsking(false));
+      }
     } catch (err) {
       const code = (err as { code?: string })?.code;
       showToast(code === 'permission-denied'
@@ -125,6 +133,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
           {SLOW_MODE_OPTIONS.map(sec => <option key={sec} value={sec}>{slowModeLabel(sec)}</option>)}
         </select>
       </label>
+      <label className="watch-chat-ai-toggle"><input type="checkbox" checked={aiPending ?? state.aiEnabled} disabled={aiPending !== null} onChange={event => {
+        // Show the new value at once; the saved chat state takes over when the write settles.
+        const enabled = event.target.checked; setAiPending(enabled);
+        void run(() => setChatAi(matchId, currentUser.id, enabled, state), enabled ? 'Arena AI answers @Arena questions again.' : 'Arena AI is off in this chat.', 'Could not change Arena AI.').finally(() => setAiPending(null));
+      }} /> Arena AI</label>
       <button type="button" className="watch-chat-mutes-toggle" aria-expanded={showMutes} onClick={() => setShowMutes(value => !value)} disabled={!mutes.length}>
         <Shield size={14} />{mutes.length ? `${mutes.length} muted` : 'No one muted'}
       </button>
@@ -145,11 +158,12 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
     <div className="watch-chat-log" role="log" aria-label="Match messages" ref={logRef}>
       {error && <p className="module-error" role="alert">{error}</p>}
       {!messages.length && !error && <p className="watch-chat-empty">{readOnly ? 'Chat is available for published matches.' : available ? 'No messages yet. Say hi to the other viewers.' : 'Loading chat…'}</p>}
-      {messages.map(message => <article key={message.id} className={`watch-chat-message${message.badge ? ' is-staff' : ''}`}>
-        <span className="watch-chat-avatar" aria-hidden="true">{initials(message.author)}</span>
+      {messages.map(message => <article key={message.id} className={`watch-chat-message${message.badge ? ' is-staff' : ''}${message.ai ? ' is-ai' : ''}`}>
+        <span className="watch-chat-avatar" aria-hidden="true">{message.ai ? <Sparkles size={14} /> : initials(message.author)}</span>
         <p>
           <strong>{message.author}</strong>
           {message.badge && <span className="watch-chat-badge">Staff</span>}
+          {message.ai && <span className="watch-chat-badge is-ai">AI</span>}
           {message.createdAt && <time dateTime={new Date(message.createdAt).toISOString()}>{formatChatTime(message.createdAt)}</time>}
           <span className="watch-chat-text">{message.text}</span>
         </p>
@@ -159,20 +173,23 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
           {menuFor === message.id && <div className="watch-chat-menu" role="menu" aria-label={`Moderate ${message.author}`}>
             <button type="button" role="menuitem" onClick={() => void run(() => pinChatMessage(matchId, currentUser.id, message, state), 'Message pinned.', 'Could not pin.')}>Pin message</button>
             <button type="button" role="menuitem" onClick={() => void run(() => deleteChatMessage(matchId, currentUser.id, message.id, state), 'Message deleted.', 'Could not delete.')}>Delete message</button>
-            <span className="watch-chat-menu-label">Mute author</span>
-            {MUTE_PRESETS.map(minutes => <button key={minutes} type="button" role="menuitem" onClick={() => void mute(message, minutes)}>
-              {minutes} minutes{minutes === DEFAULT_MUTE_MINUTES ? ' (default)' : ''}</button>)}
-            <button type="button" role="menuitem" className="is-danger" onClick={() => { setMenuFor(null); setKickTarget(message); }}>Remove from chat…</button>
+            {!message.ai && <>
+              <span className="watch-chat-menu-label">Mute author</span>
+              {MUTE_PRESETS.map(minutes => <button key={minutes} type="button" role="menuitem" onClick={() => void mute(message, minutes)}>
+                {minutes} minutes{minutes === DEFAULT_MUTE_MINUTES ? ' (default)' : ''}</button>)}
+              <button type="button" role="menuitem" className="is-danger" onClick={() => { setMenuFor(null); setKickTarget(message); }}>Remove from chat…</button>
+            </>}
           </div>}
-        </> : canPost && <button type="button" className="watch-chat-report" aria-label={`Report message by ${message.author}`} data-tip="Report"
+        </> : canPost && !message.ai && <button type="button" className="watch-chat-report" aria-label={`Report message by ${message.author}`} data-tip="Report"
           onClick={() => { void reportLiveMessage(matchId, message).then(() => showToast('Message reported privately to tournament staff.', 'success')).catch(() => showToast('This message may already be reported by you, or reporting is unavailable.', 'error')); }}><Flag size={14} /></button>}
       </article>)}
+      {asking && <p className="watch-chat-asking" role="status"><Sparkles size={13} /> Arena AI is answering…</p>}
     </div>
 
     {canPost ? muteLeft ? <p className="watch-chat-muted" role="status"><Shield size={14} /><span>{muteText} You can post again in <strong>{formatCountdown(muteLeft)}</strong>.</span></p>
       : <form className="watch-chat-form" onSubmit={send}>
         <span className="watch-chat-avatar" aria-hidden="true">{anonymous ? '?' : initials(currentUser.name || 'You')}</span>
-        <input type="text" aria-label="Match chat message" value={input} onChange={event => setInput(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : 'Chat…'} maxLength={500} disabled={!available || sending} />
+        <input type="text" aria-label="Match chat message" value={input} onChange={event => setInput(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : state.aiEnabled ? 'Chat, or ask @Arena…' : 'Chat…'} maxLength={500} disabled={!available || sending} />
         <button type="submit" className="shell-icon-button" aria-label={slowLeft ? `Wait ${slowLeft} seconds` : 'Send chat message'} disabled={!input.trim() || !available || sending || slowLeft > 0}>
           {slowLeft ? <span className="watch-chat-wait" aria-hidden="true">{slowLeft}</span> : <Send size={18} />}
         </button>

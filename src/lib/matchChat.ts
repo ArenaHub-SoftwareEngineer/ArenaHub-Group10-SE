@@ -10,13 +10,15 @@ export interface LiveChatMessage {
   createdAt?: number;
   /** 'staff' when a tournament staff member posted it. Checked against the token role in the rules. */
   badge?: 'staff';
+  /** Posted by the server as Arena AI (isAI in the document). Clients cannot write this. */
+  ai?: boolean;
 }
 
 export interface ChatPin { messageId: string; author: string; text: string }
-export interface ChatState { slowModeSec: number; pinned: ChatPin | null }
+export interface ChatState { slowModeSec: number; pinned: ChatPin | null; /** @Arena questions in this chat. On unless staff turn it off. */ aiEnabled: boolean }
 export interface ChatMute { until: number; kind: 'mute' | 'kick'; reason: string; /** Chat name shown on the muted message, for the staff list. */ name?: string }
 
-const EMPTY_STATE: ChatState = { slowModeSec: 0, pinned: null };
+const EMPTY_STATE: ChatState = { slowModeSec: 0, pinned: null, aiEnabled: true };
 const millis = (value: unknown) => value instanceof Timestamp ? value.toMillis() : undefined;
 const stateRef = (matchId: string) => doc(db, 'matchChat', matchId);
 const messageRef = (matchId: string, id: string) => doc(db, 'matchChat', matchId, 'messages', id);
@@ -28,7 +30,7 @@ export function watchMatchChat(matchId: string, onMessages: (messages: LiveChatM
   const recent = query(collection(db, 'matchChat', matchId, 'messages'), orderBy('createdAt', 'desc'), limit(60));
   return onSnapshot(recent, snapshot => onMessages(snapshot.docs.map(item => {
     const data = item.data({ serverTimestamps: 'estimate' });
-    return { id: item.id, author: data.author, text: data.text, createdAt: millis(data.createdAt), badge: data.badge === 'staff' ? 'staff' as const : undefined };
+    return { id: item.id, author: data.author, text: data.text, createdAt: millis(data.createdAt), badge: data.badge === 'staff' ? 'staff' as const : undefined, ...(data.isAI === true ? { ai: true } : {}) };
   }).reverse()), onError);
 }
 
@@ -36,7 +38,7 @@ export function watchMatchChat(matchId: string, onMessages: (messages: LiveChatM
 export function watchChatState(matchId: string, receive: (state: ChatState) => void) {
   return onSnapshot(stateRef(matchId), snap => {
     const data = snap.data();
-    receive(data ? { slowModeSec: Number(data.slowModeSec) || 0, pinned: data.pinned || null } : EMPTY_STATE);
+    receive(data ? { slowModeSec: Number(data.slowModeSec) || 0, pinned: data.pinned || null, aiEnabled: data.aiEnabled !== false } : EMPTY_STATE);
   }, () => receive(EMPTY_STATE));
 }
 
@@ -131,14 +133,14 @@ export async function deleteChatMessage(matchId: string, staffUid: string, messa
   const batch = writeBatch(db);
   const auditId = audit(batch, staffUid, matchId, { kind: 'delete' }, messageId);
   batch.delete(messageRef(matchId, messageId));
-  if (state.pinned?.messageId === messageId) batch.set(stateRef(matchId), { slowModeSec: state.slowModeSec, pinned: null, updatedBy: staffUid, auditId, updatedAt: serverTimestamp() });
+  if (state.pinned?.messageId === messageId) batch.set(stateRef(matchId), { slowModeSec: state.slowModeSec, pinned: null, aiEnabled: state.aiEnabled, updatedBy: staffUid, auditId, updatedAt: serverTimestamp() });
   await batch.commit();
 }
 
 function writeState(matchId: string, staffUid: string, next: ChatState, action: ModerationAction, target = '') {
   const batch = writeBatch(db);
   const auditId = audit(batch, staffUid, matchId, action, target);
-  batch.set(stateRef(matchId), { slowModeSec: next.slowModeSec, pinned: next.pinned, updatedBy: staffUid, auditId, updatedAt: serverTimestamp() });
+  batch.set(stateRef(matchId), { slowModeSec: next.slowModeSec, pinned: next.pinned, aiEnabled: next.aiEnabled, updatedBy: staffUid, auditId, updatedAt: serverTimestamp() });
   return batch.commit();
 }
 
@@ -148,6 +150,8 @@ export const unpinChatMessage = (matchId: string, staffUid: string, state: ChatS
   writeState(matchId, staffUid, { ...state, pinned: null }, { kind: 'unpin' });
 export const setSlowMode = (matchId: string, staffUid: string, seconds: number, state: ChatState) =>
   writeState(matchId, staffUid, { ...state, slowModeSec: seconds }, { kind: 'slow-mode', seconds });
+export const setChatAi = (matchId: string, staffUid: string, enabled: boolean, state: ChatState) =>
+  writeState(matchId, staffUid, { ...state, aiEnabled: enabled }, { kind: 'ai', enabled });
 
 /** Staff list of active mutes for this match. */
 export function watchMatchMutes(matchId: string, receive: (mutes: Array<ChatMute & { uid: string }>) => void) {

@@ -5,8 +5,9 @@ import { AuthError, bearer, callerVerifier, type Caller, type VerifyCaller } fro
 import { publishedReader, type PublishedReader } from './data.ts';
 import { adminApp } from './firebaseAdmin.ts';
 import { aiConfig } from './ai/config.ts';
-import { askSchema, bracketSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
+import { askSchema, bracketSchema, chatAskSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
 import { draftBracket } from './ai/bracketDraft.ts';
+import { ChatAskError, createChatResponder, firestoreChatSink } from './ai/chat.ts';
 import { createAssistant, InterruptedAnswer } from './ai/index.ts';
 import type { Provider } from './ai/provider.ts';
 import { geminiProvider } from './ai/gemini.ts';
@@ -21,6 +22,8 @@ export interface AiDeps {
   providers?: Provider[];
   rate?: RateStore;
   fetcher?: typeof fetch;
+  /** Live-chat responder; null disables it. Defaults to Firestore when the server has admin access. */
+  chat?: ReturnType<typeof createChatResponder> | null;
 }
 
 /** Gemini first, Groq as the backup. The scripted provider replaces both on the test emulators only. */
@@ -109,6 +112,29 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
     } catch (error) {
       if (!controller.signal.aborted) send('error', { message: error instanceof InterruptedAnswer ? error.message : 'The assistant could not answer. Try again.' });
     } finally { res.end(); }
+  });
+
+  // "@Arena ..." in a match's live chat. The reply is posted into the chat for every viewer.
+  const chat = deps.chat !== undefined ? deps.chat : app ? createChatResponder({ providers, config, rate, sink: firestoreChatSink(app) }) : null;
+  router.post('/chat', async (req, res) => {
+    const token = admit(req, res);
+    if (!token) return;
+    const body = chatAskSchema.safeParse(req.body);
+    if (!body.success) { fail(res, 400, 'Ask a question of up to 500 characters about this match.'); return; }
+    // Posting as Arena AI needs firebase-admin (a service account, or the emulators).
+    if (!chat) { fail(res, 503, 'Arena AI cannot reply in chat on this server. Ask on the Arena AI page instead.'); return; }
+    const caller = await identify(res, token);
+    if (!caller) return;
+    const controller = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
+    try {
+      const data = await published(token);
+      res.set('Cache-Control', 'no-store').json({ posted: true, ...(await chat({ caller, matchId: body.data.matchId, question: body.data.question, data, signal: controller.signal })) });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (error instanceof ChatAskError) { fail(res, error.status, error.message); return; }
+      fail(res, 503, 'Arena AI could not answer in chat. Try again.');
+    }
   });
 
   // Bracket from a prompt. Staff only; returns parameters or a clarifying question, never a bracket.
