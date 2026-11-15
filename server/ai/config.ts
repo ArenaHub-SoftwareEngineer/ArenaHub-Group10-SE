@@ -8,7 +8,10 @@ const whole = (value: string | undefined, fallback: number, min: number, max: nu
 };
 
 export interface AiConfig {
-  gemini?: { key: string; model: string };
+  /** Tried in order: GEMINI_MODEL, then GEMINI_FALLBACK_MODEL. */
+  gemini?: { key: string; models: string[] };
+  /** A model that has not written any text within this time is abandoned for the next one. */
+  firstTokenMs: number;
   groq?: { key: string; model: string };
   /** Model answers per signed-in user per minute (assistant page). Over the limit, live records answer. */
   userPerMinute: number;
@@ -25,8 +28,14 @@ export interface AiConfig {
 
 export function aiConfig(env: Env): AiConfig {
   const emulators = env.VITE_FIREBASE_EMULATORS === 'true' && env.VITE_FIREBASE_PROJECT_ID === 'demo-arenahub';
+  // Measured 15 Nov 2026 on the project's free-tier key: gemini-3.5-flash-lite answered in about 1 s and
+  // gemini-3.6-flash in 1.5 to 3 s, while gemini-3.8-flash, gemini-3.7-flash and gemini-flash-latest
+  // timed out (504) on every request. Availability changes; both names can be overridden.
+  const fallback = env.GEMINI_FALLBACK_MODEL === 'none' ? '' : env.GEMINI_FALLBACK_MODEL || 'gemini-3.6-flash';
+  const models = [...new Set([env.GEMINI_MODEL || 'gemini-3.5-flash-lite', fallback].filter(Boolean))];
   return {
-    ...(env.GEMINI_API_KEY ? { gemini: { key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL || 'gemini-3.8-flash' } } : {}),
+    ...(env.GEMINI_API_KEY ? { gemini: { key: env.GEMINI_API_KEY, models } } : {}),
+    firstTokenMs: whole(env.AI_FIRST_TOKEN_MS, 12_000, 2_000, 60_000),
     ...(env.GROQ_API_KEY ? { groq: { key: env.GROQ_API_KEY, model: env.GROQ_MODEL || 'openai/gpt-oss-20b' } } : {}),
     userPerMinute: whole(env.AI_USER_PER_MINUTE, 5, 1, 60),
     globalPerMinute: whole(env.AI_GLOBAL_PER_MINUTE, 12, 1, 1000),

@@ -11,6 +11,7 @@ import { buildTools } from '../server/ai/tools.ts';
 import { assistantPrompt } from '../server/ai/prompt.ts';
 import { cleanReply, StreamCleaner } from '../server/ai/sanitize.ts';
 import { draftBracket } from '../server/ai/bracketDraft.ts';
+import { groundingProblems as factCheck } from '../server/ai/grounding.ts';
 import { ChatAskError, createChatResponder, recordReply, type ChatSink } from '../server/ai/chat.ts';
 import { parseBracketPromptLocally, resolveBracketRequest } from '../src/lib/bracketRequest.ts';
 import { hasEmoji } from '../src/lib/emoji.ts';
@@ -66,9 +67,9 @@ const grounded: Plan = async function* (request) {
 function assistant(providers: Provider[], options: { rate?: RateStore; openReports?: () => Promise<any[]> } = {}) {
   return createAssistant({ providers, config: { userPerMinute: 5, globalPerMinute: 100 }, rate: options.rate || new MemoryRateStore(), openReports: options.openReports, log: () => {} });
 }
-async function ask(a: ReturnType<typeof assistant>, query: string, options: { caller?: Caller; history?: Array<{ role: 'user' | 'assistant'; text: string }>; data?: typeof data } = {}) {
+async function ask(a: ReturnType<typeof assistant>, query: string, options: { caller?: Caller; history?: Array<{ role: 'user' | 'assistant'; text: string }>; data?: typeof data; focus?: { bracketId: string; matchId?: string } } = {}) {
   let streamed = '', source = '';
-  const result = await a.answer({ caller: options.caller || viewer, query, history: options.history || [], data: options.data || data, signal: new AbortController().signal }, { start: s => { source = s; }, delta: d => { streamed += d; } });
+  const result = await a.answer({ caller: options.caller || viewer, query, history: options.history || [], data: options.data || data, signal: new AbortController().signal, focus: options.focus }, { start: s => { source = s; }, delta: d => { streamed += d; } });
   assert.equal(streamed, result.text, 'streamed text equals the final reply');
   assert.equal(source, result.source);
   return result;
@@ -86,7 +87,30 @@ const records: Array<[string, RegExp, RegExp?]> = [
   ['Show the MLBB bracket', /Semifinal: Crimson Wolves vs Azure Hawks — 2–1/],
   ['Who won Valorant?', /Available brackets|No published bracket/],
   ['Who plays next in CODM BR?', /Game 3, 3 squads/],
+  // Taglish, the way students actually ask.
+  ['Sino nanalo sa Dota?', /Iron Owls won Dota 2 Showdown/],
+  ['Kelan laban ng Crimson Wolves?', /Crimson Wolves vs Awaiting team — 2026-11-20 · 3:00 PM Manila time/],
+  ['Ano score ngayon sa MLBB?', /Golden Lions vs Silver Foxes — 1–0 \(live, not final\)/],
+  ['Sino maglalaro mamaya sa MLBB?', /No upcoming matches/, /2026-11-20/],
+  ['Sino nangunguna sa CODM BR?', /Night Ravens \(CCS\): 28 points/],
+  ['Sino mga miyembro ng MLBB teams?', /Kaizen — Jungler/],
 ];
+
+test('focus: a question that names nothing is answered about the match the viewer came from', async () => {
+  const onMatch = await ask(assistant([]), "who's winning?", { focus: { bracketId: 'mlbb-cup', matchId: 'mlbb-m2' } });
+  assert.match(onMatch.text, /Golden Lions vs Silver Foxes — 1–0 \(live, not final\)/);
+  assert.doesNotMatch(onMatch.text, /Iron Owls|Night Ravens/);
+  // Naming something else wins over the focus; an unknown focus is ignored.
+  assert.match((await ask(assistant([]), 'Who won Dota 2?', { focus: { bracketId: 'mlbb-cup', matchId: 'mlbb-m2' } })).text, /Iron Owls won/);
+  assert.match((await ask(assistant([]), 'Who won?', { focus: { bracketId: 'not-published' } })).text, /Iron Owls won/);
+});
+
+test('focus: the model is told which match the viewer came from, as quoted data', async () => {
+  const m = model(grounded);
+  await ask(assistant([m]), 'Explain this match to me', { focus: { bracketId: 'mlbb-cup', matchId: 'mlbb-m2' } });
+  assert.equal(m.calls, 1);
+  assert.match(m.lastRequest!.system, /the match "Golden Lions vs Silver Foxes" \(matchId "mlbb-m2"\) in the tournament "Campus Cup MLBB"/);
+});
 for (const [question, expected, absent] of records) {
   test(`records: ${question}`, async () => {
     const m = model(grounded);
@@ -223,8 +247,52 @@ test('fallback: live records answer when every model fails', async () => {
 });
 
 test('fallback: a model that fails mid-answer reports an interrupted answer', async () => {
-  const half = model(async function* () { yield 'Double elimination means '; throw new Error('connection reset'); });
+  const half = model(async function* () { yield 'Double elimination gives every team a second chance.\nA team that '; throw new Error('connection reset'); });
   await assert.rejects(ask(assistant([half, model(grounded, 'groq')]), 'Explain double elimination'), InterruptedAnswer);
+});
+
+test('fallback: a model that breaks before finishing a sentence showed nothing, so the next one answers', async () => {
+  const half = model(async function* () { yield 'Double elimination means '; throw new Error('connection reset'); });
+  const result = await ask(assistant([half, model(grounded, 'groq')]), 'Explain double elimination');
+  assert.equal(result.source, 'Arena AI (backup model)');
+  assert.match(result.text, /lower bracket/);
+});
+
+test('fallback: a model that writes nothing before the first-token deadline is abandoned', async () => {
+  const hung = model(async function* (request) { await new Promise((_, reject) => request.signal.addEventListener('abort', () => reject(request.signal.reason), { once: true })); });
+  const started = Date.now();
+  const result = await createAssistant({ providers: [hung, model(grounded, 'groq')], config: { userPerMinute: 5, globalPerMinute: 100, firstTokenMs: 300 }, rate: new MemoryRateStore(), log: () => {} })
+    .answer({ caller: viewer, query: 'Explain double elimination', history: [], data, signal: new AbortController().signal }, { start() {}, delta() {} });
+  assert.equal(result.source, 'Arena AI (backup model)');
+  assert.ok(Date.now() - started < 3000, 'did not wait for the HTTP timeout');
+});
+
+// ---- Fact check: model sentences are checked against the records before a viewer sees them. ----
+test('fact check: an invented result in the first sentence is never shown; the next model answers', async () => {
+  const liar = model(async function* () { yield 'Crimson Wolves beat Golden Lions 3-0 in the final. '; yield 'What a series.'; });
+  let streamed = '';
+  const result = await assistant([liar, model(grounded, 'groq')]).answer({ caller: viewer, query: 'Explain double elimination', history: [], data, signal: new AbortController().signal }, { start() {}, delta: d => { streamed += d; } });
+  assert.ok(!streamed.includes('3-0'), streamed);
+  assert.equal(result.source, 'Arena AI (backup model)');
+});
+
+test('fact check: an invented result after a good sentence replaces the answer with the live records', async () => {
+  const liar = model(async function* () { yield 'Iron Owls beat Storm Bears 2-0 in the Dota 2 final.\n'; yield 'Then Iron Owls beat Crimson Wolves 2-1 in an exhibition.\n'; });
+  let streamed = '', replaced = '';
+  const result = await assistant([liar]).answer({ caller: viewer, query: 'Explain how the Dota 2 showdown went', history: [], data, signal: new AbortController().signal }, { start() {}, delta: d => { streamed += d; }, replace: (_s, t) => { replaced = t; } });
+  assert.match(streamed, /Iron Owls beat Storm Bears 2-0/);
+  assert.ok(!streamed.includes('Crimson Wolves 2-1'), 'the unsupported sentence never streamed');
+  assert.equal(result.replaced, true);
+  assert.equal(result.source, 'Live records');
+  assert.equal(replaced, result.text);
+});
+
+test('fact check: scores and match-ups are checked against the records, general text is not', () => {
+  const b = data.brackets;
+  assert.deepEqual(factCheck('Crimson Wolves beat Azure Hawks 2-1. Golden Lions lead Silver Foxes 1-0. A Bo3 can end 2-0 or 2-1.', b), []);
+  assert.deepEqual(factCheck('Crimson Wolves vs Awaiting team on 2026-11-20 at 3:00 PM.', b), []);
+  assert.equal(factCheck('Crimson Wolves beat Golden Lions 3-0.', b).length, 2);
+  assert.deepEqual(factCheck('Phantom Five vs Crimson Wolves.', b), ['"Phantom Five" is not a team in the records']);
 });
 
 test('fallback: without any model key, live records answer', async () => {

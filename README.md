@@ -22,7 +22,7 @@ The production server listens on `http://localhost:3210`. The Vite development s
 
 ## Configuration
 
-Copy `.env.example` to `.env` and set this project's Firebase web configuration. Set `GEMINI_API_KEY` for the online assistant. Provider keys must never use a `VITE_` prefix, because that makes them visible to browsers. `GEMINI_MODEL` can override the server's default `gemini-flash-latest` model.
+Copy `.env.example` to `.env` and set this project's Firebase web configuration. Set `GEMINI_API_KEY` for the online assistant. Provider keys must never use a `VITE_` prefix, because that makes them visible to browsers. `GEMINI_MODEL` and `GEMINI_FALLBACK_MODEL` override the server's model order (default `gemini-3.5-flash-lite`, then `gemini-3.6-flash`); see `docs/ENV_CHECKLIST.md`.
 
 Email verification uses Firebase's real verification links. Staff access comes from trusted Firebase custom claims (`admin: true`, or an authorized `role` claim), never email text or profile labels. Registered account status changes are restricted to project administrators. Users receive profile status updates during their session.
 

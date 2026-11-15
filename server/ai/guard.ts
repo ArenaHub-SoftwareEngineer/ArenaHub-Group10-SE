@@ -8,6 +8,8 @@ export const askSchema = z.object({
   query: text(4000),
   history: z.array(z.object({ role: z.enum(['user', 'assistant']), text: text(4000) }).strict()).max(24).default([])
     .refine(items => items.reduce((sum, item) => sum + item.text.length, 0) <= 20_000, 'History is too long.'),
+  // Ids of what the viewer was looking at. Only ids: the server reads the records itself.
+  focus: z.object({ bracketId: z.string().regex(/^[\w#.:-]{1,160}$/), matchId: z.string().regex(/^[\w#.:-]{1,160}$/).optional() }).strict().optional(),
 }).strict();
 export const chatAskSchema = z.object({
   matchId: z.string().regex(/^[A-Za-z0-9_#.:-]{1,160}$/),

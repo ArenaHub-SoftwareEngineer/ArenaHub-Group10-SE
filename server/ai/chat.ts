@@ -11,7 +11,8 @@ import { AnswerCache, normalizeQuestion } from './cache.ts';
 import type { AiConfig } from './config.ts';
 import { screenQuestion, type RateStore } from './guard.ts';
 import { chatPrompt } from './prompt.ts';
-import { runTool, type Provider } from './provider.ts';
+import { attemptSignal, runTool, type Provider } from './provider.ts';
+import { groundingFacts, groundingProblems } from './grounding.ts';
 import { cleanReply } from './sanitize.ts';
 import { buildTools } from './tools.ts';
 
@@ -53,7 +54,7 @@ export function recordReply(match: any): string {
 
 export interface ChatDeps {
   providers: Provider[];
-  config: Pick<AiConfig, 'chatUserIntervalSec' | 'chatMatchPerMinute'>;
+  config: Pick<AiConfig, 'chatUserIntervalSec' | 'chatMatchPerMinute'> & Partial<Pick<AiConfig, 'firstTokenMs'>>;
   rate: RateStore;
   sink: ChatSink;
   cache?: AnswerCache<{ text: string; source: string }>;
@@ -88,19 +89,25 @@ export function createChatResponder(deps: ChatDeps) {
         // Only this match goes to the model: teams, score, schedule, timeline and MVP by in-game name.
         const context = { tournament: found.tournament, game: found.game, ...found.match, timeline: found.timeline?.slice(-10) || [], mvp: found.mvp };
         if (deps.providers.length && await deps.rate.hit(`chatmatch_${matchId}`, deps.config.chatMatchPerMinute, 60)) {
+          const facts = groundingFacts(data.brackets);
           for (const [index, provider] of deps.providers.entries()) {
+            const attempt = attemptSignal(signal, deps.config.firstTokenMs ?? 12_000);
             try {
               let text = '';
-              for await (const delta of provider.stream({ system: chatPrompt(), history: [], question: `Match data: ${JSON.stringify(context)}\n\nQuestion: ${question}`, tools: [], signal, maxOutputTokens: 200 })) {
+              for await (const delta of provider.stream({ system: chatPrompt(), history: [], question: `Match data: ${JSON.stringify(context)}\n\nQuestion: ${question}`, tools: [], signal: attempt.signal, maxOutputTokens: 200 })) {
+                if (delta) attempt.gotText();
                 text += delta;
                 if (text.length > CHAT_REPLY_MAX * 2) break;
               }
               const clean = cleanReply(text.replace(/\s*\n+\s*/g, ' '), CHAT_REPLY_MAX);
+              // A public reply must match the records; otherwise the match record answers.
+              const problems = clean ? groundingProblems(clean, facts) : [];
+              if (problems.length) { log(`${provider.id} reply rejected: ${problems.join('; ').slice(0, 200)}`); break; }
               if (clean) { reply = { text: clean, source: index > 0 || provider.id === 'groq' ? 'Arena AI (backup model)' : 'Arena AI' }; break; }
             } catch (error) {
               if (signal.aborted) throw error;
               log(`${provider.id} failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`);
-            }
+            } finally { attempt.done(); }
           }
         }
         cache.set(key, reply);

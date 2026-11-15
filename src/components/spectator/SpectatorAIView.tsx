@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ArrowUp, ArrowUpRight, Check, Copy, Download, LoaderCircle, PanelLeft, PanelLeftClose, Pencil, Plus, RotateCcw, Search, Settings2, Trash2, X } from '../ui/Icons';
-import { aiService } from '../../lib/ai';
-import { browserHistoryStorage, ChatHistory, ChatMessage, ChatThread, deleteThread, emptyHistory, historyKey, legacyKeys, loadHistory, modelHistory, pruneHistory, RetentionDays, saveHistory } from '../../lib/chatHistory';
+import { aiService, type AskFocus } from '../../lib/ai';
+import { browserHistoryStorage, ChatHistory, ChatMessage, ChatThread, ChatReference, deleteThread, parseReferences, emptyHistory, historyKey, legacyKeys, loadHistory, modelHistory, pruneHistory, RetentionDays, saveHistory } from '../../lib/chatHistory';
 import { CleanFormattedText } from '../common/CleanFormattedText';
 import { ArenaCharacter } from '../ui/ArenaCharacter';
 import { Modal } from '../ui/Modal';
@@ -12,11 +12,16 @@ import { Req } from '../ui/Req';
 interface SpectatorAIViewProps {
   currentUser?: { id: string; name: string; email: string; role: string; avatarInitials: string; collegeName?: string };
   sidebarOpen?: boolean; onToggleSidebar?: () => void; onOpenBrackets?: () => void;
+  /** Opens the bracket or match an answer was checked against. */
+  onOpenReference?: (ref: ChatReference) => void;
+  /** What the viewer was looking at before opening Arena AI; questions are answered about it. */
+  focus?: AskFocus | null;
+  onClearFocus?: () => void;
 }
 const retentionLabel = (days: RetentionDays) => days ? `Auto-delete after ${days} days` : 'Keep until I delete';
 const uid = () => crypto.randomUUID();
 
-export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, sidebarOpen: controlledSidebar, onToggleSidebar, onOpenBrackets }) => {
+export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, sidebarOpen: controlledSidebar, onToggleSidebar, onOpenBrackets, onOpenReference, focus, onClearFocus }) => {
   const userId = currentUser?.id || 'guest';
   const { showToast } = useToast();
   const [initial] = useState(() => {
@@ -86,9 +91,9 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
     const controller = new AbortController(); request.current = { controller, threadId, messageId }; setLoading(true);
     let text = '';
     try {
-      for await (const chunk of aiService.streamAnswer(prompt, modelHistory(previous), controller.signal)) {
-        text += chunk.delta;
-        updateReply(threadId, messageId, { text, source: chunk.source, status: chunk.done ? 'complete' : 'writing', ...(chunk.references?.length ? { references: chunk.references.map(r => r.label) } : {}) });
+      for await (const chunk of aiService.streamAnswer(prompt, modelHistory(previous), controller.signal, focus)) {
+        text = chunk.replace ? chunk.delta : text + chunk.delta;
+        updateReply(threadId, messageId, { text, source: chunk.source, status: chunk.done ? 'complete' : 'writing', ...(chunk.references?.length ? { references: parseReferences(chunk.references) } : {}) });
         if (chunk.done) break;
       }
       if (controller.signal.aborted) throw new Error('stopped');
@@ -207,12 +212,15 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
       <div className="chat-scroll" role="log" aria-label="Conversation messages" aria-live="polite" aria-busy={loading}>
         {!messages.length ? <div className="chat-empty"><span className="chat-eyebrow">ARENA HUB / ASSISTANT</span><img className="arena-character" src="/arenahub-logo.svg" alt="" width="90" height="106"/><h1>One place for every question.</h1><p>Matches, teams, fair play, or a fresh idea.<br />Just start a conversation.</p><div className="chat-suggestions">{['Who plays next?', 'Help me write a match report', 'Explain the tournament format', 'Show the COE Titans roster'].map(text => <button key={text} onClick={() => void send(text)}>{text}<ArrowUpRight size={14} aria-hidden="true" /></button>)}</div></div> : <div className="chat-messages">{messages.map((message, index) => <article key={message.id} className={`chat-message from-${message.sender}`} aria-label={message.sender === 'user' ? 'You' : 'Arena AI'}>
           {message.sender === 'user' ? <div className="chat-user-text">{message.text}</div> : <div className="chat-assistant-text"><span className="chat-answer-label"><img src="/arenahub-logo.svg" alt="" width={18} height={21} /> Arena AI</span>{message.text ? <CleanFormattedText text={message.text} isStreaming={message.status === 'writing'} /> : <span className="chat-writing"><LoaderCircle size={15} className="animate-spin" /> Writing a response…</span>}
-            {message.status !== 'writing' && !!message.references?.length && <p className="chat-references">Checked: {message.references.join(' · ')}</p>}
+            {message.status !== 'writing' && !!message.references?.length && <p className="chat-references"><span>Checked:</span> {message.references.map((ref, i) => <React.Fragment key={`${ref.bracketId}-${ref.matchId}-${i}`}>
+              {i > 0 && <span aria-hidden="true"> · </span>}
+              {onOpenReference && (ref.bracketId || ref.matchId) ? <button type="button" className="chat-reference" onClick={() => onOpenReference(ref)}>{ref.label}</button> : <span>{ref.label}</span>}
+            </React.Fragment>)}</p>}
             {message.status !== 'writing' && <div className="chat-response-actions"><button className="quiet-icon-button" aria-label="Copy response" data-tooltip={copied === message.id ? 'Copied' : 'Copy'} onClick={async () => { try { await navigator.clipboard.writeText(message.text); setCopied(message.id); window.setTimeout(() => setCopied(null), 1600); } catch { showToast('Copy is unavailable. Select the response text to copy it.', 'error'); } }}>{copied === message.id ? <Check size={16} /> : <Copy size={16} />}</button>{index === messages.length - 1 && <button className="quiet-icon-button" disabled={loading} aria-label="Retry response" data-tooltip="Retry" onClick={() => void retry(message)}><RotateCcw size={16} /></button>}<small>{message.status === 'stopped' ? 'Stopped' : message.status === 'error' ? 'Response unavailable' : message.source || 'Saved response'}</small>{onOpenBrackets && /bracket/i.test(message.text) && <button className="chat-text-link" onClick={onOpenBrackets}>Open bracket studio <ArrowUpRight size={14} aria-hidden="true" /></button>}</div>}
           </div>}
         </article>)}<div ref={end} /></div>}
       </div>
-      <div className="chat-composer-area"><form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}><textarea ref={composer} aria-label="Message Arena AI" value={input} maxLength={4000} rows={2} placeholder="Ask Arena anything…" onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} /><footer><span>{loading ? 'You can stop this response at any time.' : 'Shift + Enter for a new line'}</span>{loading ? <button type="button" className="chat-send is-stop" aria-label="Stop response" data-tooltip="Stop response" data-tooltip-align="end" onClick={() => request.current?.controller.abort()}><span /></button> : <button className="chat-send" type="submit" disabled={!input.trim()} aria-label="Send message" data-tooltip="Send message" data-tooltip-align="end"><ArrowUp size={18} /></button>}</footer></form><p className="chat-footnote">{data.retentionDays ? `Chats auto-delete after ${data.retentionDays} days without a new message.` : 'Chats stay until you delete them.'} <button onClick={openPolicy}>History settings</button></p></div>
+      <div className="chat-composer-area">{focus && <p className="chat-focus" role="status"><span>Thinking about:</span> <strong>{focus.label}</strong>{onClearFocus && <button type="button" className="quiet-icon-button" aria-label={`Stop asking about ${focus.label}`} data-tooltip="Ask about everything" onClick={onClearFocus}><X size={13} /></button>}</p>}<form className="chat-composer" onSubmit={event => { event.preventDefault(); void send(); }}><textarea ref={composer} aria-label="Message Arena AI" value={input} maxLength={4000} rows={2} placeholder="Ask Arena anything…" onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} /><footer><span>{loading ? 'You can stop this response at any time.' : 'Shift + Enter for a new line'}</span>{loading ? <button type="button" className="chat-send is-stop" aria-label="Stop response" data-tooltip="Stop response" data-tooltip-align="end" onClick={() => request.current?.controller.abort()}><span /></button> : <button className="chat-send" type="submit" disabled={!input.trim()} aria-label="Send message" data-tooltip="Send message" data-tooltip-align="end"><ArrowUp size={18} /></button>}</footer></form><p className="chat-footnote">{data.retentionDays ? `Chats auto-delete after ${data.retentionDays} days without a new message.` : 'Chats stay until you delete them.'} <button onClick={openPolicy}>History settings</button></p></div>
     </section>
     <Modal open={policyOpen} title="Your history, your choice." description="One history for Arena AI, shared between your viewer and organizer workspaces on this browser." onClose={() => setPolicyOpen(false)}>
       <form className="module-form" onSubmit={event => { event.preventDefault(); applyPolicy(); }}><label>Automatically delete inactive chats<select aria-label="History retention" value={policyDays} onChange={event => { setPolicyDays(Number(event.target.value) as RetentionDays); setPolicyFeedback(null); }}><option value="30">After 30 days without a new message</option><option value="90">After 90 days without a new message</option><option value="180">After 180 days without a new message</option><option value="0">Keep until I delete</option></select></label>

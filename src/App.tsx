@@ -56,6 +56,7 @@ import { useHistoryTab } from './lib/navigation';
 import { auth } from './lib/firebase';
 import { firestoreService } from './lib/firestore';
 import { Tournament, Match, BracketDraft } from './lib/types';
+import type { AskFocus } from './lib/ai';
 
 // ─── Full-screen loading skeleton ─────────────────────────────────────────────
 function AppLoadingScreen() {
@@ -134,6 +135,22 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
   const activeMatchBracket = activeMatch && publishedBrackets.find(bracket => bracket.matches.some(match => match.id === activeMatch.id));
   const matchCenterGame = routeParams.get('game');
   const openMatchCenter = () => setSpectatorTab('current-live', matchCenterGame ? { game: matchCenterGame } : undefined);
+  // Arena AI answers about the last match or bracket the viewer opened, until they clear it.
+  const [aiFocus, setAiFocus] = useState<AskFocus | null>(null);
+  useEffect(() => {
+    if (spectatorTab === 'live' && activeMatch && activeMatchBracket) {
+      setAiFocus({ bracketId: activeMatchBracket.id, matchId: activeMatch.id, label: `${activeMatch.team1?.name || 'To be decided'} vs ${activeMatch.team2?.name || 'To be decided'}` });
+    } else if (spectatorTab === 'brackets' && selectedPublishedBracketId) {
+      const bracket = publishedBrackets.find(b => b.id === selectedPublishedBracketId);
+      if (bracket) setAiFocus({ bracketId: bracket.id, label: bracket.title });
+    }
+  }, [spectatorTab, activeMatch?.id, activeMatchBracket?.id, selectedPublishedBracketId, publishedBrackets]);
+  /** A record an Arena AI answer was checked against: open the match if it has one, else the bracket. */
+  const openReference = (ref: { bracketId?: string; matchId?: string }) => {
+    if (ref.matchId && officialMatches.some(m => m.id === ref.matchId)) setSpectatorTab('live', { match: ref.matchId });
+    else if (ref.bracketId && publishedBrackets.some(b => b.id === ref.bracketId)) setSpectatorTab('brackets', { bracket: ref.bracketId });
+    else showToast('That record is no longer published.', 'info');
+  };
   // Live matches for the navigation rail's "Live now" list (broadcasting first, then started but not yet on air).
   const liveCards = watchGames(publishedBrackets).flatMap(game => game.cards)
     .filter(card => card.state === 'live' || card.state === 'waiting').sort((a, b) => Number(b.state === 'live') - Number(a.state === 'live'));
@@ -379,6 +396,9 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               currentUser={currentUser}
               sidebarOpen={isAiSidebarOpen}
               onToggleSidebar={() => setIsAiSidebarOpen(!isAiSidebarOpen)}
+              focus={aiFocus}
+              onClearFocus={() => setAiFocus(null)}
+              onOpenReference={openReference}
             />
           )}
 

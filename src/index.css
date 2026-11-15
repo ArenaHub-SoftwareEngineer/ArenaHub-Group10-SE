@@ -533,6 +533,10 @@ html[data-motion=reduced] .dialog-panel { transform:none !important; opacity:1 !
 .chat-writing { display: flex; gap: 9px; align-items: center; font-size: 14px; color: var(--text-muted); }
 .chat-response-actions { display: flex; align-items: center; gap: 3px; margin-top: 10px; flex-wrap: wrap; }
 .chat-references { margin: 10px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.chat-reference { color: var(--brand-ink); text-decoration: underline; text-underline-offset: 2px; font-size: inherit; padding: 2px 0; min-height: 24px; }
+.chat-reference:hover { color: var(--text-primary); }
+.chat-focus { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; width: fit-content; max-width: 100%; font-size: 12px; color: var(--text-secondary); }
+.chat-focus strong { color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-response-actions small { color: var(--text-muted); font-size: 12px; margin-left: 5px; }
 .chat-text-link { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary); text-decoration: underline; text-underline-offset: 4px; }
 .chat-text-link:hover { color: var(--brand-ink); }

@@ -59,7 +59,7 @@ test('AI API streams model text, stops the model when the viewer leaves, and rep
   const slow: Provider = {
     id: 'mock',
     async *stream(request) {
-      yield 'Checking ';
+      yield 'Checking the records.\n';
       await new Promise((resolve, reject) => { request.signal.addEventListener('abort', () => { aborted = true; reject(request.signal.reason); }, { once: true }); setTimeout(resolve, 5000); });
       yield 'never sent';
     },
@@ -74,8 +74,8 @@ test('AI API streams model text, stops the model when the viewer leaves, and rep
   const ask = (path: string, signal?: AbortSignal) => fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ok' }, body: JSON.stringify({ query: 'Explain how seeding works' }), signal });
 
   const good = await events(await ask('/streaming'));
-  // Released word by word as the model writes, not held until the end.
-  assert.deepEqual(good.map(([e]) => e), ['start', 'delta', 'delta', 'delta', 'delta', 'done']);
+  // Released one fact-checked sentence at a time as the model writes, not held until the end.
+  assert.deepEqual(good.map(([e]) => e), ['start', 'delta', 'delta', 'done']);
   assert.equal(good.filter(([e]) => e === 'delta').map(([, d]) => d.text).join(''), 'Arena AI streams\nhere.');
   assert.equal(good.at(-1)![1].source, 'Arena AI');
 

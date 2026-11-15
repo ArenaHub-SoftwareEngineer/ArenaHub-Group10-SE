@@ -47,6 +47,38 @@ test('Arena AI page streams an answer from the server and measures time to first
   expect(ours(errors)).toEqual([]);
 });
 
+test('Arena AI answers about the match the viewer came from and links back to it', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'Navigation flow; one width is enough.');
+  test.setTimeout(90_000);
+  const { page, errors } = await open(browser, STUDENT);
+  await page.evaluate(() => { window.location.hash = '#/arena/current-live'; });
+  await page.locator('.watch-card.is-live').first().click();
+  await expect(page.getByRole('heading', { name: 'Live chat' })).toBeVisible({ timeout: 20_000 });
+  const matchHash = await page.evaluate(() => window.location.hash);
+
+  await page.evaluate(() => { window.location.hash = '#/arena/ai-assistant'; });
+  const chip = page.locator('.chat-focus');
+  await expect(chip).toContainText(/Thinking about: .+ vs .+/, { timeout: 20_000 });
+  const matchup = (await chip.locator('strong').textContent())!.trim();
+
+  await page.getByLabel('Message Arena AI').fill("Who's winning?");
+  await page.getByRole('button', { name: 'Send message' }).click();
+  const reply = page.locator('article.chat-message.from-assistant').last();
+  await expect(reply.locator('.chat-response-actions small')).toHaveText('Live records', { timeout: 20_000 });
+  await expect(reply.locator('.chat-assistant-text')).toContainText(matchup);
+
+  // The record it checked is a link back to the match.
+  await reply.locator('.chat-reference').first().click();
+  await expect(page).toHaveURL(new RegExp(matchHash.split('?')[1]?.match(/match=[^&]+/)?.[0] || 'live'));
+  await expect(page.getByRole('heading', { name: 'Live chat' })).toBeVisible({ timeout: 20_000 });
+
+  // The viewer can stop asking about that match.
+  await page.evaluate(() => { window.location.hash = '#/arena/ai-assistant'; });
+  await page.getByRole('button', { name: /Stop asking about/ }).click();
+  await expect(chip).toHaveCount(0);
+  expect(ours(errors)).toEqual([]);
+});
+
 test('viewer A asks @Arena in live chat; viewer B sees the reply with the AI badge', async ({ browser }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop-1440', 'Two signed-in browsers; the chat panel is the same at both widths.');
   test.setTimeout(120_000);

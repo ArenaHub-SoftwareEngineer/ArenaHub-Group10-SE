@@ -44,9 +44,19 @@ function gameQuery(query:string) {
   if(other)return other[1].toLowerCase();
 }
 function gameOf(bracket:BracketDraft) {return gameQuery(`${bracket.gameName} ${bracket.gameId?.replaceAll('-',' ')}`);}
-export function selectKnowledge(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[]) {
+/** What the viewer was looking at when they asked. Used only when the question names nothing itself. */
+export interface KnowledgeFocus {bracketId:string;matchId?:string}
+export function selectKnowledge(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[],focus?:KnowledgeFocus|null) {
+  const own=selectFromQuery(snapshot,query,history);
+  if(!focus || own.game || own.teamIds.size || own.brackets.length!==snapshot.brackets.length)return own;
+  const bracket=snapshot.brackets.find(b=>b.id===focus.bracketId);
+  if(!bracket)return own;
+  const match=focus.matchId?bracket.matches.find(m=>m.id===focus.matchId):undefined;
+  return {game:gameOf(bracket),brackets:[bracket],teamIds:new Set([match?.team1?.id,match?.team2?.id].filter((id):id is string=>!!id))};
+}
+function selectFromQuery(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>) {
   let game=gameQuery(query);
-  if(!game && /\b(who won|winner|champion|that|they|it|next|score)\b/i.test(query) && !/\ball\b/i.test(query))game=history.filter(m=>m.role==='user').map(m=>gameQuery(m.text)).filter(Boolean).at(-1);
+  if(!game && /\b(who won|winner|champion|that|they|it|next|score|sila|yun|iyon|ito|nanalo|panalo|sunod|susunod)\b/i.test(query) && !/\b(all|lahat)\b/i.test(query))game=history.filter(m=>m.role==='user').map(m=>gameQuery(m.text)).filter(Boolean).at(-1);
   let brackets=snapshot.brackets.filter(b=>!game || (game==='codm'?gameOf(b)?.startsWith('codm'):gameOf(b)===game));
   const q=query.toLowerCase();
   const named=brackets.filter(b=>b.title.length>=4 && q.includes(b.title.toLowerCase()));
@@ -72,15 +82,16 @@ export function recordedChampion(bracket:BracketDraft) {
 function score(match:Match) {if(match.lobby)return match.status==='completed'?`won by ${md(match.lobby.winner || 'a recorded squad')}`:match.status==='live'?'lobby in progress':'lobby game';return [match.score.team1Score,match.score.team2Score].every(Number.isFinite)?`${match.score.team1Score}–${match.score.team2Score}`:'score not recorded';}
 const matchup=(m:Match)=>m.lobby?`${md(m.roundName)}, ${m.lobby.squads} squads`:`${md(m.team1?.name || 'Awaiting team')} vs ${md(m.team2?.name || 'Awaiting team')}`;
 const validMatch=(m:Match)=>!m.inactive && !m.team1?.isBye && !m.team2?.isBye;
-export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[]):KnowledgeAnswer {
-  const q=query.trim().toLowerCase(),selected=selectKnowledge(snapshot,query,history),refs:KnowledgeReference[]=[];
+export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[],focus?:KnowledgeFocus|null):KnowledgeAnswer {
+  const q=query.trim().toLowerCase(),selected=selectKnowledge(snapshot,query,history,focus),refs:KnowledgeReference[]=[];
   const reference=(b:BracketDraft,m?:Match)=>{if(refs.length<12 && !refs.some(r=>r.bracketId===b.id && r.matchId===m?.id))refs.push({label:m?`${b.title} · ${m.matchNumber || m.roundName}`:b.title,bracketId:b.id,...(m?{matchId:m.id}:{})});};
   const reply=(text:string,kind:KnowledgeAnswer['kind']='records',needsModel=false):KnowledgeAnswer=>({text,references:refs,kind,needsModel});
   if(/cheat|fair.?play|evidence|report/.test(q))return reply('Open Fair play to submit a recording or review match evidence. Organizers can inspect sampled frames and returned observations. A referee must confirm the finding; a replay alone cannot prove hidden software or input automation.','help',!/\bwhere\b|\bhow\b.*(?:upload|submit|report)|\bcan\b.*detect/.test(q));
   // "Explain seeding" needs no bracket; only record questions stop at "nothing is published".
   const explanatory=/\b(explain|how|why|what (?:is|are|does)|meaning|rules?|help)\b/.test(q);
   if(!selected.brackets.length)return reply(snapshot.brackets.length?`No published bracket matches ${selected.game?selected.game.toUpperCase():'that tournament'}. Available brackets:\n\n${snapshot.brackets.slice(0,8).map(b=>`- ${md(b.title)} — ${md(b.gameName)}`).join('\n')}`:'No official brackets are published in the records I just checked. Once an organizer publishes one, I can answer questions about its matches, scores, and players.','records',explanatory);
-  const winnerQuestion=/\b(winner|won|champion|nanalo|panalo|result)\b/.test(q);
+  // English and Taglish ("sino nanalo", "kelan laban", "sino maglalaro mamaya").
+  const winnerQuestion=/\b(winner|won|champion|champs?|nanalo|panalo|nagwagi|nagchampion|result|resulta)\b/.test(q);
   if(winnerQuestion){
     const blocks=selected.brackets.map(b=>{
       reference(b);if(b.placement)return placementBlock(b);const champion=recordedChampion(b);
@@ -93,12 +104,15 @@ export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string
       return `**${md(b.title)}**\n\n${!namedMatch.length && !selected.teamIds.size?'The tournament champion is not confirmed yet. Latest completed series:\n\n':''}${latest.map(({match,winner,team1,team2})=>{reference(b,match);return `- ${md((winner===team1.id?team1:team2).name)} won against ${md((winner===team1.id?team2:team1).name)} — ${winner===team1.id?score(match):`${match.score.team2Score}–${match.score.team1Score}`} (${md(match.roundName)}).`;}).join('\n')}`;
     });return reply(blocks.join('\n\n'));
   }
-  if(/\b(standing|standings|leader|leads|record|records|points)\b/.test(q))return reply(selected.brackets.map(b=>{reference(b);if(b.placement)return placementBlock(b);const rows=getStandings(b.matches);return `**${md(b.title)}**\n\n${rows.length?rows.map(r=>`- ${md(r.team.name)}: ${r.wins} wins, ${r.losses} losses; games ${r.gameWins}–${r.gameLosses}.`).join('\n'):'No completed, valid series are recorded yet.'}\n\nThese are played-series records, not final placement or Battle Royale placement points.`;}).join('\n\n'));
-  if(/\b(roster|players?|lineup|teams?)\b/.test(q) && !/bracket|format|schedule|next|score/.test(q))return reply(selected.brackets.map(b=>{reference(b);const teams=new Map(b.matches.flatMap(m=>[m.team1,m.team2]).filter((t):t is Team=>!!t&&!t.isBye&&(!selected.teamIds.size||selected.teamIds.has(t.id))).map(t=>[t.id,t]));return `**${md(b.title)}**\n\n${[...teams.values()].map(t=>`- ${md(t.name)}${t.collegeCode?` (${md(t.collegeCode)})`:''}: ${t.players.length?t.players.map(p=>`${md(p.ign)}${p.role?` — ${md(p.role)}`:''}`).join('; '):'Player names are not published yet.'}`).join('\n')}`;}).join('\n\n'));
-  if(/\b(live|next|schedule|today|tonight|when|plays|score|scores|winning)\b/.test(q)){
+  if(/\b(standing|standings|leader|leads|leading|record|records|points|ranking|rankings|puntos|nangunguna|lamang)\b/.test(q))return reply(selected.brackets.map(b=>{reference(b);if(b.placement)return placementBlock(b);const rows=getStandings(b.matches);return `**${md(b.title)}**\n\n${rows.length?rows.map(r=>`- ${md(r.team.name)}: ${r.wins} wins, ${r.losses} losses; games ${r.gameWins}–${r.gameLosses}.`).join('\n'):'No completed, valid series are recorded yet.'}\n\nThese are played-series records, not final placement or Battle Royale placement points.`;}).join('\n\n'));
+  if(/\b(roster|players?|lineup|teams?|miyembro|members?|manlalaro)\b/.test(q) && !/bracket|format|schedule|next|score|laban|kelan|kailan/.test(q))return reply(selected.brackets.map(b=>{reference(b);const teams=new Map(b.matches.flatMap(m=>[m.team1,m.team2]).filter((t):t is Team=>!!t&&!t.isBye&&(!selected.teamIds.size||selected.teamIds.has(t.id))).map(t=>[t.id,t]));return `**${md(b.title)}**\n\n${[...teams.values()].map(t=>`- ${md(t.name)}${t.collegeCode?` (${md(t.collegeCode)})`:''}: ${t.players.length?t.players.map(p=>`${md(p.ign)}${p.role?` — ${md(p.role)}`:''}`).join('; '):'Player names are not published yet.'}`).join('\n')}`;}).join('\n\n'));
+  if(/\b(live|next|schedule|today|tonight|tomorrow|when|plays|score|scores|winning|laban|kelan|kailan|maglalaro|lalaro|mamaya|ngayon|bukas|sunod|susunod|iskor|lamang)\b/.test(q)){
     const today=manilaToday(new Date(snapshot.checkedAt));
+    const tomorrow=manilaToday(new Date(new Date(snapshot.checkedAt).getTime()+86_400_000));
+    // "mamaya" (later today) and "ngayon" (now/today) mean today; "bukas" means tomorrow.
+    const day=/\b(tomorrow|bukas)\b/.test(q)?tomorrow:/\b(today|tonight|mamaya|ngayon)\b/.test(q)?today:null;
     const entries=selected.brackets.flatMap(b=>b.matches.filter(validMatch).filter(m=>!selected.teamIds.size||selected.teamIds.has(m.team1?.id||'')||selected.teamIds.has(m.team2?.id||'')).map(m=>({b,m})));
-    const live=entries.filter(({m})=>m.status==='live'),upcoming=entries.filter(({m})=>['upcoming','pre-match'].includes(m.status) && (!/today|tonight/.test(q)||scheduleDate(m.scheduledDate,today)===today)).sort((a,b)=>(scheduleDate(a.m.scheduledDate,today)||'9999').localeCompare(scheduleDate(b.m.scheduledDate,today)||'9999')||timeOrder(a.m.scheduledTime)-timeOrder(b.m.scheduledTime));
+    const live=entries.filter(({m})=>m.status==='live'),upcoming=entries.filter(({m})=>['upcoming','pre-match'].includes(m.status) && (!day||scheduleDate(m.scheduledDate,today)===day)).sort((a,b)=>(scheduleDate(a.m.scheduledDate,today)||'9999').localeCompare(scheduleDate(b.m.scheduledDate,today)||'9999')||timeOrder(a.m.scheduledTime)-timeOrder(b.m.scheduledTime));
     const rows=(items:typeof entries)=>items.slice(0,12).map(({b,m})=>{reference(b,m);return `- ${matchup(m)} — ${m.status==='live'?(m.lobby?score(m):`${score(m)} (live, not final)`):scheduleDate(m.scheduledDate,today)?`${scheduleDate(m.scheduledDate,today)} · ${timeOrder(m.scheduledTime)===9999?'time not set':md(m.scheduledTime)} Manila time`:'date/time not set'} · ${md(b.gameName)}.`;}).join('\n');
     return reply(`${live.length?`**Live now**\n\n${rows(live)}\n\n`:''}**Upcoming matches**\n\n${upcoming.length?rows(upcoming):'No upcoming matches are scheduled for this selection.'}`);
   }

@@ -24,8 +24,12 @@ export interface StreamChunk {
   done: boolean;
   source?: string;
   references?: KnowledgeReference[];
+  /** delta replaces everything received so far instead of being appended. */
+  replace?: boolean;
 }
 export type DraftResolution = Resolution & { source: string };
+/** What the viewer was looking at before opening Arena AI. The label is shown; only the ids are sent. */
+export interface AskFocus { bracketId: string; matchId?: string; label: string }
 
 export const OFFLINE_SOURCE = 'Live records (this device)';
 export const OFFLINE_DRAFT_SOURCE = 'Rules engine (offline)';
@@ -38,11 +42,11 @@ const withTimeout = (ms: number, signal?: AbortSignal) => signal ? AbortSignal.a
 
 class AIService {
   /** On-device answer from the loaded brackets. Same engine and refusals as the server. */
-  localAnswer(query: string, history: History = []) {
+  localAnswer(query: string, history: History = [], focus?: AskFocus | null) {
     const screen = screenQuestion(query);
     if (screen.kind === 'refuse') return { text: screen.text, references: [] as KnowledgeReference[] };
     const snapshot = knowledgeSnapshot(firestoreService.getPublishedBrackets(), 0, new Date().toISOString(), 'loaded');
-    const answer = answerTournamentQuestion(snapshot, query, history);
+    const answer = answerTournamentQuestion(snapshot, query, history, focus ? { bracketId: focus.bracketId, ...(focus.matchId ? { matchId: focus.matchId } : {}) } : null);
     return { text: answer.text, references: answer.references };
   }
 
@@ -50,7 +54,7 @@ class AIService {
    * Streams one answer. Throws when stopped, or when the server's answer broke off partway
    * (the caller keeps the text it already has and offers a retry).
    */
-  public async *streamAnswer(query: string, history: History = [], signal?: AbortSignal): AsyncGenerator<StreamChunk> {
+  public async *streamAnswer(query: string, history: History = [], signal?: AbortSignal, focus?: AskFocus | null): AsyncGenerator<StreamChunk> {
     const stopped = () => { if (signal?.aborted) throw new Error('Response stopped.'); };
     const token = await idToken();
     if (token) {
@@ -59,7 +63,7 @@ class AIService {
         response = await fetch(apiUrl('/api/ai'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ query, history }),
+          body: JSON.stringify({ query, history, ...(focus ? { focus: { bracketId: focus.bracketId, ...(focus.matchId ? { matchId: focus.matchId } : {}) } } : {}) }),
           signal: withTimeout(90_000, signal),
         });
       } catch { stopped(); }
@@ -68,6 +72,8 @@ class AIService {
         for await (const { event, data } of parseSse(response.body)) {
           if (event === 'start') source = data?.source;
           else if (event === 'delta' && typeof data?.text === 'string') { wrote = true; yield { delta: data.text, done: false, source }; }
+          // The server withdrew what it had sent (a sentence failed its fact check) and sends the records answer.
+          else if (event === 'replace' && typeof data?.text === 'string') { source = data.source || source; yield { delta: data.text, done: false, source, replace: true }; }
           else if (event === 'done') { yield { delta: '', done: true, source: data?.source || source, references: Array.isArray(data?.references) ? data.references : [] }; return; }
           else if (event === 'error') throw new Error(data?.message || 'The answer stopped partway.');
         }
@@ -80,7 +86,7 @@ class AIService {
       }
     }
     stopped();
-    const local = this.localAnswer(query, history);
+    const local = this.localAnswer(query, history, focus);
     yield { delta: local.text, done: true, source: OFFLINE_SOURCE, references: local.references };
   }
 

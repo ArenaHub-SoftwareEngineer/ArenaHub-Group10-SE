@@ -11,9 +11,12 @@ const SHARED = [
   'Write plain sentences. Short bullet lists are fine. No tables, no emoji, no headings, no code blocks.',
 ];
 
-export function assistantPrompt(now = new Date(), staff = false) {
+export interface PromptFocus { tournament: string; tournamentId: string; match?: string; matchId?: string }
+export function assistantPrompt(now = new Date(), staff = false, focus?: PromptFocus) {
   return [
     ...SHARED,
+    // Names are organizer-entered data, so they are quoted as JSON strings, never inlined as prose.
+    ...(focus ? [`The viewer opened Arena AI from ${focus.match ? `the match ${JSON.stringify(focus.match)} (matchId ${JSON.stringify(focus.matchId)}) in ` : ''}the tournament ${JSON.stringify(focus.tournament)} (tournament id ${JSON.stringify(focus.tournamentId)}). A question that names no game, team or tournament is about that${focus.match ? ' match' : ' tournament'}; look it up with the tools.`] : []),
     `Today is ${manilaToday(now)} (Asia/Manila). All match times are Manila time.`,
     'Keep answers under 150 words unless the user asks for detail.',
     ...(staff ? ['The user is tournament staff. listOpenReports is available; it shows case ids and status only.'] : []),

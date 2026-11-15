@@ -12,7 +12,9 @@ ArenaHub runs in three places, and each reads its own settings. "Public" values 
 | `VITE_FIREBASE_APP_ID` | required | | required | no | |
 | `VITE_API_BASE_URL` | only with a separate API host | | | no | For example `https://arenahub-api.example.app`. Empty means the same origin |
 | `GEMINI_API_KEY` | **never** | recommended | optional | **yes** | Arena AI's primary model and video review. Without any model key, Arena AI answers from the live records only and video review is off |
-| `GEMINI_MODEL` | | optional | optional | no | Defaults to `gemini-3.8-flash`. Never shown to viewers |
+| `GEMINI_MODEL` | | optional | optional | no | Defaults to `gemini-3.5-flash-lite` (about 1 s on the free tier when checked on 15 Nov 2026; `gemini-3.8-flash` timed out on every request). Never shown to viewers. Re-check with `npx tsx scripts/ai-eval-live.ts` |
+| `GEMINI_FALLBACK_MODEL` | | optional | optional | no | Tried when the first model fails or is silent. Defaults to `gemini-3.6-flash`; `none` disables it |
+| `AI_FIRST_TOKEN_MS` | | optional | optional | no | A model that has written nothing after this many milliseconds is skipped for the next one (default 12000) |
 | `GROQ_API_KEY` | **never** | optional | optional | **yes** | Backup model, used when Gemini fails or is over quota. Replies are labelled "Arena AI (backup model)" |
 | `GROQ_MODEL` | | optional | optional | no | Defaults to `openai/gpt-oss-20b`. Free-tier availability is UNVERIFIED; check GroqCloud, Settings, Limits |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | **never** | recommended | optional | **yes** | The service account JSON itself, for hosts that take only env values. Enables token revocation checks, Firestore rate limits, `@Arena` replies in live chat and the staff `listOpenReports` tool. Without it (and without `GOOGLE_APPLICATION_CREDENTIALS`), `/api/health` reports `firebaseAccess: "rest"` |
@@ -21,7 +23,7 @@ ArenaHub runs in three places, and each reads its own settings. "Public" values 
 | `AI_BURST_PER_MINUTE` | | optional | optional | no | Requests of any kind per user per minute before a 429 (default 30) |
 | `AI_CHAT_USER_INTERVAL_SEC` | | optional | optional | no | Seconds between one viewer's `@Arena` questions (default 30) |
 | `AI_CHAT_MATCH_PER_MINUTE` | | optional | optional | no | Model replies per match per minute in live chat (default 6). Over it, the match record answers |
-| `GEMINI_VIDEO_MODEL` | | optional | optional | no | Vision model for video review |
+| `GEMINI_VIDEO_MODEL` | | optional | optional | no | Vision model for video review. Defaults to `gemini-3.6-flash` (image analysis on it not yet verified) |
 | `CORS_ORIGINS` | | required with a separate API host | | no | The website origins, comma-separated, https only |
 | `HOST`, `PORT` | | | optional | no | `HOST=0.0.0.0` opens the laptop to the event Wi-Fi; port defaults to 3210 |
 | `INTEGRITY_PUBLIC_URL` | | | online mode only | no | Set by `npm run online` |

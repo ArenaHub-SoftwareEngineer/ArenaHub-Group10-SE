@@ -31,7 +31,7 @@ export function configuredProviders(env: Env, fetcher: typeof fetch = fetch): Pr
   const config = aiConfig(env);
   if (config.fake) return [fakeProvider()];
   return [
-    ...(config.gemini ? [geminiProvider(config.gemini.key, config.gemini.model)] : []),
+    ...(config.gemini ? config.gemini.models.map(model => geminiProvider(config.gemini!.key, model)) : []),
     ...(config.groq ? [groqProvider(config.groq.key, config.groq.model, fetcher)] : []),
   ];
 }
@@ -104,9 +104,10 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
     // The viewer pressed stop or left: stop the model call too.
     res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
     try {
-      const result = await assistant.answer({ caller, query: body.data.query, history: body.data.history, data, signal: controller.signal }, {
+      const result = await assistant.answer({ caller, query: body.data.query, history: body.data.history, data, signal: controller.signal, focus: body.data.focus }, {
         start: source => send('start', { source }),
         delta: text => send('delta', { text }),
+        replace: (source, text) => send('replace', { source, text }),
       });
       send('done', { source: result.source, references: result.references, ...(result.limited ? { limited: true } : {}) });
     } catch (error) {
