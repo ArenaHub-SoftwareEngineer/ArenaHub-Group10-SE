@@ -132,10 +132,13 @@ test('approved students issue QR invitations for password spectators; external G
   await assertSucceeds(redeem(password, token));
   await assertFails(getDoc(doc(personal, 'tournaments', 'rules-t1')));
   await assertSucceeds(getDoc(doc(password, 'tournaments', 'rules-t1')));
-  const message = (database, uid, id, author, extra = {}) => {
+  const message = async (database, uid, id, author, extra = {}) => {
+    // Clear the pace record so the 2 second chat floor does not interfere; tests/chat.rules.test.mjs covers pacing.
+    await env.withSecurityRulesDisabled(async context => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(context.firestore(), 'matchChat', 'test-match', 'pace', uid)); });
     const batch = writeBatch(database);
     batch.set(doc(database, 'matchChat', 'test-match', 'messages', id), { author, text: 'Go team!', createdAt: serverTimestamp(), ...extra });
     batch.set(doc(database, 'matchChat', 'test-match', 'authors', id), { uid, createdAt: serverTimestamp() });
+    batch.set(doc(database, 'matchChat', 'test-match', 'pace', uid), { lastMessageAt: serverTimestamp(), messageId: id });
     return batch.commit();
   };
   await assertSucceeds(message(student, 'other', 'named', 'Test Student'));

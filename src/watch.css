@@ -121,6 +121,37 @@
 .app-shell .watch-chat-form input[type=text]:focus { box-shadow: none !important; border-color: var(--focus) !important; border-bottom-width: 2px; }
 .watch-chat-anon { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
 .watch-chat-readonly { padding: 12px 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; }
+
+/* Chat moderation: timestamps, staff badge, pinned message, mute and slow-mode states, staff menu. */
+.watch-chat-message time { color: var(--text-muted); font-size: 11px; margin-right: 6px; font-variant-numeric: tabular-nums; }
+.watch-chat-badge { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 18px; background: var(--brand-soft); color: var(--brand-ink); vertical-align: 1px; }
+.watch-chat-message.is-staff p strong { color: var(--brand-ink); }
+.watch-chat-slow { display: inline-flex; align-items: center; gap: 4px; }
+.watch-chat-staffbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.watch-chat-staffbar label { display: flex; align-items: center; gap: 6px; }
+.watch-chat-staffbar select { height: 28px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text-primary); font-size: 12px; padding: 0 6px; }
+.watch-chat-mutes-toggle { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border-radius: 6px; color: var(--text-secondary); cursor: pointer; }
+.watch-chat-mutes-toggle:hover:not(:disabled) { background: var(--surface-hover); }
+.watch-chat-mutes-toggle:disabled { cursor: default; opacity: .7; }
+.watch-chat-mutes { list-style: none; margin: 0; padding: 4px 12px 8px; border-bottom: 1px solid var(--border); display: grid; gap: 4px; font-size: 12px; }
+.watch-chat-mutes li { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-secondary); }
+.watch-chat-mutes button { color: var(--brand-ink); font-weight: 600; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+.watch-chat-mutes button:hover { background: var(--surface-hover); }
+.watch-chat-pinned { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-soft, var(--surface-hover)); font-size: 13px; }
+.watch-chat-pinned > svg { flex: none; margin-top: 3px; color: var(--brand-ink); }
+.watch-chat-pinned p { flex: 1; overflow-wrap: anywhere; line-height: 1.4; }
+.watch-chat-pinned p strong { margin-right: 6px; }
+.watch-chat-pinned button { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; color: var(--text-muted); cursor: pointer; }
+.watch-chat-pinned button:hover { background: var(--surface-elevated); color: var(--text-primary); }
+.watch-chat-moderate:hover { color: var(--brand-ink) !important; }
+.watch-chat-menu { position: absolute; right: 4px; top: 34px; z-index: 5; min-width: 180px; display: flex; flex-direction: column; padding: 4px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-elevated, var(--surface)); box-shadow: 0 8px 24px rgb(0 0 0 / .18); }
+.watch-chat-menu button { text-align: left; padding: 7px 10px; border-radius: 6px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
+.watch-chat-menu button:hover, .watch-chat-menu button:focus-visible { background: var(--surface-hover); }
+.watch-chat-menu button.is-danger { color: var(--danger); }
+.watch-chat-menu-label { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-top: 1px solid var(--border); margin-top: 2px; }
+.watch-chat-muted { display: flex; align-items: center; gap: 6px; padding: 12px 16px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 13px; }
+.watch-chat-muted strong { font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.watch-chat-wait { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 .watch-upnext h2 { font-size: 16px; margin-bottom: 8px; }
 .watch-upnext-list { display: flex; flex-direction: column; gap: 4px; }
 

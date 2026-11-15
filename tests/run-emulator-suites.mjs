@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 
 const suites = [
-  ['rules', 'node --test tests/firestore.rules.test.mjs tests/operations.rules.test.mjs tests/data.rules.test.mjs tests/chat.rules.test.mjs'],
+  ['rules', 'node --test --test-concurrency=1 tests/firestore.rules.test.mjs tests/operations.rules.test.mjs tests/data.rules.test.mjs tests/chat.rules.test.mjs'],
   ['storage', 'node --test tests/evidence.storage.test.mjs'],
   ['auth', 'node --test tests/auth.test.mjs'],
   ['auth-flow', 'node --test tests/auth-flow.integration.test.mjs'],

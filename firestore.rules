@@ -15,14 +15,18 @@ service cloud.firestore {
     function isAdmin() { return signedIn() && request.auth.token.get('admin', false) == true; }
     function isStaff() { return signedIn() && (isAdmin() || request.auth.token.get('role', '') in ['admin', 'organizer', 'school-admin', 'moderator']); }
     function activeAccount() { return signedIn() && request.auth.token.get('email_verified', false) == true && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'active'; }
+    // "Arena AI" is reserved for server-posted assistant replies.
+    function reservedChatName(name) { return name is string && name.lower().matches('[^a-z0-9]*arena[^a-z0-9]*ai[^a-z0-9]*'); }
     function safeProfileCreate(uid) {
       return ownsProfile(uid) && request.resource.data.uid == uid
+        && !reservedChatName(request.resource.data.get('name', ''))
         && request.resource.data.role == 'user' && request.resource.data.status == 'active'
         && !request.resource.data.keys().hasAny(['spectatorInviteApproved'])
         && request.resource.data.emailVerified == request.auth.token.get('email_verified', false);
     }
     function safeProfileUpdate(uid) {
       return ownsProfile(uid)
+        && !reservedChatName(request.resource.data.get('name', ''))
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['uid', 'role', 'status', 'eventPassCode', 'joinedAt', 'spectatorInviteApproved'])
         && (request.resource.data.email == resource.data.email || request.resource.data.email == request.auth.token.get('email', ''))
         && request.resource.data.emailVerified == request.auth.token.get('email_verified', false);
@@ -157,27 +161,89 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['draft', 'savedAt'])
         && request.resource.data.draft.id == draftId && request.resource.data.savedAt == request.time;
     }
+    // ---- Live match chat ----
+    // Every staff moderation write names an audit event created in the same batch.
+    function auditedNow(auditId) {
+      return auditId is string && auditId.size() > 0 && auditId.size() <= 100
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.actorId == request.auth.uid
+        && getAfter(/databases/$(database)/documents/auditEvents/$(auditId)).data.createdAt == request.time;
+    }
+    function chatSlowModeSec(matchId) {
+      let state = /databases/$(database)/documents/matchChat/$(matchId);
+      return exists(state) ? get(state).data.slowModeSec : 0;
+    }
+    function chatMuted(matchId) {
+      let mute = /databases/$(database)/documents/matchChat/$(matchId)/mutes/$(request.auth.uid);
+      return exists(mute) && request.time < get(mute).data.until;
+    }
+    function validPin(matchId, p) {
+      return p == null || (p is map && p.keys().hasOnly(['messageId', 'author', 'text'])
+        && p.messageId is string && p.messageId.size() > 0 && p.messageId.size() <= 100
+        && p.author is string && p.author.size() <= 80 && p.text is string && p.text.size() <= 500
+        && get(/databases/$(database)/documents/matchChat/$(matchId)/messages/$(p.messageId)).data.text == p.text);
+    }
+    // Chat state: slow mode and the pinned message. Staff only, always audited.
+    match /matchChat/{matchId} {
+      allow get: if admitted();
+      allow create, update: if activeStaff()
+        && request.resource.data.keys().hasOnly(['slowModeSec', 'pinned', 'updatedBy', 'auditId', 'updatedAt'])
+        && request.resource.data.slowModeSec in [0, 10, 30, 60, 120]
+        && validPin(matchId, request.resource.data.pinned)
+        && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+        && auditedNow(request.resource.data.auditId);
+    }
     match /matchChat/{matchId}/messages/{messageId} {
       allow read: if campusStudent() || activeSpectator();
       allow create: if campusStudent()
-        && request.resource.data.keys().hasOnly(['author', 'text', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['author', 'text', 'createdAt', 'badge'])
         && request.resource.data.createdAt == request.time
         && request.resource.data.text is string && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 500
         && request.resource.data.author is string
         && request.resource.data.author.matches('[^@]{1,80}')
+        && !reservedChatName(request.resource.data.author)
         && (request.resource.data.author == 'Anonymous'
           || request.resource.data.author == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name)
+        // The staff badge is checked against the token role, never the profile.
+        && (!request.resource.data.keys().hasAny(['badge']) || (request.resource.data.badge == 'staff' && isStaff()))
+        && !chatMuted(matchId)
         && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/authors/$(messageId)).data.uid == request.auth.uid
-        && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/authors/$(messageId)).data.createdAt == request.time;
-      allow delete: if isStaff() && campusStudent();
+        && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/authors/$(messageId)).data.createdAt == request.time
+        // The pace record must be written in the same batch; its own rule enforces slow mode.
+        && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/pace/$(request.auth.uid)).data.messageId == messageId;
+      allow delete: if activeStaff();
     }
     match /matchChat/{matchId}/authors/{messageId} {
-      allow get: if isStaff() && campusStudent();
+      allow get, list: if activeStaff();
       allow create: if campusStudent()
         && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
         && request.resource.data.uid == request.auth.uid && request.resource.data.createdAt == request.time
         && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/messages/$(messageId)).data.createdAt == request.time;
+    }
+    // One record per viewer per match: when they last posted. Slow mode (with a 2 second floor) is enforced here.
+    match /matchChat/{matchId}/pace/{uid} {
+      allow get: if ownsProfile(uid);
+      allow create, update: if ownsProfile(uid) && campusStudent()
+        && request.resource.data.keys().hasOnly(['lastMessageAt', 'messageId'])
+        && request.resource.data.lastMessageAt == request.time
+        && request.resource.data.messageId is string
+        && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/messages/$(request.resource.data.messageId)).data.createdAt == request.time
+        && (resource == null || isStaff()
+          || request.time >= resource.data.lastMessageAt + duration.value(chatSlowModeSec(matchId) > 2 ? chatSlowModeSec(matchId) : 2, 's'));
+    }
+    // Timed mutes and kicks. The muted viewer can read their own record to see the countdown.
+    match /matchChat/{matchId}/mutes/{uid} {
+      allow get: if ownsProfile(uid) || activeStaff();
+      allow list: if activeStaff();
+      allow create, update: if activeStaff() && uid != request.auth.uid
+        && request.resource.data.keys().hasOnly(['until', 'kind', 'reason', 'by', 'auditId', 'createdAt'])
+        && request.resource.data.kind in ['mute', 'kick']
+        && request.resource.data.until is timestamp && request.resource.data.until > request.time
+        && request.resource.data.until <= request.time + duration.value(24, 'h')
+        && request.resource.data.reason is string && request.resource.data.reason.size() <= 200
+        && request.resource.data.by == request.auth.uid && request.resource.data.createdAt == request.time
+        && auditedNow(request.resource.data.auditId);
+      allow delete: if activeStaff();
     }
     function validEvidenceFile(file, caseId) {
       return file is map && file.keys().hasOnly(['path', 'name', 'mime', 'size'])

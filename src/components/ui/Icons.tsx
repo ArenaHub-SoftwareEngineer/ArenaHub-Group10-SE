@@ -11,6 +11,7 @@ import {
   UserPlus as UserPlusVector,
   MessageSquare as MessageSquareVector,
   Shield as ShieldVector,
+  Pin as PinVector,
   ShieldCheck as ShieldCheckVector,
   Settings2 as Settings2Vector,
   Trophy as TrophyVector,
@@ -121,6 +122,7 @@ export const User = icon(UserVector);
 export const UserPlus = icon(UserPlusVector);
 export const MessageSquare = icon(MessageSquareVector);
 export const Shield = icon(ShieldVector);
+export const Pin = icon(PinVector);
 export const ShieldCheck = icon(ShieldCheckVector);
 export const Settings2 = icon(Settings2Vector);
 export const Trophy = icon(TrophyVector);
