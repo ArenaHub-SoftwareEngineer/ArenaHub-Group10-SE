@@ -346,7 +346,57 @@
   font-size: 12px;
 }
 .studio-board-help { color: var(--text-secondary); margin: 14px 0 16px; font-size: 14px; line-height: 1.5; }
-.studio-tree-frame { background:var(--bg-base); border: 1px solid var(--border); border-radius: 10px; }
+.studio-tree-frame { position: relative; background:var(--bg-base); border: 1px solid var(--border); border-radius: 10px; }
+.studio-bracket-save {
+  position: absolute;
+  z-index: 20;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-elevated) 94%, transparent);
+  color: var(--text-secondary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 140ms ease, transform 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.studio-tree-frame:hover .studio-bracket-save,
+.studio-bracket-save:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.studio-bracket-save:hover { color: var(--text-primary); border-color: var(--brand-border); }
+.studio-bracket-save:disabled { cursor: progress; color: var(--text-muted); }
+.studio-bracket-save::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.studio-bracket-save:hover::after,
+.studio-bracket-save:focus-visible::after { opacity: 1; transform: translateY(0); }
+@media (hover: none) {
+  .studio-bracket-save { opacity: 1; transform: none; }
+}
 .studio-tree { padding: 16px 10px 22px; scrollbar-color: #777986 #1e1f24; }
 .studio-tree:focus-visible, .studio-builder > summary:focus-visible { outline: 2px solid var(--brand-hover); outline-offset: 2px; }
 .app-shell .studio-board .studio-tree [class~="text-[#80859A]"] { color: var(--text-muted); }

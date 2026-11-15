@@ -10,6 +10,7 @@ import { Modal } from '../ui/Modal';
 import { StreamScheduleEditor } from './StreamScheduleEditor';
 import { publicationGameKey } from '../../lib/bracketPublication';
 import { scheduleDate, timeOrder } from '../../lib/calendar';
+import { downloadBracketPng } from '../../lib/bracketImageExport';
 import { SuccessDialog } from '../ui/SuccessDialog';
 import { useToast } from '../ui/Toast';
 import { Req } from '../ui/Req';
@@ -46,7 +47,7 @@ import {
   ArrowUp,
   LoaderCircle,
   FileText,
-  Save,
+  Download,
 } from '../ui/Icons';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -520,7 +521,7 @@ const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
   };
 
   return (
-    <Modal open={isOpen} title="Publish bracket" description="Ready to publish live? Choose a game and review the bracket and schedule. Publishing replaces the live version for the selected game or mode." className="studio-publish" onClose={onClose} busy={publishing}>
+    <Modal open={isOpen} title="Publish Bracket" description="Choose a game and review the bracket and schedule. ArenaHub saves the latest draft first, then publishes it live for the selected game or mode." className="studio-publish" onClose={onClose} busy={publishing}>
         {/* Body */}
         <fieldset disabled={publishing} className="studio-publish-body">
           {/* Game Selection */}
@@ -632,7 +633,7 @@ const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
             className="arena-primary"
           >
             <Check className="w-4 h-4 stroke-[2.5]" />
-            <span>{publishing ? 'Publishing…' : 'Confirm and publish'}</span>
+            <span>{publishing ? 'Publishing…' : 'Publish Bracket'}</span>
           </button>
         </div>
     </Modal>
@@ -1011,6 +1012,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
   const [draftToDelete, setDraftToDelete] = useState<BracketDraft | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [draftBeforeMatchEdit, setDraftBeforeMatchEdit] = useState<BracketDraft | null>(null);
+  const [isExportingBracket, setIsExportingBracket] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
 
   // Modals
@@ -1487,13 +1489,23 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     showToast(`Bracket "${saved.title}" saved as a draft on this device.`, 'success');
   };
 
-  const handleSaveBracket = () => {
-    if (currentDraft) setShowConfirmSave(true);
+  const handleDownloadBracket = async () => {
+    if (!currentDraft || isExportingBracket) return;
+    setIsExportingBracket(true);
+    try {
+      await downloadBracketPng(currentDraft);
+      showToast('Bracket image saved as PNG.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not save the bracket image.', 'error');
+    } finally {
+      setIsExportingBracket(false);
+    }
   };
 
   const handleConfirmPublishToGame = async (gameName: string, gameId: string) => {
     if (!currentDraft) throw new Error('Load a bracket before publishing.');
-    const published = await firestoreService.publishBracket(currentDraft, gameName, gameId);
+    const saved = firestoreService.saveBracketDraft(currentDraft);
+    const published = await firestoreService.publishBracket(saved, gameName, gameId);
     loadedBracket.current = published;
     setCurrentDraft(published);
     setShowPublishGameModal(false);
@@ -1641,24 +1653,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
             <span>Bracket details</span>
           </button>
 
-          {/* Dedicated Save Bracket Button */}
-          <button
-            onClick={handleSaveBracket}
-            disabled={!currentDraft}
-            className="arena-outline"
-            title="Save the draft on this device"
-          >
-            <Save size={16} />
-            <span>Save draft</span>
-          </button>
-
           <button
             onClick={() => currentDraft && setShowPublishGameModal(true)}
             disabled={!currentDraft}
             className="arena-primary"
           >
             <Check className="w-4 h-4 stroke-[2.5]" />
-            <span>Publish bracket</span>
+            <span>Publish Bracket</span>
           </button>
         </div>
       </header>
@@ -1666,7 +1667,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       <details className="studio-builder">
         <summary><span><strong>Saved drafts ({drafts.length})</strong><small>Open a roster and bracket saved in this browser.</small></span><ChevronDown size={18} /></summary>
         <div className="studio-builder-body studio-bracket-library">
-          {drafts.length === 0 && <p className="studio-muted">Use Save draft to keep a bracket and its team roster here.</p>}
+          {drafts.length === 0 && <p className="studio-muted">Publishing a bracket also keeps its latest draft and team roster here.</p>}
           {drafts.map(draft => <div key={draft.id} className="studio-bracket-library-row">
             <span><strong>{draft.title}</strong><small>{draft.gameName} · {draft.teamsCount} teams</small></span>
             <button type="button" className="arena-outline" onClick={() => requestBracket(draft)}>Open draft</button>
@@ -2053,6 +2054,18 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
               </p>
 
               <div className="studio-tree-frame">
+                <button
+                  type="button"
+                  className="studio-bracket-save"
+                  onClick={() => void handleDownloadBracket()}
+                  disabled={isExportingBracket}
+                  aria-label="Save bracket image"
+                  data-tooltip="Save"
+                >
+                  {isExportingBracket
+                    ? <LoaderCircle size={17} className="animate-spin" />
+                    : <Download size={17} />}
+                </button>
                 <HorizontalBracketTree
                   draft={currentDraft}
                   selectedMatchId={selectedMatch?.id || null}
