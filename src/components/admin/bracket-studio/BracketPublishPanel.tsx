@@ -106,7 +106,7 @@ export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
                   {CODM_MODES.map(mode => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
                 </select>
               </label>
-              {codmMode?.id === 'game-codm-br' && <p className="module-notice">This publishes the bracket and schedule under Battle Royale. The bracket still uses head-to-head match results. Lobby placement scoring is unavailable.</p>}
+              {codmMode?.id === 'game-codm-br' && <p className="module-notice">This publishes the bracket and schedule under Battle Royale. This bracket uses head-to-head match results. For lobby games scored by placement and eliminations, create the event on the Battle Royale page instead.</p>}
             </div>}
 
             {/* Custom Game toggle */}

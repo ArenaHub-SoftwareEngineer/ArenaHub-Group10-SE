@@ -408,14 +408,15 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     showToast(`Previous bracket and schedule restored for ${restored.gameName}.`, 'success');
   };
 
+  // Throws on failure: the confirmation dialog stays open with the error, and its button retries.
+  // Nothing changes on this device until the cloud write succeeds, so the list never shows a bracket
+  // as gone while viewers can still see it.
   const handleUnpublishBracket = async (bracket: BracketDraft) => {
-    firestoreService.deletePublishedBracket(bracket.id);
     try {
-      await firestoreService.syncBracketsToCloud();
+      await firestoreService.unpublishBracket(bracket.id);
     } catch (error) {
-      console.error('[ArenaHub] Bracket unpublish sync failed:', error);
-      showToast(getBracketSyncErrorMessage(error, 'Unpublished'), 'error');
-      return;
+      console.error('[ArenaHub] Bracket unpublish failed:', error);
+      throw new Error(getBracketSyncErrorMessage(error, 'Unpublished'));
     }
     setPublishedBrackets(firestoreService.getPublishedBrackets());
     setBracketToUnpublish(null);

@@ -346,10 +346,17 @@ class FirestoreService {
     return restored;
   }
 
-  /** Removes a bracket locally; syncBracketsToCloud() then unpublishes it. */
-  public deletePublishedBracket(bracketId: string): void {
+  /**
+   * Unpublishes one bracket in the cloud first, and removes it here only after that succeeds.
+   * If the write fails the bracket stays listed, matching what viewers still see, and the caller can retry.
+   */
+  public async unpublishBracket(bracketId: string): Promise<void> {
+    this.requireSignedIn('unpublish brackets');
     const bracket = this.published.find(b => b.id === bracketId);
+    const cloud = this.cloud.get(bracketId);
+    if (cloud) await this.guarded(() => unpublishTournament(bracketId, cloud.revision));
     this.published = this.published.filter(b => b.id !== bracketId);
+    this.cloud.delete(bracketId);
     if (bracket) this.addAuditLog(`Unpublished bracket "${bracket.title}"`);
     this.emit();
   }

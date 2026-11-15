@@ -65,6 +65,17 @@ test('organizer runs a Battle Royale lobby and viewers see placement standings',
   await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible({ timeout: 20_000 });
   await expect(viewer.locator('.placement-table tbody tr').first().locator('.total')).toHaveText('27');
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+
+  // Unpublish from Bracket Studio: the event leaves the published list only after the cloud write succeeds.
+  await admin.evaluate(() => { window.location.hash = '#/admin/bracket-studio'; });
+  const library = admin.locator('details.studio-builder').filter({ has: admin.locator('summary', { hasText: 'Live published brackets' }) });
+  await library.locator('summary').click();
+  const row = library.locator('.studio-bracket-library-row').filter({ hasText: title });
+  await row.getByRole('button', { name: 'Unpublish' }).click();
+  await admin.getByRole('dialog').getByRole('button', { name: 'Unpublish Bracket' }).click();
+  await expect(admin.getByText(`Bracket "${title}" unpublished.`)).toBeVisible({ timeout: 20_000 });
+  await expect(row).toHaveCount(0);
+  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toHaveCount(0, { timeout: 20_000 });
   expect(ours(adminErrors)).toEqual([]);
   expect(ours(viewerErrors)).toEqual([]);
 });
