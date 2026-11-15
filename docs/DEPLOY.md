@@ -11,7 +11,7 @@
 | API: Arena AI and video review (`/api/ai`, `/api/fair-play`, `/api/health`) | A Node host on a separate origin | Firebase Hosting rewrites can reach only Cloud Functions and Cloud Run, which need the Blaze plan (plan C4) |
 | Match monitor (`/api/integrity`, `join.html`) | The event laptop (`npm start`, `npm run online`) | Recordings and sessions stay on local disk by design |
 
-Without an API host, the website still works. Arena AI falls back to its local guide, and video review is unavailable.
+Without an API host, the website still works. Arena AI answers from the live records on the viewer's device, `@Arena` in live chat is unavailable, and so is video review.
 
 ## 1. Check before deploying
 
@@ -38,9 +38,13 @@ Plan recommendation: Vercel Hobby (free, non-commercial). **The steps below are 
 
 1. Import the repository as a new project with the framework preset "Other" and no build command, so no website is published there.
 2. Route every `/api/*` path to the `api/index.ts` function. On Vercel this is a rewrite from `/api/(.*)` to `/api` in `vercel.json`. The repository deliberately ships no `vercel.json` until that is verified, because a wrong output directory would publish source files.
-3. Set the API-host variables from [ENV_CHECKLIST.md](ENV_CHECKLIST.md): the Firebase project id and web API key, `GEMINI_API_KEY`, and `CORS_ORIGINS`.
+3. Set the API-host variables from [ENV_CHECKLIST.md](ENV_CHECKLIST.md): the Firebase project id and web API key, `GEMINI_API_KEY` (and optionally `GROQ_API_KEY`), `CORS_ORIGINS`, and a service account in `FIREBASE_SERVICE_ACCOUNT_JSON`.
 
-Known limits, both planned for Phase 3: the request limit for the assistant is kept in memory per server instance (3.6), and sign-in tokens are checked through Google's REST lookup rather than firebase-admin (3.1).
+Why the service account matters: with it, the API checks sign-in tokens with `verifyIdToken(token, true)` (revoked sessions are refused), keeps Arena AI's per-user limits in Firestore (`aiRate/*`, one read and one write per model answer), and can post `@Arena` replies in live chat. Without it, the API still works: it verifies tokens through Google's lookup, keeps limits in memory per instance, and `@Arena` in chat answers 503. Use a dedicated service account, not a personal key.
+
+Add a Firestore TTL policy on the `aiRate` collection group, field `expiresAt` (Firebase Console, Firestore, TTL), so old counters are deleted automatically. Each counter expires an hour after its minute ends.
+
+Still open: plan question Q5 (staff AI tools on the free Gemini tier). Until it is answered, `summarizeCase` does not exist and `listOpenReports` returns case ids, status, match and evidence count only.
 
 ## 4. Website
 

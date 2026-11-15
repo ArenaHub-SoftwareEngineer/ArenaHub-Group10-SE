@@ -66,3 +66,40 @@ Node 24's recursive `fs.rmSync` returns without error but deletes nothing on Win
 | browser (Playwright) | 9 / 9 passed, 1 skipped by design (the propagation check runs at 1440 px only). An organizer change reached an open bracket viewer in 145 ms. |
 
 Main bundle chunks are unchanged in size (`index` 470 kB, the Firebase chunk 581 kB). Code splitting is Phase 4.
+
+## After Phase 2 (15 Nov 2026, branch `phase-2-modules`, not merged)
+
+| Suite | Result |
+|---|---|
+| lint | pass |
+| unit | 108 / 108 |
+| api, video-api, integrity-api | 3 / 3, 1 / 1, 7 / 7 |
+| build | pass |
+| rules | 36 / 36 |
+| auth, auth-flow, stream, operations, chat kick, migration, roles | all pass |
+| browser (Playwright) | 29 passed, 5 skipped by design (desktop-only tests in the 375 px project) |
+
+## After Phase 3: Arena AI rebuild (15 Nov 2026, branch `phase-2-modules`, not merged)
+
+| Suite | Result |
+|---|---|
+| lint | pass |
+| unit | 174 / 174, including the Arena AI eval (`tests/ai-eval.test.ts`, 63 cases) and the build-check test |
+| api, video-api, integrity-api | 4 / 4, 1 / 1, 7 / 7 |
+| build | pass, 41 files. The build check compared the actual server key values (1 configured) against every file in `dist/`: absent |
+| rules | 38 / 38 (2 new: Arena AI replies are server-only; the chat AI switch is staff-only and audited) |
+| auth, auth-flow, stream, operations, chat kick, migration, roles, server auth | all pass (server auth is new: firebase-admin verification and the published reader, 3 tests) |
+| storage | **not run**: no Storage emulator on port 9198 in this session (connection refused) |
+| browser (Playwright) | 31 passed, 6 skipped by design, 1 failed: "organizer creates a match monitor pairing code" at 1440 px. That page never got past "Loading ArenaHub…" (sign-in and profile load), so no monitor code ran. It passes alone and right after the test that precedes it. In the full run the shared emulator had slowed (the timeline test took 1.5 min instead of 21 s). Recorded as an environment issue, not hidden with a longer timeout. Re-check on fresh emulators with `npm run test:e2e`. |
+
+Arena AI eval (63 cases, scripted model, fixture built through the public-document converters): every reply is checked for grounding (each "X vs Y" team and each score exists in the fixture), private roster values, emoji and markdown tables. It covers 11 live-records answers, 5 model answers through the tools, 19 refusals (off-topic, injection, private data) with the model never called, output cleaning, the backup model, a broken stream, the rate limit, the cache, tool privacy, staff-only tools, live chat (budget, interval, refusals, access) and bracket drafts.
+
+Time to first token, Arena AI page, measured by the browser test with the scripted provider (so this is ArenaHub's own overhead: sign-in check, record read, rate-limit transaction, streaming; a real model adds its own latency):
+
+| Run | First token | Complete answer |
+|---|---|---|
+| 1440 px, warm server | 420 ms | 441 ms |
+| 1440 px and 375 px, late in the full suite (emulator under load) | 2124 ms, 2005 ms | 2215 ms, 2029 ms |
+| 375 px, first request after the server started | 1495 ms | 2405 ms |
+
+Real-provider run: **not done yet.** It sends public tournament data to the Gemini free tier and uses Kerr's quota, so it waits for his go-ahead. Record the result here when it runs.

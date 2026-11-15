@@ -8,7 +8,7 @@ const whole = (value: string | undefined, fallback: number, min: number, max: nu
 };
 
 export interface AiConfig {
-  gemini?: { key: string; model: string; chatModel: string };
+  gemini?: { key: string; model: string };
   groq?: { key: string; model: string };
   /** Model answers per signed-in user per minute (assistant page). Over the limit, live records answer. */
   userPerMinute: number;
@@ -25,9 +25,8 @@ export interface AiConfig {
 
 export function aiConfig(env: Env): AiConfig {
   const emulators = env.VITE_FIREBASE_EMULATORS === 'true' && env.VITE_FIREBASE_PROJECT_ID === 'demo-arenahub';
-  const geminiModel = env.GEMINI_MODEL || 'gemini-3.8-flash';
   return {
-    ...(env.GEMINI_API_KEY ? { gemini: { key: env.GEMINI_API_KEY, model: geminiModel, chatModel: env.GEMINI_CHAT_MODEL || geminiModel } } : {}),
+    ...(env.GEMINI_API_KEY ? { gemini: { key: env.GEMINI_API_KEY, model: env.GEMINI_MODEL || 'gemini-3.8-flash' } } : {}),
     ...(env.GROQ_API_KEY ? { groq: { key: env.GROQ_API_KEY, model: env.GROQ_MODEL || 'openai/gpt-oss-20b' } } : {}),
     userPerMinute: whole(env.AI_USER_PER_MINUTE, 5, 1, 60),
     globalPerMinute: whole(env.AI_GLOBAL_PER_MINUTE, 12, 1, 1000),

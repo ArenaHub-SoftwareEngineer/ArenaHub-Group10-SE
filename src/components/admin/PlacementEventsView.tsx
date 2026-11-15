@@ -78,10 +78,18 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
   // fingerprint sorts keys: a snapshot from the local cache and one from the server can list the same fields in a different order.
   const savedGameKey = event && game ? fingerprint([event.id, event.placement?.teams.map(t => t.id), game]) : '';
   const loadedKey = useRef('');
+  // Which game the form shows, and whether the organizer has typed into it since it was loaded or saved.
+  // A late snapshot of the same game (a slow publish or save confirmation) must never overwrite those edits.
+  const loadedGame = useRef('');
+  const dirty = useRef(false);
+  const edit = (update: (rows: Record<string, Row>) => Record<string, Row>) => { dirty.current = true; setRows(update); };
   // Layout effect: the saved values load before the form paints, so nothing typed can land in between.
   useLayoutEffect(() => {
     if (!event?.placement || !game || !savedGameKey || savedGameKey === loadedKey.current) return;
     loadedKey.current = savedGameKey;
+    const gameKey = `${event.id}|${game.id}`;
+    if (gameKey === loadedGame.current && dirty.current) return;
+    loadedGame.current = gameKey; dirty.current = false;
     setRows(Object.fromEntries(event.placement.teams.map(team => {
       const result = game.results.find(r => r.teamId === team.id);
       return [team.id, { placement: result ? String(result.placement) : '', kills: result ? String(result.kills) : '' }];
@@ -112,6 +120,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
       const next = recordGame(event.placement, game.id, toResults(), status);
       const withSchedule = { ...next, games: next.games.map(g => g.id === game.id ? { ...g, scheduledDate: when.date || undefined, scheduledTime: when.time || undefined } : g) };
       await firestoreService.savePlacementEvent(event.id, withSchedule, `Battle Royale "${event.title}": ${game.label} saved as ${status}`);
+      dirty.current = false;
       // Move to the next game now. Waiting for the snapshot would switch the form later, possibly
       // after the organizer has started typing the next results, and wipe them.
       if (status === 'completed') {
@@ -178,12 +187,12 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
           </select>
         </label>
         <label>Status
-          <select value={status} onChange={e => setStatus(e.target.value as PlacementGame['status'])}>
+          <select value={status} onChange={e => { dirty.current = true; setStatus(e.target.value as PlacementGame['status']); }}>
             <option value="upcoming">Upcoming</option><option value="live">Live</option><option value="completed">Final (counts toward standings)</option>
           </select>
         </label>
-        <label>Date<input type="date" value={when.date} onChange={e => setWhen(w => ({ ...w, date: e.target.value }))} /></label>
-        <label>Time<input type="time" value={when.time} onChange={e => setWhen(w => ({ ...w, time: e.target.value }))} /></label>
+        <label>Date<input type="date" value={when.date} onChange={e => { dirty.current = true; setWhen(w => ({ ...w, date: e.target.value })); }} /></label>
+        <label>Time<input type="time" value={when.time} onChange={e => { dirty.current = true; setWhen(w => ({ ...w, time: e.target.value })); }} /></label>
       </div>
       <table className="placement-entry-table">
         <thead><tr><th scope="col">Squad</th><th scope="col">Placement (1 to {teamCount})</th><th scope="col">Eliminations</th></tr></thead>
@@ -193,9 +202,9 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
           return <tr key={team.id}>
             <th scope="row">{team.name}{team.collegeCode && <small className="studio-muted"> · {team.collegeCode}</small>}</th>
             <td><input type="number" inputMode="numeric" min={1} max={teamCount} aria-label={`${team.name} placement`} aria-invalid={dup || undefined} title={dup ? 'Another squad already has this placement' : undefined} value={row.placement}
-              onChange={e => setRows(r => ({ ...r, [team.id]: { ...row, placement: e.target.value } }))} /></td>
+              onChange={e => edit(r => ({ ...r, [team.id]: { ...row, placement: e.target.value } }))} /></td>
             <td><input type="number" inputMode="numeric" min={0} max={MAX_KILLS} aria-label={`${team.name} eliminations`} value={row.kills}
-              onChange={e => setRows(r => ({ ...r, [team.id]: { ...row, kills: e.target.value } }))} /></td>
+              onChange={e => edit(r => ({ ...r, [team.id]: { ...row, kills: e.target.value } }))} /></td>
           </tr>;
         })}</tbody>
       </table>
