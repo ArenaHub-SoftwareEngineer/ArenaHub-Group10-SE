@@ -98,3 +98,19 @@ test('legacy single documents are read-only', async () => {
   await assertFails(setDoc(doc(campus('staff', true), 'arenahub/brackets'), { publishedBrackets: [] }));
   await assertFails(setDoc(doc(campus('staff', true), 'arenahub/workspace'), { games: [] }));
 });
+
+test('Battle Royale placement data is accepted within its limits and rejected outside them', async () => {
+  const staff = campus('staff', true);
+  const squads = n => Array.from({ length: n }, (_, i) => ({ id: `s${i}`, name: `Squad ${i}`, collegeCode: 'CCS' }));
+  const placement = (overrides = {}) => ({ config: { pointsTable: [10, 6, 5, 4], killPoints: 1 }, teams: squads(4), games: [{ id: 'g1', label: 'Game 1', status: 'upcoming', results: [] }], ...overrides });
+  const br = (id, p, revision = 1) => tournament(id, { gameId: 'game-codm-br', gameName: 'Call of Duty: Mobile Battle Royale', gameKey: 'game-codm-br', format: 'Battle Royale points', matches: [], placement: p, revision });
+  await assertSucceeds(setDoc(doc(staff, 'tournaments/br1'), br('br1', placement())));
+  await assertSucceeds(getDoc(doc(campus('student'), 'tournaments/br1')));
+  await assertFails(setDoc(doc(campus('student'), 'tournaments/br2'), br('br2', placement())));
+  await assertFails(setDoc(doc(staff, 'tournaments/br3'), br('br3', placement({ teams: squads(26) }))), 'a lobby holds at most 25 squads');
+  await assertFails(setDoc(doc(staff, 'tournaments/br3'), br('br3', placement({ games: [] }))), 'an event needs at least one game');
+  await assertFails(setDoc(doc(staff, 'tournaments/br3'), br('br3', placement({ config: { pointsTable: [10], killPoints: 50 } }))));
+  await assertFails(setDoc(doc(staff, 'tournaments/br3'), br('br3', placement({ players: [] }))), 'no extra fields such as player data');
+  await assertFails(setDoc(doc(staff, 'tournaments/br3'), br('br3', 'not a map')));
+  await assertSucceeds(setDoc(doc(staff, 'tournaments/br1'), br('br1', placement({ games: [{ id: 'g1', label: 'Game 1', status: 'completed', results: [{ teamId: 's0', placement: 1, kills: 3 }] }] }), 2)));
+});

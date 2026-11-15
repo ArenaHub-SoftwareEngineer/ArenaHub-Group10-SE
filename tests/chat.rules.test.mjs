@@ -41,7 +41,7 @@ function audited(database, staffUid, write) {
   return batch.commit();
 }
 const mute = (database, staffUid, matchId, target, minutes, overrides = {}) => audited(database, staffUid, (batch, auditId) =>
-  batch.set(doc(database, 'matchChat', matchId, 'mutes', target), { until: Timestamp.fromMillis(Date.now() + minutes * 60_000), kind: 'mute', reason: '', by: staffUid, auditId, createdAt: serverTimestamp(), ...overrides }));
+  batch.set(doc(database, 'matchChat', matchId, 'mutes', target), { until: Timestamp.fromMillis(Date.now() + minutes * 60_000), kind: 'mute', reason: '', name: 'Chat Student', by: staffUid, auditId, createdAt: serverTimestamp(), ...overrides }));
 const setState = (database, staffUid, matchId, state) => audited(database, staffUid, (batch, auditId) =>
   batch.set(doc(database, 'matchChat', matchId), { slowModeSec: 0, pinned: null, updatedBy: staffUid, auditId, updatedAt: serverTimestamp(), ...state }));
 
@@ -100,6 +100,7 @@ test('a timed mute blocks posting until it expires; the viewer sees only their o
   await assertFails(mute(student(), 'student', 'mute', 'other', 20));
   await assertFails(mute(mod(), 'mod', 'mute', 'mod', 20));
   await assertFails(mute(mod(), 'mod', 'mute', 'student', 25 * 60));
+  await assertFails(mute(mod(), 'mod', 'mute', 'student', 20, { name: 'x'.repeat(81) }));
   await assertFails(setDoc(doc(mod(), 'matchChat', 'mute', 'mutes', 'student'), { until: Timestamp.fromMillis(Date.now() + 60_000), kind: 'mute', reason: '', by: 'mod', auditId: 'missing', createdAt: serverTimestamp() }));
   await assertSucceeds(mute(mod(), 'mod', 'mute', 'student', 20));
 

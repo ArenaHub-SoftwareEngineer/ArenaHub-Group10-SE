@@ -39,6 +39,7 @@ const UsersView = lazy(() => import('./components/admin/UsersView').then(m => ({
 const GamesCategoriesView = lazy(() => import('./components/admin/GamesCategoriesView').then(m => ({ default: m.GamesCategoriesView })));
 const ReportsView = lazy(() => import('./components/admin/ReportsView').then(m => ({ default: m.ReportsView })));
 const FeaturedView = lazy(() => import('./components/admin/FeaturedView').then(m => ({ default: m.FeaturedView })));
+const PlacementEventsView = lazy(() => import('./components/admin/PlacementEventsView').then(m => ({ default: m.PlacementEventsView })));
 const BracketStudioView = lazy(() => import('./components/admin/BracketStudioView').then(m => ({ default: m.BracketStudioView })));
 const AIAssistantView = lazy(() => import('./components/admin/AIAssistantView').then(m => ({ default: m.AIAssistantView })));
 const AdminMatchDataEntry = lazy(() => import('./components/admin/AdminMatchDataEntry').then(m => ({ default: m.AdminMatchDataEntry })));
@@ -254,6 +255,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           {adminTab === 'reports' && <ReportsView reports={reports} />}
           {adminTab === 'featured' && <FeaturedView tournaments={tournaments} />}
           {adminTab === 'bracket-studio' && <BracketStudioView initialBracketId={routeParams.get('editBracket')} />}
+          {adminTab === 'battle-royale' && <PlacementEventsView brackets={publishedBrackets} />}
           {adminTab === 'ai-assistant' && (
             <AIAssistantView key={currentUser.id}
               currentUser={currentUser}
@@ -340,7 +342,13 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
             />
           )}
 
-          {spectatorTab === 'brackets' && (
+          {spectatorTab === 'brackets' && !activeTournament && <section className="arena-panel match-center-unavailable">
+            {/* Opening or reloading a Brackets link renders before tournaments load; BracketsView needs one. */}
+            <h1>No tournament to show yet</h1>
+            <p className="studio-muted">Published tournaments appear here as soon as they load.</p>
+            <button type="button" className="arena-outline" onClick={() => setSpectatorTab('choose-tournament')}>All tournaments</button>
+          </section>}
+          {spectatorTab === 'brackets' && activeTournament && (
             <BracketsView
               tournament={activeTournament}
               matches={matches}

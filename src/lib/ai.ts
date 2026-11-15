@@ -285,7 +285,7 @@ class AIService {
       game = "League of Legends";
     else if (/\bdota\s*2\b/.test(p)) game = "Dota 2";
     else if (/\bcodm\b|call of duty/.test(p)) {
-      if (/battle royale|\bbr\b/.test(p)) throw new Error('CODM Battle Royale uses placement scoring. Use a head-to-head game for this bracket.');
+      if (/battle royale|\bbr\b/.test(p)) throw new Error('CODM Battle Royale is scored by lobby placement, not a bracket. Create it on the Battle Royale page.');
       game = "Call of Duty: Mobile Multiplayer";
     }
     else if (p.includes("tekken")) game = "Tekken 8";

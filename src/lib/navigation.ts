@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 const allowed = {
   arena: ['home', 'live', 'current-live', 'choose-tournament', 'brackets', 'teams', 'ai-assistant', 'support', 'settings', 'schedule', 'integrity', 'operations', 'standings'],
-  admin: ['overview', 'users', 'games', 'reports', 'featured', 'bracket-studio', 'ai-assistant', 'match-data', 'live-stream', 'integrity', 'match-monitor', 'operations', 'support', 'settings'],
+  admin: ['overview', 'users', 'games', 'reports', 'featured', 'bracket-studio', 'battle-royale', 'ai-assistant', 'match-data', 'live-stream', 'integrity', 'match-monitor', 'operations', 'support', 'settings'],
 };
 export function readHistoryTab(scope: keyof typeof allowed, hash: string, initial: string): string {
   const [section, tab] = hash.split('?')[0].replace(/^#\//, '').split('/');

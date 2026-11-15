@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
-import { Shield, ShieldAlert, Sparkles, LayoutDashboard, Users as UsersIcon, Gamepad2, AlertTriangle, Star, GitBranch, ClipboardList, Radio, Swords } from '../ui/Icons';
+import { Shield, ShieldAlert, Sparkles, LayoutDashboard, Users as UsersIcon, Gamepad2, AlertTriangle, Star, GitBranch, ClipboardList, Radio, Swords, Trophy } from '../ui/Icons';
 import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
 import { ProfileMenu, type AccountPanel } from '../common/ProfileMenu';
 import { NotificationBell } from '../common/NotificationBell';
@@ -26,6 +26,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { label: 'Workspace', items: [
       { id: 'overview', label: 'Home', icon: LayoutDashboard, keywords: 'dashboard schedule overview' },
       { id: 'bracket-studio', label: 'Brackets', icon: GitBranch, keywords: 'bracket studio create publish' },
+      { id: 'battle-royale', label: 'Battle Royale', short: 'BR', icon: Trophy, keywords: 'codm br lobby placement points' },
       { id: 'operations', label: 'Tournament desk', short: 'Desk', icon: ClipboardList, keywords: 'registration roster check-in policy' },
       { id: 'match-data', label: 'Matches', icon: Swords, keywords: 'stats kda score data entry' },
       { id: 'live-stream', label: 'Stream', icon: Radio, keywords: 'broadcast youtube facebook live' },

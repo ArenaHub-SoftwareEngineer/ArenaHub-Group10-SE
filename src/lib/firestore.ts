@@ -19,7 +19,7 @@ import { updateMatchAndAdvance } from './bracketUtils';
 import { watchCommunityReports, resolveCommunityReport } from './communityReports';
 import { collegeStandings } from './colleges';
 import { DEFAULT_CATEGORIES, DEFAULT_GAMES } from './catalogDefaults';
-import { fingerprint, toTournamentDoc } from './data/tournamentDocs';
+import { contentFingerprint, toTournamentDoc } from './data/tournamentDocs';
 import {
   publishTournament, restoreTournament, saveTournament, setTournamentFeatured, unpublishTournament,
   watchPreviousVersions, watchPublishedTournaments, type LiveTournament,
@@ -37,7 +37,7 @@ const LEGACY_KEYS = ['arenahub_matches', 'arenahub_chat', 'arenahub_tournaments'
 const LEGACY_DRAFTS_KEY = 'arenahub_saved_bracket_drafts';
 const STAFF_ROLES = ['admin', 'organizer', 'school-admin', 'moderator'];
 
-const matchContentFingerprint = (bracket: BracketDraft) => fingerprint(toTournamentDoc(bracket, 0).matches);
+const matchContentFingerprint = (bracket: BracketDraft) => contentFingerprint(toTournamentDoc(bracket, 0));
 
 function tournamentFormat(format: string): TournamentFormat {
   const value = format.toLowerCase();
@@ -257,6 +257,19 @@ class FirestoreService {
     if (!bracket || !cloud) throw new Error('Publish the bracket before saving broadcast links.');
     const [updated] = updateBroadcastLinks([bracket], matchId, links, primary);
     await this.writeTournament(updated, cloud.revision);
+  }
+
+  /** Saves Battle Royale placement results straight to their published event. */
+  public async savePlacementEvent(bracketId: string, placement: NonNullable<BracketDraft['placement']>, auditText: string): Promise<void> {
+    if (!isFirebaseConfigured || !auth.currentUser) throw new Error('Sign in as tournament staff to save results.');
+    const bracket = this.published.find(b => b.id === bracketId);
+    const cloud = bracket && this.cloud.get(bracketId);
+    if (!bracket?.placement || !cloud) throw new Error('This Battle Royale event is not published. Reload and try again.');
+    const updated: BracketDraft = { ...bracket, placement };
+    await this.writeTournament(updated, cloud.revision);
+    this.published = this.published.map(b => b.id === bracketId ? updated : b);
+    this.addAuditLog(auditText);
+    this.emit();
   }
 
   public setMatchStatus(matchId: string, status: Match['status']): void {

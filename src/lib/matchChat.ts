@@ -14,7 +14,7 @@ export interface LiveChatMessage {
 
 export interface ChatPin { messageId: string; author: string; text: string }
 export interface ChatState { slowModeSec: number; pinned: ChatPin | null }
-export interface ChatMute { until: number; kind: 'mute' | 'kick'; reason: string }
+export interface ChatMute { until: number; kind: 'mute' | 'kick'; reason: string; /** Chat name shown on the muted message, for the staff list. */ name?: string }
 
 const EMPTY_STATE: ChatState = { slowModeSec: 0, pinned: null };
 const millis = (value: unknown) => value instanceof Timestamp ? value.toMillis() : undefined;
@@ -79,27 +79,27 @@ export async function messageAuthorId(matchId: string, messageId: string) {
   return uid;
 }
 
-export async function muteChatUser(matchId: string, staffUid: string, messageId: string, minutes: number, reason = '') {
-  const target = await messageAuthorId(matchId, messageId);
+export async function muteChatUser(matchId: string, staffUid: string, message: Pick<LiveChatMessage, 'id' | 'author'>, minutes: number, reason = '') {
+  const target = await messageAuthorId(matchId, message.id);
   if (target === staffUid) throw new Error('You cannot mute yourself.');
   const batch = writeBatch(db);
   const auditId = audit(batch, staffUid, matchId, { kind: 'mute', minutes }, target);
   batch.set(muteRef(matchId, target), {
-    until: Timestamp.fromMillis(Date.now() + minutes * 60_000), kind: 'mute', reason: reason.slice(0, 200),
+    until: Timestamp.fromMillis(Date.now() + minutes * 60_000), kind: 'mute', reason: reason.slice(0, 200), name: message.author.slice(0, 80),
     by: staffUid, auditId, createdAt: serverTimestamp(),
   });
   await batch.commit();
 }
 
 /** Kick: block posting for KICK_HOURS and remove the viewer's messages in this match. */
-export async function kickChatUser(matchId: string, staffUid: string, messageId: string, reason = '') {
-  const target = await messageAuthorId(matchId, messageId);
+export async function kickChatUser(matchId: string, staffUid: string, message: Pick<LiveChatMessage, 'id' | 'author'>, reason = '') {
+  const target = await messageAuthorId(matchId, message.id);
   if (target === staffUid) throw new Error('You cannot remove yourself from chat.');
   const posted = await getDocs(query(collection(db, 'matchChat', matchId, 'authors'), where('uid', '==', target), limit(400)));
   const batch = writeBatch(db);
   const auditId = audit(batch, staffUid, matchId, { kind: 'kick' }, target);
   batch.set(muteRef(matchId, target), {
-    until: Timestamp.fromMillis(Date.now() + KICK_HOURS * 3_600_000), kind: 'kick', reason: reason.slice(0, 200),
+    until: Timestamp.fromMillis(Date.now() + KICK_HOURS * 3_600_000), kind: 'kick', reason: reason.slice(0, 200), name: message.author.slice(0, 80),
     by: staffUid, auditId, createdAt: serverTimestamp(),
   });
   posted.docs.forEach(item => batch.delete(messageRef(matchId, item.id)));
@@ -139,6 +139,6 @@ export const setSlowMode = (matchId: string, staffUid: string, seconds: number, 
 /** Staff list of active mutes for this match. */
 export function watchMatchMutes(matchId: string, receive: (mutes: Array<ChatMute & { uid: string }>) => void) {
   return onSnapshot(collection(db, 'matchChat', matchId, 'mutes'), snap => receive(snap.docs
-    .map(item => ({ uid: item.id, until: millis(item.data().until) || 0, kind: item.data().kind, reason: item.data().reason || '' }))
+    .map(item => ({ uid: item.id, until: millis(item.data().until) || 0, kind: item.data().kind, reason: item.data().reason || '', name: item.data().name || '' }))
     .filter(mute => mute.until > Date.now())), () => receive([]));
 }

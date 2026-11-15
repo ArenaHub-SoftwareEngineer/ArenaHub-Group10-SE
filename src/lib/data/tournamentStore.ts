@@ -9,7 +9,7 @@ import type { BracketDraft } from '../types';
 import { publicationGameKey } from '../bracketPublication';
 import { notificationRecord } from '../notificationService';
 import {
-  announcementChanges, assertDocSize, fingerprint, fromDocs, toRosterDoc, toTournamentDoc,
+  announcementChanges, assertDocSize, contentFingerprint, fromDocs, toRosterDoc, toTournamentDoc,
   type RosterDoc, type TournamentDoc,
 } from './tournamentDocs';
 
@@ -35,7 +35,7 @@ export function watchPublishedTournaments(receive: (items: LiveTournament[]) => 
     if (!ready) return;
     receive([...tournaments.values()].map(t => ({
       bracket: fromDocs(t, rosters.get(t.id)), revision: t.revision, featured: t.featured === true,
-      fingerprint: fingerprint(t.matches),
+      fingerprint: contentFingerprint(t),
     })));
   };
   const stopTournaments = onSnapshot(query(collection(db, 'tournaments'), where('status', '==', 'published')), snapshot => {
@@ -123,7 +123,7 @@ export async function restoreTournament(expected: BracketDraft): Promise<Bracket
     const prevT = await tx.get(previousRef(key, 'tournament')), prevR = await tx.get(previousRef(key, 'rosters'));
     if (!prevT.exists()) throw new Error('There is no previous published version for this game.');
     const previous = prevT.data() as TournamentDoc;
-    if (previous.id !== expected.id || fingerprint(previous.matches) !== fingerprint(toTournamentDoc(expected, 0).matches)) {
+    if (previous.id !== expected.id || contentFingerprint(previous) !== contentFingerprint(toTournamentDoc(expected, 0))) {
       throw new Error('The previous version changed. Reopen Bracket Studio before restoring.');
     }
     const currentId: string | null = pubSnap.data()?.currentId ?? null;

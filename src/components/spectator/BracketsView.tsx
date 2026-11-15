@@ -5,6 +5,7 @@ import { createBracketFromTeams } from '../../lib/bracketUtils';
 import { StandingsView } from './StandingsView';
 import { publicationGameKey } from '../../lib/bracketPublication';
 import { TournamentBracketCanvas } from './TournamentBracketCanvas';
+import { PlacementStandingsView } from './PlacementStandingsView';
 import { PublishedScheduleDialog } from '../common/SchedulePage';
 import { FAIR_PLAY_GAMES } from '../../lib/fairPlayGames';
 import { ArrowLeft, Calendar, ChevronDown, ChevronRight, Radio } from '../ui/Icons';
@@ -124,11 +125,11 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
         <div>
           <p className="viewer-bracket-game">{activeBracket.gameName}</p>
           <h1>{activeBracket.title || tournament.title}{activeBracket.demo && <span className="demo-label" title="Demonstration data, not a real event">DEMO</span>}</h1>
-          <p className="studio-muted">{activeBracket.format} · {activeBracket.teamsCount} teams · {currentBracketMatches.length} matches</p>
+          <p className="studio-muted">{activeBracket.format} · {activeBracket.teamsCount} {activeBracket.placement ? 'squads' : 'teams'} · {activeBracket.placement ? `${activeBracket.placement.games.length} games` : `${currentBracketMatches.length} matches`}</p>
         </div>
-        <button type="button" className="arena-outline" onClick={() => setShowScheduleModal(true)}>
+        {!activeBracket.placement && <button type="button" className="arena-outline" onClick={() => setShowScheduleModal(true)}>
           <Calendar size={17} /> Match schedule <ChevronDown size={14} />
-        </button>
+        </button>}
         {(() => {
           const artwork = FAIR_PLAY_GAMES.find(game => `game-${game.id}` === publicationGameKey(activeBracket));
           return artwork && <img className="viewer-bracket-artwork" src={artwork.image} alt="" />;
@@ -142,6 +143,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
         </select>
       </label>}
 
+      {activeBracket.placement ? <PlacementStandingsView event={activeBracket.placement} /> : <>
       {/* Navigation Tabs */}
       <div className="flex items-center gap-1 border-b border-[var(--border)] pb-3">
         <button
@@ -353,6 +355,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           </div>
         </div>
       )}
+      </>}
 
       <PublishedScheduleDialog open={showScheduleModal} onClose={() => setShowScheduleModal(false)}
         bracket={activeBracket.status === 'published' ? activeBracket : undefined} onSelect={onSelectMatch} />

@@ -52,10 +52,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
       watchChatState(matchId, setState),
     ];
     if (canPost) {
-      stops.push(watchMyMute(matchId, currentUser.id, setMyMute));
-      void lastMessageAt(matchId, currentUser.id).then(setLastSent);
+      // Refresh the clock with each mute change so the countdown starts from the real time, not the mount time.
+      stops.push(watchMyMute(matchId, currentUser.id, mute => { setNow(Date.now()); setMyMute(mute); }));
+      void lastMessageAt(matchId, currentUser.id).then(at => { setNow(Date.now()); setLastSent(at); });
     }
-    if (staff) stops.push(watchMatchMutes(matchId, setMutes));
+    if (staff) stops.push(watchMatchMutes(matchId, list => { setNow(Date.now()); setMutes(list); }));
     return () => stops.forEach(stop => stop());
   }, [matchId, readOnly, canPost, staff, currentUser.id]);
 
@@ -100,11 +101,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
     setMenuFor(null);
     try { await action(); showToast(success, 'success'); } catch (err) { showToast(failure(err, fallback), 'error'); }
   };
-  const mute = (message: LiveChatMessage, minutes: number) => run(() => muteChatUser(matchId, currentUser.id, message.id, minutes),
+  const mute = (message: LiveChatMessage, minutes: number) => run(() => muteChatUser(matchId, currentUser.id, message, minutes),
     `${message.author} is muted for ${minutes} minutes.`, 'Could not mute this viewer.');
   const kick = async () => {
     const target = kickTarget; if (!target) return;
-    const removed = await kickChatUser(matchId, currentUser.id, target.id, 'Removed by staff');
+    const removed = await kickChatUser(matchId, currentUser.id, target, 'Removed by staff');
     setKickTarget(null);
     showToast(`Removed from chat for ${KICK_HOURS} hours. ${removed} message${removed === 1 ? '' : 's'} deleted.`, 'success');
   };
@@ -130,7 +131,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
     </div>}
     {staff && showMutes && mutes.length > 0 && <ul className="watch-chat-mutes" aria-label="Muted viewers">
       {mutes.map(item => <li key={item.uid}>
-        <span>{item.kind === 'kick' ? 'Removed' : 'Muted'} viewer <code>{item.uid.slice(0, 6)}</code> · {formatCountdown(muteSecondsLeft(item.until, now))} left</span>
+        <span>{item.kind === 'kick' ? 'Removed' : 'Muted'}: <strong>{item.name || 'Viewer'}</strong> · {formatCountdown(muteSecondsLeft(item.until, now))} left</span>
         <button type="button" onClick={() => void run(() => unmuteChatUser(matchId, currentUser.id, item.uid), 'Viewer can post again.', 'Could not lift the mute.')}>Lift</button>
       </li>)}
     </ul>}
@@ -168,7 +169,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
       </article>)}
     </div>
 
-    {canPost ? muteLeft ? <p className="watch-chat-muted" role="status"><Shield size={14} />{muteText} You can post again in <strong>{formatCountdown(muteLeft)}</strong>.</p>
+    {canPost ? muteLeft ? <p className="watch-chat-muted" role="status"><Shield size={14} /><span>{muteText} You can post again in <strong>{formatCountdown(muteLeft)}</strong>.</span></p>
       : <form className="watch-chat-form" onSubmit={send}>
         <span className="watch-chat-avatar" aria-hidden="true">{anonymous ? '?' : initials(currentUser.name || 'You')}</span>
         <input type="text" aria-label="Match chat message" value={input} onChange={event => setInput(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : 'Chat…'} maxLength={500} disabled={!available || sending} />

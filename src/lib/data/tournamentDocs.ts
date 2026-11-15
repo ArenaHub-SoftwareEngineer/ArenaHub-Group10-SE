@@ -14,6 +14,7 @@
 import type { BracketDraft, Match, Player, Team } from '../types';
 import { publicationGameKey } from '../bracketPublication';
 import { safePlayerImage } from '../playerProfiles';
+import type { PlacementEvent } from '../formats/placement';
 
 export type TournamentStatus = 'published' | 'archived' | 'unpublished';
 export const MAX_DOC_BYTES = 900_000;
@@ -29,6 +30,8 @@ export interface TournamentDoc {
   format: string; matchFormat: string; teamsCount: number; seedingRule: string; createdAt: string;
   status: TournamentStatus; revision: number; featured: boolean; demo?: boolean;
   matches: PublicMatch[];
+  /** Battle Royale placement scoring: squad names and college codes only, no players. */
+  placement?: PlacementEvent;
 }
 
 export interface PublicPlayer {
@@ -93,7 +96,26 @@ export function toTournamentDoc(bracket: BracketDraft, revision: number, options
     status: options.status ?? 'published', revision, featured: options.featured === true,
     ...(bracket.demo ? { demo: true } : {}),
     matches: bracket.matches.map(publicMatch),
+    ...(bracket.placement ? { placement: publicPlacement(bracket.placement) } : {}),
   });
+}
+
+/** Only the scoring fields leave the client; anything else on the object is dropped. */
+function publicPlacement(event: PlacementEvent): PlacementEvent {
+  return {
+    config: { pointsTable: event.config.pointsTable.map(Number), killPoints: Number(event.config.killPoints) },
+    teams: event.teams.map(t => ({ id: t.id, name: t.name, collegeCode: t.collegeCode || '' })),
+    games: event.games.map(g => ({
+      id: g.id, label: g.label, status: g.status,
+      ...(g.scheduledDate ? { scheduledDate: g.scheduledDate } : {}), ...(g.scheduledTime ? { scheduledTime: g.scheduledTime } : {}),
+      results: g.results.map(r => ({ teamId: r.teamId, placement: r.placement, kills: r.kills })),
+    })),
+  };
+}
+
+/** What counts as a content change when deciding whether a tournament needs saving. */
+export function contentFingerprint(doc: Pick<TournamentDoc, 'matches' | 'placement'>): string {
+  return fingerprint(doc.placement ? { matches: doc.matches, placement: doc.placement } : doc.matches);
 }
 
 export function toRosterDoc(bracket: BracketDraft): RosterDoc {
@@ -129,6 +151,7 @@ export function fromDocs(tournament: TournamentDoc, roster?: RosterDoc | null): 
     parsedParams: { game: tournament.gameName, format: tournament.format, seeding: tournament.seedingRule, constraint: 'None', teamsCount: tournament.teamsCount, matchFormat: (tournament.matchFormat as any) || 'Bo3' },
     rawPrompt: '', createdAt: tournament.createdAt, status: 'published',
     ...(tournament.demo ? { demo: true } : {}),
+    ...(tournament.placement ? { placement: tournament.placement, teams: tournament.placement.teams.map((t, i) => ({ id: t.id, name: t.name, college: t.collegeCode, seed: i + 1 })) } : {}),
   };
 }
 
