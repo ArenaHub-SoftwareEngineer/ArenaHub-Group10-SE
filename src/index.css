@@ -1006,3 +1006,29 @@ html[data-motion=reduced] :is(.feedback-note, .arena-chat button) { transform: n
 .directory-game.is-empty > img { filter: grayscale(1); opacity: .45; }
 .directory-game.is-empty small { color: var(--text-muted); }
 .directory-college-record { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+/* Arena AI answer ratings and the staff review. */
+.chat-response-actions .quiet-icon-button.is-chosen { color: var(--brand-ink); }
+.ai-feedback-open { margin-left: auto; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.ai-feedback-filter { display: flex; gap: 6px; margin: 0 0 12px; }
+.ai-feedback-filter button { padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: 13px; color: var(--text-secondary); }
+.ai-feedback-filter button[aria-pressed=true] { border-color: var(--brand-ink); color: var(--text-primary); }
+.ai-feedback-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; max-height: 60vh; overflow-y: auto; }
+.ai-feedback-list li { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.ai-feedback-list li > .chat-text-link { justify-self: start; }
+.ai-feedback-meta { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-muted); font-size: 12px; }
+.ai-feedback-question { margin: 0; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.ai-feedback-answer { margin: 0; color: var(--text-secondary); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9em; overflow: hidden; }
+.ai-feedback-note { margin: 0; font-size: 13px; font-style: italic; color: var(--text-secondary); }
+/* Arena AI answer ratings and the staff review. */
+.chat-response-actions .quiet-icon-button.is-chosen { color: var(--brand-ink); }
+.ai-feedback-open { margin-left: auto; min-height: 32px; padding: 0 12px; font-size: 13px; }
+.ai-feedback-filter { display: flex; gap: 6px; margin: 0 0 12px; }
+.ai-feedback-filter button { padding: 6px 12px; border: 1px solid var(--border-strong); border-radius: 999px; font-size: 13px; color: var(--text-secondary); }
+.ai-feedback-filter button[aria-pressed=true] { border-color: var(--brand-ink); color: var(--text-primary); }
+.ai-feedback-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; max-height: 60vh; overflow-y: auto; }
+.ai-feedback-list li { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.ai-feedback-list li > .chat-text-link { justify-self: start; }
+.ai-feedback-meta { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--text-muted); font-size: 12px; }
+.ai-feedback-question { margin: 0; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.ai-feedback-answer { margin: 0; color: var(--text-secondary); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 9em; overflow: hidden; }
+.ai-feedback-note { margin: 0; font-size: 13px; font-style: italic; color: var(--text-secondary); }

@@ -203,6 +203,22 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
         && auditedNow(request.resource.data.auditId);
     }
+    // "Was this answer helpful?" One rating per answer per account (the id is uid_messageId), never
+    // edited. Only staff read them: the question a student typed may say more than they meant to share.
+    match /aiFeedback/{id} {
+      allow create: if admitted() && id.matches(request.auth.uid + '_[A-Za-z0-9_-]{1,160}')
+        && request.resource.data.keys().hasOnly(['uid', 'rating', 'question', 'answer', 'source', 'references', 'note', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.rating in ['up', 'down']
+        && request.resource.data.question is string && request.resource.data.question.size() <= 500
+        && request.resource.data.answer is string && request.resource.data.answer.size() <= 2400
+        && request.resource.data.source is string && request.resource.data.source.size() <= 40
+        && request.resource.data.references is list && request.resource.data.references.size() <= 12
+        && request.resource.data.note is string && request.resource.data.note.size() <= 300
+        && request.resource.data.createdAt == request.time;
+      allow read, delete: if activeStaff();
+      allow update: if false;
+    }
     // Arena AI request counters. Server only (firebase-admin); no client may read or change a limit.
     match /aiRate/{id} {
       allow read, write: if false;

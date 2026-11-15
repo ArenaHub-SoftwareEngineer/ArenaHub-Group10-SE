@@ -111,3 +111,22 @@ test('the published reader returns public documents only, with a revision that t
   clock += 11_000;
   assert.ok(!(await read('x')).brackets.some(b => b.id === id), 'archived tournaments are not public');
 });
+
+test('my team: the captain is found by registration, a member by the school email on the private roster', async () => {
+  const { firestoreMyTeams } = await import('../server/ai/myTeam.ts');
+  const { adminApp } = await import('../server/firebaseAdmin.ts');
+  const read = firestoreMyTeams(adminApp(env)!);
+  const tid = `myteam-${run}`;
+  await db.doc(`tournamentRegistrations/${tid}-reg`).set({ ownerId: `captain-${run}`, tournamentId: tid, teamId: `${tid}-t1`, teamName: 'Captain Team', status: 'approved' });
+  await db.doc(`tournamentRegistrations/${tid}-rej`).set({ ownerId: `captain-${run}`, tournamentId: tid, teamId: `${tid}-t9`, teamName: 'Rejected Team', status: 'rejected' });
+  await db.doc(`tournaments/${tid}/private/roster`).set({ teams: { [`${tid}-t2`]: { teamName: 'Member Team', collegeCode: 'CCS', players: [{ fullName: 'Hidden Name', studentId: '2026-00001', schoolEmail: `Member-${run}@WMSU.edu.ph`, section: 'X', ign: 'Mem', role: 'Mid', substitute: false }] } } });
+  const caller = (uid: string, email: string) => ({ uid, email, campus: true, admitted: true, staff: false, role: '' });
+
+  assert.deepEqual(await read(caller(`captain-${run}`, `captain-${run}@wmsu.edu.ph`), [tid]), [{ tournamentId: tid, teamId: `${tid}-t1`, teamName: 'Captain Team' }]);
+  const member = await read(caller(`member-${run}`, `member-${run}@wmsu.edu.ph`), [tid]);
+  assert.deepEqual(member, [{ tournamentId: tid, teamId: `${tid}-t2`, teamName: 'Member Team' }]);
+  assert.ok(!JSON.stringify(member).includes('Hidden Name') && !JSON.stringify(member).includes('2026-00001'), 'no roster details leave the lookup');
+  assert.deepEqual(await read(caller(`stranger-${run}`, `stranger-${run}@wmsu.edu.ph`), [tid]), []);
+  // A personal account is never matched by roster email.
+  assert.deepEqual(await read({ ...caller(`member-${run}`, `member-${run}@wmsu.edu.ph`), campus: false }, [tid]), []);
+});

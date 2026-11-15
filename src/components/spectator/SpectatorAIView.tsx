@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ArrowUp, ArrowUpRight, Check, Copy, Download, LoaderCircle, PanelLeft, PanelLeftClose, Pencil, Plus, RotateCcw, Search, Settings2, Trash2, X } from '../ui/Icons';
+import { ArrowUp, ArrowUpRight, Check, Copy, Download, LoaderCircle, PanelLeft, PanelLeftClose, Pencil, Plus, RotateCcw, Search, Settings2, ThumbsDown, ThumbsUp, Trash2, X } from '../ui/Icons';
+import { rateAnswer, type AiRating } from '../../lib/aiFeedback';
 import { aiService, type AskFocus } from '../../lib/ai';
 import { browserHistoryStorage, ChatHistory, ChatMessage, ChatThread, ChatReference, deleteThread, parseReferences, emptyHistory, historyKey, legacyKeys, loadHistory, modelHistory, pruneHistory, RetentionDays, saveHistory } from '../../lib/chatHistory';
 import { CleanFormattedText } from '../common/CleanFormattedText';
@@ -17,11 +18,13 @@ interface SpectatorAIViewProps {
   /** What the viewer was looking at before opening Arena AI; questions are answered about it. */
   focus?: AskFocus | null;
   onClearFocus?: () => void;
+  /** Extra header controls, such as the staff feedback review. */
+  headerActions?: React.ReactNode;
 }
 const retentionLabel = (days: RetentionDays) => days ? `Auto-delete after ${days} days` : 'Keep until I delete';
 const uid = () => crypto.randomUUID();
 
-export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, sidebarOpen: controlledSidebar, onToggleSidebar, onOpenBrackets, onOpenReference, focus, onClearFocus }) => {
+export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, sidebarOpen: controlledSidebar, onToggleSidebar, onOpenBrackets, onOpenReference, focus, onClearFocus, headerActions }) => {
   const userId = currentUser?.id || 'guest';
   const { showToast } = useToast();
   const [initial] = useState(() => {
@@ -123,6 +126,19 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
     updateReply(active.id, message.id, { text: '', status: 'writing', references: undefined, source: undefined });
     await runReply(active.id, message.id, active.messages[userIndex].text, active.messages.slice(0,userIndex));
   };
+  const rate = async (message: ChatMessage, rating: AiRating) => {
+    if (!active || message.rating) return;
+    const index = active.messages.findIndex(m => m.id === message.id);
+    const question = [...active.messages.slice(0, index)].reverse().find(m => m.sender === 'user')?.text || '';
+    updateReply(active.id, message.id, { rating });
+    try {
+      await rateAnswer({ messageId: message.id, rating, question, answer: message.text, source: message.source, references: message.references });
+      showToast(rating === 'up' ? 'Thanks for the feedback.' : 'Thanks. Tournament staff review answers marked not helpful.', 'success');
+    } catch {
+      updateReply(active.id, message.id, { rating: undefined });
+      showToast('Your rating could not be saved. Try again.', 'error');
+    }
+  };
   const exportChats = () => {
     const originals: Record<string, string> = {};
     if (!canSave.current) for (const key of [historyKey(userId), ...legacyKeys(userId)]) {
@@ -204,19 +220,23 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
     <section className="chat-conversation" aria-label="Arena AI conversation">
       <header className="chat-header">
         <div><ArenaCharacter /><span>{active?.title || 'Arena AI'}</span></div>
+        {headerActions}
         {active && <button type="button" className="quiet-icon-button" disabled={loading} aria-label="Rename conversation" data-tooltip="Rename chat" data-tooltip-align="end"
           onClick={() => { setRenameId(active.id); setRenameTitle(active.title); }}><Pencil size={16} /></button>}
       </header>
       {storageError && <div className="chat-storage-error" role="alert"><span>{storageError}</span><button onClick={exportChats}>Download chats</button></div>}
       {notice && <div className="chat-inline-notice" role="status"><span>{notice}</span><button className="quiet-icon-button" aria-label="Dismiss history notice" data-tooltip="Dismiss" data-tooltip-align="end" onClick={() => setNotice('')}><X size={14} /></button></div>}
       <div className="chat-scroll" role="log" aria-label="Conversation messages" aria-live="polite" aria-busy={loading}>
-        {!messages.length ? <div className="chat-empty"><span className="chat-eyebrow">ARENA HUB / ASSISTANT</span><img className="arena-character" src="/arenahub-logo.svg" alt="" width="90" height="106"/><h1>One place for every question.</h1><p>Matches, teams, fair play, or a fresh idea.<br />Just start a conversation.</p><div className="chat-suggestions">{['Who plays next?', 'Help me write a match report', 'Explain the tournament format', 'Show the COE Titans roster'].map(text => <button key={text} onClick={() => void send(text)}>{text}<ArrowUpRight size={14} aria-hidden="true" /></button>)}</div></div> : <div className="chat-messages">{messages.map((message, index) => <article key={message.id} className={`chat-message from-${message.sender}`} aria-label={message.sender === 'user' ? 'You' : 'Arena AI'}>
+        {!messages.length ? <div className="chat-empty"><span className="chat-eyebrow">ARENA HUB / ASSISTANT</span><img className="arena-character" src="/arenahub-logo.svg" alt="" width="90" height="106"/><h1>One place for every question.</h1><p>Scores, schedules, standings and rosters, checked against the published records.<br />Ask in English or Filipino.</p><div className="chat-suggestions">{['Who plays next?', 'When is our next match?', 'Sino nanalo sa MLBB?', 'Explain double elimination'].map(text => <button key={text} onClick={() => void send(text)}>{text}<ArrowUpRight size={14} aria-hidden="true" /></button>)}</div></div> : <div className="chat-messages">{messages.map((message, index) => <article key={message.id} className={`chat-message from-${message.sender}`} aria-label={message.sender === 'user' ? 'You' : 'Arena AI'}>
           {message.sender === 'user' ? <div className="chat-user-text">{message.text}</div> : <div className="chat-assistant-text"><span className="chat-answer-label"><img src="/arenahub-logo.svg" alt="" width={18} height={21} /> Arena AI</span>{message.text ? <CleanFormattedText text={message.text} isStreaming={message.status === 'writing'} /> : <span className="chat-writing"><LoaderCircle size={15} className="animate-spin" /> Writing a response…</span>}
             {message.status !== 'writing' && !!message.references?.length && <p className="chat-references"><span>Checked:</span> {message.references.map((ref, i) => <React.Fragment key={`${ref.bracketId}-${ref.matchId}-${i}`}>
               {i > 0 && <span aria-hidden="true"> · </span>}
               {onOpenReference && (ref.bracketId || ref.matchId) ? <button type="button" className="chat-reference" onClick={() => onOpenReference(ref)}>{ref.label}</button> : <span>{ref.label}</span>}
             </React.Fragment>)}</p>}
-            {message.status !== 'writing' && <div className="chat-response-actions"><button className="quiet-icon-button" aria-label="Copy response" data-tooltip={copied === message.id ? 'Copied' : 'Copy'} onClick={async () => { try { await navigator.clipboard.writeText(message.text); setCopied(message.id); window.setTimeout(() => setCopied(null), 1600); } catch { showToast('Copy is unavailable. Select the response text to copy it.', 'error'); } }}>{copied === message.id ? <Check size={16} /> : <Copy size={16} />}</button>{index === messages.length - 1 && <button className="quiet-icon-button" disabled={loading} aria-label="Retry response" data-tooltip="Retry" onClick={() => void retry(message)}><RotateCcw size={16} /></button>}<small>{message.status === 'stopped' ? 'Stopped' : message.status === 'error' ? 'Response unavailable' : message.source || 'Saved response'}</small>{onOpenBrackets && /bracket/i.test(message.text) && <button className="chat-text-link" onClick={onOpenBrackets}>Open bracket studio <ArrowUpRight size={14} aria-hidden="true" /></button>}</div>}
+            {message.status !== 'writing' && <div className="chat-response-actions"><button className="quiet-icon-button" aria-label="Copy response" data-tooltip={copied === message.id ? 'Copied' : 'Copy'} onClick={async () => { try { await navigator.clipboard.writeText(message.text); setCopied(message.id); window.setTimeout(() => setCopied(null), 1600); } catch { showToast('Copy is unavailable. Select the response text to copy it.', 'error'); } }}>{copied === message.id ? <Check size={16} /> : <Copy size={16} />}</button>{message.source && message.status === 'complete' && userId !== 'guest' && <>
+              <button className={`quiet-icon-button${message.rating === 'up' ? ' is-chosen' : ''}`} disabled={!!message.rating} aria-pressed={message.rating === 'up'} aria-label="Helpful answer" data-tooltip={message.rating ? 'Rated' : 'Helpful'} onClick={() => void rate(message, 'up')}><ThumbsUp size={15} /></button>
+              <button className={`quiet-icon-button${message.rating === 'down' ? ' is-chosen' : ''}`} disabled={!!message.rating} aria-pressed={message.rating === 'down'} aria-label="Not helpful answer" data-tooltip={message.rating ? 'Rated' : 'Not helpful: staff see the question and answer'} onClick={() => void rate(message, 'down')}><ThumbsDown size={15} /></button>
+            </>}{index === messages.length - 1 && <button className="quiet-icon-button" disabled={loading} aria-label="Retry response" data-tooltip="Retry" onClick={() => void retry(message)}><RotateCcw size={16} /></button>}<small>{message.status === 'stopped' ? 'Stopped' : message.status === 'error' ? 'Response unavailable' : message.source || 'Saved response'}</small>{onOpenBrackets && /bracket/i.test(message.text) && <button className="chat-text-link" onClick={onOpenBrackets}>Open bracket studio <ArrowUpRight size={14} aria-hidden="true" /></button>}</div>}
           </div>}
         </article>)}<div ref={end} /></div>}
       </div>

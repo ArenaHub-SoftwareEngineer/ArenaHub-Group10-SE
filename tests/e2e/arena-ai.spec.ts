@@ -121,3 +121,30 @@ test('viewer A asks @Arena in live chat; viewer B sees the reply with the AI bad
   expect(ours(studentErrors)).toEqual([]);
   expect(ours(staffErrors)).toEqual([]);
 });
+
+test('a student marks an answer not helpful; staff see it in the feedback review', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'Two signed-in browsers; one width is enough.');
+  test.setTimeout(90_000);
+  const question = `Explain how the tournament works, run ${Date.now() % 100000}`;
+  const { page: student, errors: studentErrors } = await open(browser, STUDENT);
+  await student.evaluate(() => { window.location.hash = '#/arena/ai-assistant'; });
+  await student.getByLabel('Message Arena AI').fill(question);
+  await student.getByRole('button', { name: 'Send message' }).click();
+  const reply = student.locator('article.chat-message.from-assistant').last();
+  await expect(reply.locator('.chat-response-actions small')).toHaveText('Arena AI', { timeout: 20_000 });
+  await reply.getByRole('button', { name: 'Not helpful answer' }).click();
+  await expect(student.getByText('Tournament staff review answers marked not helpful.')).toBeVisible();
+  // One rating per answer.
+  await expect(reply.getByRole('button', { name: 'Helpful answer', exact: true })).toBeDisabled();
+
+  const { page: staff, errors: staffErrors } = await open(browser, ORGANIZER);
+  await staff.evaluate(() => { window.location.hash = '#/admin/ai-assistant'; });
+  await staff.getByRole('button', { name: /Answer feedback/ }).click();
+  const dialog = staff.getByRole('dialog', { name: 'Arena AI answer feedback' });
+  const item = dialog.locator('.ai-feedback-list li').filter({ hasText: question });
+  await expect(item).toBeVisible({ timeout: 20_000 });
+  await item.getByRole('button', { name: 'Reviewed' }).click();
+  await expect(item).toHaveCount(0, { timeout: 10_000 });
+  expect(ours(studentErrors)).toEqual([]);
+  expect(ours(staffErrors)).toEqual([]);
+});

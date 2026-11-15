@@ -162,3 +162,19 @@ test('only staff turn Arena AI on or off in a chat, with an audit event', async 
   // Without the audit event in the same write, even staff are refused.
   await assertFails(setDoc(doc(mod(), 'matchChat', 'ai-toggle'), { slowModeSec: 0, pinned: null, aiEnabled: false, updatedBy: 'mod', auditId: 'missing', updatedAt: serverTimestamp() }));
 });
+
+test('Arena AI feedback: one rating per answer, own account only, readable by staff only', async () => {
+  const rating = (uid, id, extra = {}) => ({ uid, rating: 'down', question: 'Who won?', answer: 'Iron Owls won.', source: 'Arena AI', references: ['Dota 2 Showdown'], note: '', createdAt: serverTimestamp(), ...extra });
+  await assertSucceeds(setDoc(doc(student(), 'aiFeedback', 'student_msg-1'), rating('student')));
+  // The same answer cannot be rated twice, and a rating cannot be edited.
+  await assertFails(setDoc(doc(student(), 'aiFeedback', 'student_msg-1'), rating('student', 'x', { rating: 'up' })));
+  await assertFails(updateDoc(doc(student(), 'aiFeedback', 'student_msg-1'), { rating: 'up' }));
+  // Not in someone else's name, not with extra fields or a made-up rating.
+  await assertFails(setDoc(doc(student(), 'aiFeedback', 'other_msg-2'), rating('other')));
+  await assertFails(setDoc(doc(student(), 'aiFeedback', 'student_msg-3'), rating('student', 'x', { rating: 'meh' })));
+  await assertFails(setDoc(doc(student(), 'aiFeedback', 'student_msg-4'), rating('student', 'x', { email: 'student@wmsu.edu.ph' })));
+  // Students cannot read ratings, even their own; staff can read and dismiss them.
+  await assertFails(getDoc(doc(student(), 'aiFeedback', 'student_msg-1')));
+  await assertSucceeds(getDoc(doc(mod(), 'aiFeedback', 'student_msg-1')));
+  await assertSucceeds(deleteDoc(doc(mod(), 'aiFeedback', 'student_msg-1')));
+});

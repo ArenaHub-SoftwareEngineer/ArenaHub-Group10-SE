@@ -8,6 +8,7 @@ import { aiConfig } from './ai/config.ts';
 import { askSchema, bracketSchema, chatAskSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
 import { draftBracket } from './ai/bracketDraft.ts';
 import { ChatAskError, createChatResponder, firestoreChatSink } from './ai/chat.ts';
+import { firestoreMyTeams, type MyTeamsReader } from './ai/myTeam.ts';
 import { createAssistant, InterruptedAnswer } from './ai/index.ts';
 import type { Provider } from './ai/provider.ts';
 import { geminiProvider } from './ai/gemini.ts';
@@ -22,6 +23,8 @@ export interface AiDeps {
   providers?: Provider[];
   rate?: RateStore;
   fetcher?: typeof fetch;
+  /** The asker's own teams; null disables. Defaults to Firestore when the server has admin access. */
+  myTeams?: MyTeamsReader | null;
   /** Live-chat responder; null disables it. Defaults to Firestore when the server has admin access. */
   chat?: ReturnType<typeof createChatResponder> | null;
 }
@@ -60,7 +63,7 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
   const app = adminApp(env);
   const providers = deps.providers || configuredProviders(env, deps.fetcher);
   const rate = deps.rate || (app ? new FirestoreRateStore(app) : new MemoryRateStore());
-  const assistant = createAssistant({ providers, config, rate, openReports: openReportsReader(env) });
+  const assistant = createAssistant({ providers, config, rate, openReports: openReportsReader(env), myTeams: deps.myTeams !== undefined ? deps.myTeams || undefined : app ? firestoreMyTeams(app) : undefined });
   const burst = new MemoryRateStore();
 
   const fail = (res: express.Response, status: number, error: string) => { res.status(status).json({ error }); };

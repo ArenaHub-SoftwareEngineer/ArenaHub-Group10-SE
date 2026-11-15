@@ -542,3 +542,37 @@ test('bracket draft: a malformed model reply falls through to the next provider'
   assert.equal(result.source, 'Arena AI (backup model)');
   assert.equal(result.kind, 'ready');
 });
+
+// ---- 10. "Our next match": the asker's own team, from the records, never shared between students. ----
+test('my team: the captain or roster member gets their own next match and last result', async () => {
+  const wolves = { tournamentId: 'mlbb-cup', teamId: 't-wolves', teamName: 'Crimson Wolves' };
+  const m = model(grounded);
+  const a = createAssistant({ providers: [m], config: { userPerMinute: 5, globalPerMinute: 100 }, rate: new MemoryRateStore(), cooldown: new Cooldown(), log: () => {},
+    myTeams: async caller => caller.uid === 'wolves-captain' ? [wolves] : [] });
+  const ask2 = (uid: string, q: string) => a.answer({ caller: { ...viewer, uid }, query: q, history: [], data, signal: new AbortController().signal }, { start() {}, delta() {} });
+  const mine = await ask2('wolves-captain', 'When is our next match?');
+  assert.equal(mine.source, 'Live records');
+  assert.match(mine.text, /Crimson Wolves \(Campus Cup MLBB\): Next: an opponent still to be decided in the Final, 2026-11-20 at 3:00 PM Manila time \(Bo5\)\. Last result: won against Azure Hawks, 2-1\./);
+  assert.deepEqual(mine.references.map(r => r.matchId).filter(Boolean), ['mlbb-m3']);
+  // The same words from someone without a team: not the captain's cached answer.
+  assert.match((await ask2('someone-else', 'When is our next match?')).text, /couldn't find a team linked to your account/);
+  assert.match((await ask2('wolves-captain', 'kelan laban namin?')).text, /Crimson Wolves \(Campus Cup MLBB\)/);
+  assert.equal(m.calls, 0, 'no model needed');
+});
+
+test('my team: only questions about "my/our" team are personal', async () => {
+  const { personalQuestion } = await import('../server/ai/myTeam.ts');
+  for (const q of ['When is our next match?', 'who do we play next', 'Sino kalaban namin?', 'my team schedule', 'kailan kami maglalaro']) assert.ok(personalQuestion(q), q);
+  for (const q of ['Who plays next?', 'When is the MLBB final?', 'Show the Crimson Wolves roster', 'Who won Dota 2?']) assert.ok(!personalQuestion(q), q);
+});
+
+test('tools: head-to-head and recent form come from completed series only', async () => {
+  const tools = buildTools({ brackets: data.brackets, checkedAt: data.checkedAt, staff: false });
+  const h2h = await runTool(tools, 'getHeadToHead', { teamA: 'Azure Hawks', teamB: 'Crimson Wolves' }) as any;
+  assert.equal(h2h.record, '0-1');
+  assert.equal(h2h.series[0].result, 'Crimson Wolves 2-1 Azure Hawks');
+  const none = await runTool(tools, 'getHeadToHead', { teamA: 'Golden Lions', teamB: 'Silver Foxes' }) as any;
+  assert.equal(none.record, null, 'a live series is not a result yet');
+  const form = await runTool(tools, 'getTeamForm', { name: 'Iron Owls' }) as any;
+  assert.deepEqual([form.streak, form.results[0].score, form.results[0].opponent], ['1 win in a row', '2-0', 'Storm Bears']);
+});

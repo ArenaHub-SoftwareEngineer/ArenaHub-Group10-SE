@@ -18,6 +18,7 @@ import { groundingFacts, SentenceGate, UngroundedSentence } from './grounding.ts
 import { cleanReply, StreamCleaner } from './sanitize.ts';
 import { buildTools, type Tool, type ToolContext } from './tools.ts';
 import { scheduleMatches } from '../../src/lib/formats/placement.ts';
+import { myTeamAnswer, personalQuestion, type MyTeamsReader } from './myTeam.ts';
 
 export type Source = 'Live records' | 'Arena AI' | 'Arena AI (backup model)';
 export interface AnswerEvents {
@@ -41,6 +42,8 @@ export interface AssistantDeps {
   /** Whole-server model budget for this instance. */
   globalRate?: RateStore;
   openReports?: ToolContext['openReports'];
+  /** The asker's own teams (captain or on the roster). Present when the server has admin access. */
+  myTeams?: MyTeamsReader;
   /** Models benched after a quota error or a timeout. Defaults to the process-wide one. */
   cooldown?: Cooldown;
   cache?: AnswerCache<AnswerResult>;
@@ -63,6 +66,15 @@ export function createAssistant(deps: AssistantDeps) {
   async function answer(input: AskInput, events: AnswerEvents): Promise<AnswerResult> {
     const screen = screenQuestion(input.query);
     if (screen.kind === 'refuse') return emit(events, { source: 'Arena AI', text: screen.text, references: [], refused: screen.reason });
+
+    // "When is our next match?" is about the asker's own team: answered from the records, never cached.
+    if (deps.myTeams && personalQuestion(input.query)) {
+      const teams = await deps.myTeams(input.caller, input.data.brackets.map(b => b.id)).catch(error => { log(`my-team lookup failed: ${error instanceof Error ? error.message.slice(0, 120) : 'unknown'}`); return null; });
+      if (teams) {
+        const mine = myTeamAnswer(teams, input.data.brackets, input.data.checkedAt);
+        return emit(events, { source: 'Live records', text: cleanReply(mine.text, MAX_REPLY), references: mine.references });
+      }
+    }
 
     const history = input.history.slice(-12);
     // Only a focus that exists in the records counts; anything else is ignored.

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { BracketDraft, Match, Team } from '../../src/lib/types.ts';
 import type { KnowledgeReference } from '../../src/lib/tournamentKnowledge.ts';
 import { recordedChampion } from '../../src/lib/tournamentKnowledge.ts';
-import { getStandings } from '../../src/lib/standings.ts';
+import { completedSeries, getStandings } from '../../src/lib/standings.ts';
 import { computeStandings, scheduleMatches } from '../../src/lib/formats/placement.ts';
 import { bracketTeams } from '../../src/lib/data/tournamentDocs.ts';
 import { publicationGameKey } from '../../src/lib/bracketPublication.ts';
@@ -29,6 +29,8 @@ const gameOf = (b: BracketDraft) => publicationGameKey(b).replace(/^game-/, '');
 const ref = (b: BracketDraft, m?: Match): KnowledgeReference => ({ label: m ? `${b.title} · ${m.matchNumber || m.roundName}` : b.title, bracketId: b.id, ...(m ? { matchId: m.id } : {}) });
 const playable = (m: Match) => !m.inactive && !m.team1?.isBye && !m.team2?.isBye;
 const name = (t?: Team) => t?.name || 'To be decided';
+/** Valid finished series of a head-to-head bracket, in match order. Battle Royale lobbies have none. */
+const completedSeriesOf = (b: BracketDraft) => b.placement ? [] : completedSeries(b.matches.filter(playable));
 
 function matchView(m: Match, today: string) {
   const scored = [m.score?.team1Score, m.score?.team2Score].every(Number.isFinite);
@@ -167,6 +169,31 @@ export function buildTools(ctx: ToolContext): Tool[] {
           }
         }
         return { data: found.slice(0, 6).map(f => f.data), references: found.slice(0, 6).map(f => ref(f.b)) };
+      }),
+    tool({ name: 'getHeadToHead', description: 'Every completed series between two teams across published tournaments, with the overall record. Use it for "head to head", "h2h", "have they played before".', parameters: object({ teamA: { type: 'string' }, teamB: { type: 'string' } }, ['teamA', 'teamB']) },
+      z.object({ teamA: z.string().min(2).max(80), teamB: z.string().min(2).max(80) }), ({ teamA, teamB }) => {
+        const a = teamA.trim().toLowerCase(), b = teamB.trim().toLowerCase();
+        const is = (t: Team | undefined, q: string) => !!t && (t.name.toLowerCase() === q || t.name.toLowerCase().includes(q) || t.collegeCode?.toLowerCase() === q);
+        const rows = ctx.brackets.flatMap(br => completedSeriesOf(br).filter(s => (is(s.match.team1, a) && is(s.match.team2, b)) || (is(s.match.team1, b) && is(s.match.team2, a))).map(s => ({ br, s })));
+        const winsA = rows.filter(({ s }) => is(s.winner === s.team1.id ? s.team1 : s.team2, a)).length;
+        return {
+          data: { series: rows.map(({ br, s }) => ({ tournament: br.title, round: s.match.roundName, result: `${s.team1.name} ${s.match.score.team1Score}-${s.match.score.team2Score} ${s.team2.name}`, winner: (s.winner === s.team1.id ? s.team1 : s.team2).name })), record: rows.length ? `${winsA}-${rows.length - winsA}` : null, note: rows.length ? undefined : 'These teams have no completed series against each other.' },
+          references: rows.slice(0, 6).map(({ br, s }) => ref(br, s.match)),
+        };
+      }),
+    tool({ name: 'getTeamForm', description: "A team's recent completed series, newest first, and its current winning or losing streak.", parameters: object({ name: { type: 'string' } }, ['name']) },
+      z.object({ name: z.string().min(2).max(80) }), ({ name: query }) => {
+        const q = query.trim().toLowerCase();
+        const is = (t: Team) => t.name.toLowerCase() === q || t.name.toLowerCase().includes(q) || t.collegeCode?.toLowerCase() === q;
+        const rows = ctx.brackets.flatMap(br => completedSeriesOf(br).filter(s => is(s.team1) || is(s.team2)).map(s => ({ br, s }))).reverse().slice(0, 8);
+        const results = rows.map(({ br, s }) => {
+          const us = is(s.team1) ? s.team1 : s.team2, them = us === s.team1 ? s.team2 : s.team1;
+          const won = s.winner === us.id;
+          return { tournament: br.title, round: s.match.roundName, team: us.name, opponent: them.name, outcome: won ? 'won' : 'lost', score: us === s.team1 ? `${s.match.score.team1Score}-${s.match.score.team2Score}` : `${s.match.score.team2Score}-${s.match.score.team1Score}` };
+        });
+        let streak = 0;
+        for (const r of results) { if (r.outcome !== results[0].outcome) break; streak++; }
+        return { data: { results, streak: results.length ? `${streak} ${results[0].outcome === 'won' ? 'win' : 'loss'}${streak === 1 ? '' : results[0].outcome === 'won' ? 's' : 'es'} in a row` : null }, references: rows.slice(0, 6).map(({ br, s }) => ref(br, s.match)) };
       }),
     tool({ name: 'explainFormat', description: 'Explain a competition format.', parameters: object({ format: { type: 'string', enum: Object.keys(FORMATS) } }, ['format']) },
       z.object({ format: z.enum(Object.keys(FORMATS) as [string, ...string[]]) }), ({ format }) => ({ data: { format, explanation: FORMATS[format] }, references: [] })),

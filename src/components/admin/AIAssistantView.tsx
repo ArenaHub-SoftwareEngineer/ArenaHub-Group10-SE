@@ -1,5 +1,6 @@
 import React from 'react';
 import { SpectatorAIView } from '../spectator/SpectatorAIView';
+import { AIFeedbackReview } from './AIFeedbackReview';
 
 interface AIAssistantViewProps {
   currentUser?: {
@@ -15,6 +16,7 @@ interface AIAssistantViewProps {
   onOpenBrackets?: () => void;
 }
 
+/** The organizer workspace's Arena AI: the same assistant, plus the staff review of answer ratings. */
 export const AIAssistantView: React.FC<AIAssistantViewProps> = (props) => (
-  <SpectatorAIView {...props} />
+  <SpectatorAIView {...props} headerActions={<AIFeedbackReview />} />
 );

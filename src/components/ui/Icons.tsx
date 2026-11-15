@@ -81,6 +81,8 @@ import {
   KeyRound as KeyRoundVector,
   Bot as BotVector,
   Sparkles as SparklesVector,
+  ThumbsUp as ThumbsUpVector,
+  ThumbsDown as ThumbsDownVector,
   AlertCircle as AlertCircleVector,
   XCircle as XCircleVector,
   Ban as BanVector,
@@ -192,6 +194,8 @@ export const Layers = icon(LayersVector);
 export const KeyRound = icon(KeyRoundVector);
 export const Bot = icon(BotVector);
 export const Sparkles = icon(SparklesVector);
+export const ThumbsUp = icon(ThumbsUpVector);
+export const ThumbsDown = icon(ThumbsDownVector);
 export const AlertCircle = icon(AlertCircleVector);
 export const XCircle = icon(XCircleVector);
 export const Ban = icon(BanVector);

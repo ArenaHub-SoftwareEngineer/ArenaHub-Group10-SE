@@ -6,6 +6,8 @@ export interface ChatMessage {
   source?: string; status?: 'complete' | 'writing' | 'stopped' | 'error';
   /** Which published records the answer was checked against. Ids open the bracket or match. */
   references?: ChatReference[];
+  /** This account's rating of the answer, once given. */
+  rating?: 'up' | 'down';
 }
 export interface ChatReference { label: string; bracketId?: string; matchId?: string }
 const safeId = (value: unknown) => typeof value === 'string' && /^[\w#.:-]{1,160}$/.test(value) ? value : undefined;
@@ -45,6 +47,7 @@ function parseThread(value: unknown, now: number): ChatThread | null {
       text: writing && !raw.text ? 'This response was interrupted. You can try again.' : raw.text,
       timestamp: timestamp(raw.timestamp, now), source: typeof raw.source === 'string' ? raw.source : undefined,
       ...(Array.isArray(raw.references) ? { references: parseReferences(raw.references) } : {}),
+      ...(raw.rating === 'up' || raw.rating === 'down' ? { rating: raw.rating } : {}),
       status: writing ? 'stopped' : ['complete', 'stopped', 'error'].includes(raw.status) ? raw.status : 'complete' }];
   });
   if (!messages.length || messages.length !== input.messages.length) return null;
