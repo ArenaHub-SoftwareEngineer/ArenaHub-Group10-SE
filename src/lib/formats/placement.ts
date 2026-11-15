@@ -14,7 +14,7 @@
  *
  * Pure functions only, so everything here is unit-tested.
  */
-import type { BracketDraft } from '../types';
+import type { BracketDraft, Match } from '../types';
 
 export const MAX_LOBBY_TEAMS = 25; // CODM BR: 100 players, squads of four.
 export const MAX_GAMES = 24;
@@ -154,3 +154,26 @@ export function recordGame(event: PlacementEvent, gameId: string, results: Place
 }
 
 export const isPlacementEvent = (bracket: Pick<BracketDraft, 'placement'>) => !!bracket.placement;
+
+/**
+ * Each lobby game as a match-shaped record, so schedules and Match center can list Battle Royale games
+ * next to head-to-head matches. They carry `lobby` instead of two teams and are never stored.
+ */
+export function lobbyMatches(bracket: BracketDraft): Match[] {
+  const event = bracket.placement;
+  if (!event) return [];
+  const names = new Map(event.teams.map(t => [t.id, t.name]));
+  return event.games.map((game, i) => {
+    const winner = game.status === 'completed' ? names.get(game.results.find(r => r.placement === 1)?.teamId || '') : undefined;
+    const match: Match = {
+      id: game.id, matchNumber: `#G${i + 1}`, tournamentId: bracket.id, gameId: 'game-codm-br', gameMode: 'br', round: i + 1,
+      roundName: game.label, bracketType: 'upper', score: { team1Score: 0, team2Score: 0 }, status: game.status, matchFormat: 'Bo1',
+      scheduledDate: game.scheduledDate || '', scheduledTime: game.scheduledTime || '', organizerName: '',
+      lobby: { eventId: bracket.id, squads: event.teams.length, ...(winner ? { winner } : {}) },
+    };
+    return match;
+  });
+}
+
+/** What a schedule should list for a bracket: its matches, or its lobby games for a Battle Royale event. */
+export const scheduleMatches = (bracket: BracketDraft): Match[] => bracket.placement ? lobbyMatches(bracket) : bracket.matches;

@@ -3,7 +3,7 @@ import type { BracketDraft, Match } from '../../lib/types';
 import { bracketScheduleLabel } from '../../lib/calendar';
 import { upcomingOrder, watchGames, type WatchCard } from '../../lib/watchCards';
 import { MultiMatchViewer } from './MultiMatchViewer';
-import { WatchCardView } from './WatchCardView';
+import { WatchCardView, cardTitle } from './WatchCardView';
 import { FeaturedCarousel } from './FeaturedCarousel';
 import { BroadcastIllustration, CalendarIllustration } from '../ui/Illustrations';
 import { LayoutGrid } from 'lucide-react';
@@ -75,15 +75,15 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
     </div>}
 
     <MultiMatchViewer open={multiOpen} onClose={() => setMultiOpen(false)}
-      entries={all.map(card => ({ match: card.match, gameName: card.gameLabel, bracketTitle: card.bracket.title, gameId: card.gameId }))} onSelectMatch={onSelectMatch} />
+      entries={all.filter(card => !card.match.lobby).map(card => ({ match: card.match, gameName: card.gameLabel, bracketTitle: card.bracket.title, gameId: card.gameId }))} onSelectMatch={onSelectMatch} />
 
     <Modal open={pending !== null} onClose={() => setPending(null)}
       title={pending?.state === 'waiting' ? 'Broadcast starting soon' : pending?.match.status === 'completed' ? 'Match has ended' : 'Match is not live yet'}
       description={pending ? [pending.gameLabel, pending.mode, pending.bracket.title].filter(Boolean).join(' · ') : undefined}>
       {pending && <div className="match-center-notice">
-        <strong>{pending.match.team1?.name || 'Awaiting team'} vs {pending.match.team2?.name || 'Awaiting team'}</strong>
+        <strong>{cardTitle(pending.match)}</strong>
         <p>{bracketScheduleLabel(pending.match)} · {pending.match.roundName}</p>
-        <p className="field-hint">{pending.state === 'waiting' ? 'The match has started; the organizer has not attached the broadcast yet.' : 'Come back at the scheduled time. Live matches open straight into the player.'}</p>
+        <p className="field-hint">{pending.match.lobby ? 'Battle Royale standings update after each game on the Brackets page.' : pending.state === 'waiting' ? 'The match has started; the organizer has not attached the broadcast yet.' : 'Come back at the scheduled time. Live matches open straight into the player.'}</p>
       </div>}
     </Modal>
   </div>;

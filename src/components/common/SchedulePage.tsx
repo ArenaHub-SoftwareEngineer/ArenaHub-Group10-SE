@@ -3,6 +3,7 @@ import type { BracketDraft, Match } from '../../lib/types';
 import { manilaToday } from '../../lib/calendar';
 import { matchLabel } from '../../lib/integrityChecks';
 import { publicationGameKey } from '../../lib/bracketPublication';
+import { scheduleMatches } from '../../lib/formats/placement';
 import { GAME_ARTWORK, GameArtworkTiles } from './GameArtworkTiles';
 import { CalendarDays } from '../ui/Icons';
 import { Modal } from '../ui/Modal';
@@ -23,7 +24,8 @@ export function PublishedScheduleDialog({ open, onClose, bracket, onSelect, choi
         {choices.map(item => <option key={item.id} value={item.id}>{item.gameName} · {item.title}</option>)}
       </select>
     </label>}
-    {bracket ? <PublishedCalendar key={bracket.id} matches={bracket.matches} onSelect={match => {
+    {/* Mounted only while open, so each opening starts at the next scheduled date, even if the schedule changed since. */}
+    {!open ? null : bracket ? <PublishedCalendar key={bracket.id} matches={scheduleMatches(bracket)} onSelect={match => {
       onClose();
       onSelect(match);
     }} /> : <p className="studio-muted">The organizer hasn’t published a schedule for this selection.</p>}
@@ -50,9 +52,10 @@ function PublishedCalendar({ matches, onSelect }: { matches: Match[]; onSelect: 
       <h3>{dayLabel.format(new Date(`${selectedDay}T00:00:00Z`))}</h3>
       {entries.length ? <ul>{entries.map(match => <li key={match.id}>
         <time>{match.scheduledTime}</time>
-        <div><strong>{matchLabel(match)}</strong><small>{match.roundName} · {match.matchFormat}</small></div>
-        {match.status === 'live' ? <button type="button" className="arena-outline" onClick={() => onSelect(match)}>Open live match</button>
-          : <small>{match.status === 'completed' ? 'Completed' : 'Not live yet'}</small>}
+        <div><strong>{matchLabel(match)}</strong><small>{match.lobby ? 'Battle Royale lobby' : `${match.roundName} · ${match.matchFormat}`}</small></div>
+        {/* A lobby has no broadcast to open; its results show in the Battle Royale standings. */}
+        {match.status === 'live' && !match.lobby ? <button type="button" className="arena-outline" onClick={() => onSelect(match)}>Open live match</button>
+          : <small>{match.status === 'completed' ? (match.lobby?.winner ? `Won by ${match.lobby.winner}` : 'Completed') : match.status === 'live' ? 'Playing now' : 'Not live yet'}</small>}
       </li>)}</ul> : <p className="studio-muted">No matches scheduled for this date.</p>}
     </section>
   </div>;

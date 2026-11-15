@@ -127,9 +127,9 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           <h1>{activeBracket.title || tournament.title}{activeBracket.demo && <span className="demo-label" title="Demonstration data, not a real event">DEMO</span>}</h1>
           <p className="studio-muted">{activeBracket.format} · {activeBracket.teamsCount} {activeBracket.placement ? 'squads' : 'teams'} · {activeBracket.placement ? `${activeBracket.placement.games.length} games` : `${currentBracketMatches.length} matches`}</p>
         </div>
-        {!activeBracket.placement && <button type="button" className="arena-outline" onClick={() => setShowScheduleModal(true)}>
-          <Calendar size={17} /> Match schedule <ChevronDown size={14} />
-        </button>}
+        <button type="button" className="arena-outline" onClick={() => setShowScheduleModal(true)}>
+          <Calendar size={17} /> {activeBracket.placement ? 'Game schedule' : 'Match schedule'} <ChevronDown size={14} />
+        </button>
         {(() => {
           const artwork = FAIR_PLAY_GAMES.find(game => `game-${game.id}` === publicationGameKey(activeBracket));
           return artwork && <img className="viewer-bracket-artwork" src={artwork.image} alt="" />;

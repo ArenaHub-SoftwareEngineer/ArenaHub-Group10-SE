@@ -61,10 +61,35 @@ test('organizer runs a Battle Royale lobby and viewers see placement standings',
 
   const { page: viewer, errors: viewerErrors } = await open(browser, STUDENT, { width: 375, height: 812 });
   await viewer.evaluate(() => { window.location.hash = '#/arena/choose-tournament'; });
-  await viewer.getByText(title).first().click();
+  await viewer.locator('button.stream-game-card').filter({ hasText: title }).click();
   await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible({ timeout: 20_000 });
   await expect(viewer.locator('.placement-table tbody tr').first().locator('.total')).toHaveText('27');
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+
+  // Schedule Game 3; lobby games appear in Match center and the game schedule like any match.
+  const entry = admin.locator('form.placement-admin-entry');
+  await expect(entry.locator('label', { hasText: /^Game/ }).first().locator('select')).toHaveValue(/-G3$/);
+  await entry.getByLabel('Date').fill('2026-12-01');
+  await entry.getByLabel('Time').fill('15:00');
+  await admin.getByRole('button', { name: 'Save Game 3' }).click();
+  await expect(admin.getByText('Game 3 saved.')).toBeVisible({ timeout: 20_000 });
+  await viewer.evaluate(() => { window.location.hash = '#/arena/current-live'; });
+  const lobbyCard = viewer.locator('.watch-card').filter({ hasText: 'Game 3: 4-squad lobby' }).filter({ hasText: title });
+  await expect(lobbyCard.first()).toBeVisible({ timeout: 20_000 });
+  // The schedule reaches open viewers through the live listener; allow for a slow emulator.
+  await expect(lobbyCard.first()).toContainText('2026-12-01 · 15:00', { timeout: 20_000 });
+  await lobbyCard.first().click();
+  await expect(viewer.getByRole('dialog')).toContainText('Battle Royale standings update after each game');
+  await viewer.getByRole('dialog').getByRole('button', { name: 'Close dialog' }).click();
+  await expect(viewer.getByRole('dialog')).toHaveCount(0);
+  await viewer.evaluate(() => { window.location.hash = '#/arena/choose-tournament'; });
+  await viewer.locator('button.stream-game-card').filter({ hasText: title }).click();
+  await viewer.getByRole('button', { name: /Game schedule/ }).click();
+  const calendar = viewer.getByRole('dialog');
+  await expect(calendar).toContainText('December 2026');
+  await expect(calendar).toContainText('Game 3 · 4-squad lobby');
+  await expect(calendar).toContainText('Battle Royale lobby');
+  await calendar.getByRole('button', { name: 'Close dialog' }).click();
 
   // Unpublish from Bracket Studio: the event leaves the published list only after the cloud write succeeds.
   await admin.evaluate(() => { window.location.hash = '#/admin/bracket-studio'; });

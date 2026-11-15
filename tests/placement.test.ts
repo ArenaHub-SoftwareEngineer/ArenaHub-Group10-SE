@@ -116,3 +116,20 @@ test('placement survives the tournament document round trip and changes the cont
   // Head-to-head brackets keep their old fingerprint shape.
   assert.equal(contentFingerprint({ matches: [] }), '[]');
 });
+
+test('lobby games become schedule entries without teams, with the winner once final', async () => {
+  const { lobbyMatches, scheduleMatches } = await import('../src/lib/formats/placement');
+  const { matchLabel } = await import('../src/lib/integrityChecks');
+  const draft = make(2);
+  const id = ids(draft.placement!);
+  draft.placement = recordGame(draft.placement!, draft.placement!.games[0].id, [{ teamId: id.Charlie, placement: 1, kills: 2 }, { teamId: id.Alpha, placement: 2, kills: 0 }], 'completed');
+  draft.placement.games[1] = { ...draft.placement.games[1], scheduledDate: '2026-11-20', scheduledTime: '14:00' };
+  const [g1, g2] = lobbyMatches(draft);
+  assert.equal(g1.lobby?.winner, 'Charlie');
+  assert.equal(g1.status, 'completed');
+  assert.equal(g2.lobby?.winner, undefined);
+  assert.equal(g2.scheduledTime, '14:00');
+  assert.equal(g1.team1, undefined);
+  assert.equal(matchLabel(g2), 'Game 2 · 4-squad lobby');
+  assert.deepEqual(scheduleMatches({ ...draft, placement: undefined }), draft.matches);
+});

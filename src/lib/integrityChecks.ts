@@ -50,4 +50,4 @@ export function checkTeamRoster(team: Team, allTeams: Team[], expectedPlayers = 
   }
   return [...new Set(issues)];
 }
-export function matchLabel(match: Match) { return `${match.matchNumber} · ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}`; }
+export function matchLabel(match: Match) { return match.lobby ? `${match.roundName} · ${match.lobby.squads}-squad lobby` : `${match.matchNumber} · ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}`; }

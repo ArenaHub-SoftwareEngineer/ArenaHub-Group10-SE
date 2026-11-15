@@ -183,6 +183,8 @@ export interface Match {
   mvp?: MatchMVP | string;
   statGames?: Record<string, { playerStats: NonNullable<Match['playerStats']>; notes: string }>;
   playerStats?: Record<string, { kills: number; deaths: number; assists: number; [key: string]: any }>;
+  /** Present on a Battle Royale lobby game shown in schedules and Match center (see lobbyMatches). It has no team1/team2. */
+  lobby?: { eventId: string; squads: number; winner?: string };
 }
 
 export interface GameCategory {

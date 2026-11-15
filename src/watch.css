@@ -28,6 +28,10 @@
 .watch-thumb-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.35) 45%, rgba(0,0,0,.7) 100%); }
 .watch-thumb-versus { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; z-index: 1; }
 .watch-thumb-versus b { color: #fff; font-size: 16px; font-weight: 700; letter-spacing: .04em; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+/* Battle Royale lobby card: squad count instead of two crests. */
+.watch-thumb-lobby { flex-direction: column; gap: 0; }
+.watch-thumb-lobby b { font-size: 28px; line-height: 1; }
+.watch-thumb-lobby small { color: #fff; font-size: 12px; font-weight: 600; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
 .watch-badge { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 600; color: #fff; }
 .watch-badge-live { top: 8px; left: 8px; background: #cc0000; letter-spacing: .02em; }
 .watch-badge-live i { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: watch-blink 1.4s ease-in-out infinite; }

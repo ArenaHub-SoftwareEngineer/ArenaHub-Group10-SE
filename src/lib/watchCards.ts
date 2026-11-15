@@ -4,6 +4,7 @@ import { belongsToFairPlayGame, FAIR_PLAY_GAMES } from './fairPlayGames';
 import { scheduleDate, timeOrder } from './calendar';
 import { isWatchableLiveMatch } from './streamUtils';
 import { GAME_ARTWORK } from '../components/common/GameArtworkTiles';
+import { scheduleMatches } from './formats/placement';
 
 /** One match as a "video" in Match center and in the watch page's Up next list. */
 export type WatchCard = {
@@ -15,7 +16,7 @@ export type WatchGame = { id: string; label: string; image?: string; cards: Watc
 const isBye = (match: Match) => [match.team1, match.team2].some(team => team?.isBye || team?.name === 'BYE');
 const stateOf = (match: Match): WatchCard['state'] => isWatchableLiveMatch(match) ? 'live'
   : match.status === 'live' ? 'waiting'
-  : (match.status === 'upcoming' || match.status === 'pre-match') && match.team1 && match.team2 ? 'upcoming' : 'other';
+  : (match.status === 'upcoming' || match.status === 'pre-match') && ((match.team1 && match.team2) || match.lobby) ? 'upcoming' : 'other';
 
 /** Groups every published match under its game (CODM modes share one CODM game), in the fixed game order. */
 export function watchGames(brackets: BracketDraft[]): WatchGame[] {
@@ -23,7 +24,8 @@ export function watchGames(brackets: BracketDraft[]): WatchGame[] {
   for (const bracket of brackets) {
     const key = publicationGameKey(bracket);
     const publishedGame = FAIR_PLAY_GAMES.find(game => `game-${game.id}` === key);
-    for (const match of bracket.matches) {
+    // Battle Royale events contribute their lobby games.
+    for (const match of scheduleMatches(bracket)) {
       if (isBye(match)) continue;
       const candidates = bracket.gameId === 'game-custom' ? [] : FAIR_PLAY_GAMES.filter(game => belongsToFairPlayGame(match, game));
       const game = publishedGame ?? (candidates.length === 1 ? candidates[0] : undefined);
@@ -54,9 +56,9 @@ const short = (name?: string) => (name || 'TBD').replace(/^DEMO\s+/i, '');
 export function liveRailItem(card: WatchCard) {
   return {
     id: card.match.id,
-    title: `${short(card.match.team1?.name)} vs ${short(card.match.team2?.name)}`,
+    title: card.match.lobby ? `${short(card.bracket.title)} · ${card.match.roundName}` : `${short(card.match.team1?.name)} vs ${short(card.match.team2?.name)}`,
     subtitle: card.state === 'live' ? card.gameLabel : `${card.gameLabel} · starting soon`,
     image: card.image,
-    score: `${card.match.score.team1Score}–${card.match.score.team2Score}`,
+    score: card.match.lobby ? '' : `${card.match.score.team1Score}–${card.match.score.team2Score}`,
   };
 }
