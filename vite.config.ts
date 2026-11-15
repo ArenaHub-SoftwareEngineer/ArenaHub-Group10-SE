@@ -37,6 +37,24 @@ export default defineConfig(({ mode }) => {
     build: {
       // Always start from an empty dist/ so stale hashed chunks are never deployed.
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          // Vendor code in its own chunks: each stays under 500 kB, caches across releases, and Storage
+          // (evidence uploads only) is no longer downloaded by every viewer.
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (/[\\/]@firebase[\\/](firestore|firestore-compat)[\\/]/.test(id) || /[\\/]firebase[\\/]firestore[\\/]/.test(id)) return 'firebase-firestore';
+            if (/[\\/]@firebase[\\/]auth[\\/]/.test(id) || /[\\/]firebase[\\/]auth[\\/]/.test(id)) return 'firebase-auth';
+            if (/[\\/]@firebase[\\/]storage[\\/]/.test(id) || /[\\/]firebase[\\/]storage[\\/]/.test(id)) return 'firebase-storage';
+            if (/[\\/](@firebase|firebase|idb)[\\/]/.test(id)) return 'firebase-core';
+            // Anchored to the package folder: motion ships a motion/react/ folder that is not React.
+            if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
+            if (/node_modules[\\/](motion|framer-motion|motion-dom|motion-utils)[\\/]/.test(id)) return 'motion';
+            if (/[\\/](react-markdown|remark-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|unified|unist-[^\\/]+|vfile[^\\/]*|property-information|space-separated-tokens|comma-separated-tokens|decode-named-character-reference|character-entities[^\\/]*|devlop|bail|trough|is-plain-obj|ccount|markdown-table|longest-streak|zwitch|trim-lines|html-url-attributes|estree-util-is-identifier-name)[\\/]/.test(id)) return 'markdown';
+            return undefined;
+          },
+        },
+      },
     },
   };
 });

@@ -18,7 +18,6 @@ import { ToastProvider, useToast } from './components/ui/Toast';
 import { hasCampusEmail, redeemSpectatorAccess } from './lib/campusAccess';
 import { AuthEntry } from './components/auth/AuthEntry';
 import { EmailVerificationScreen } from './components/auth/EmailVerificationScreen';
-import { SpectatorQRReader } from './components/auth/SpectatorQRReader';
 
 // Spectator Shell
 import { SpectatorLayout } from './components/spectator/SpectatorLayout';
@@ -44,14 +43,16 @@ const ReportsView = lazy(() => import('./components/admin/ReportsView').then(m =
 const FeaturedView = lazy(() => import('./components/admin/FeaturedView').then(m => ({ default: m.FeaturedView })));
 const PlacementEventsView = lazy(() => import('./components/admin/PlacementEventsView').then(m => ({ default: m.PlacementEventsView })));
 const BracketStudioView = lazy(() => import('./components/admin/BracketStudioView').then(m => ({ default: m.BracketStudioView })));
+// Loaded on first use: Fair Play brings the Storage SDK and video review, admission brings the QR reader.
+const IntegrityCenter = lazy(() => import('./components/common/FairPlayCenter').then(m => ({ default: m.FairPlayCenter })));
+const TournamentOperations = lazy(() => import('./components/common/TournamentOperations').then(m => ({ default: m.TournamentOperations })));
+const StandingsPage = lazy(() => import('./components/spectator/StandingsView').then(m => ({ default: m.StandingsPage })));
+const SpectatorQRReader = lazy(() => import('./components/auth/SpectatorQRReader').then(m => ({ default: m.SpectatorQRReader })));
 const AIAssistantView = lazy(() => import('./components/admin/AIAssistantView').then(m => ({ default: m.AIAssistantView })));
 const AdminMatchDataEntry = lazy(() => import('./components/admin/AdminMatchDataEntry').then(m => ({ default: m.AdminMatchDataEntry })));
 const AdminLiveStreamManager = lazy(() => import('./components/admin/AdminLiveStreamManager').then(m => ({ default: m.AdminLiveStreamManager })));
 
-import { FairPlayCenter as IntegrityCenter } from './components/common/FairPlayCenter';
-import { TournamentOperations } from './components/common/TournamentOperations';
 import { PreferencesPage, SupportPage, SchedulePage } from './components/common/WorkspacePages';
-import { StandingsPage } from './components/spectator/StandingsView';
 import { useHistoryTab } from './lib/navigation';
 import { auth } from './lib/firebase';
 import { firestoreService } from './lib/firestore';
@@ -59,6 +60,11 @@ import { Tournament, Match, BracketDraft } from './lib/types';
 import type { AskFocus } from './lib/ai';
 
 // ─── Full-screen loading skeleton ─────────────────────────────────────────────
+/** Inside the shell: a lazily loaded tab shows this while its code arrives; the navigation stays. */
+function TabLoading() {
+  return <div className="tab-loading" role="status" aria-live="polite"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading…</span></div>;
+}
+
 function AppLoadingScreen() {
   return (
     <div className="min-h-screen bg-(--surface) flex items-center justify-center">
@@ -248,6 +254,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           openReportsCount={reports.filter((r) => r.status === 'open').length}
           live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => setAdminTab('live-stream', { streamBracket: card.bracket.id, streamMatch: card.match.id }) }))}
         >
+          <Suspense fallback={<TabLoading />}>
           {sharedError && <div className="module-notice mb-6" role="alert">{sharedError}</div>}
           {adminTab === 'overview' && (
             <AdminOverview
@@ -291,6 +298,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
             <AdminLiveStreamManager matches={matches} initialBracketId={liveStreamBracketId} initialMatchId={routeParams.get('streamMatch')} />
           )}
           {accountDialogs}
+          </Suspense>
         </AdminLayout>
       ) : (
         <SpectatorLayout
@@ -308,6 +316,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           breadcrumb={breadcrumb}
           live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => card.state === 'live' ? setSpectatorTab('live', { match: card.match.id, game: card.gameId }) : setSpectatorTab('current-live', { game: card.gameId }) }))}
         >
+          <Suspense fallback={<TabLoading />}>
           {spectatorTab === 'integrity' && <IntegrityCenter key={routeParams.get('case') || 'new'} matches={officialMatches} teams={teams} onSignIn={onSignIn} initialCaseId={routeParams.get('case')} />}
           {spectatorTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'team'} brackets={publishedBrackets} initialEntityId={routeParams.get('entity')} />}
           {spectatorTab === 'standings' && <StandingsPage brackets={publishedBrackets} />}
@@ -405,6 +414,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           {spectatorTab === 'support' && <SupportPage onNavigate={setSpectatorTab} />}
           {spectatorTab === 'settings' && <PreferencesPage user={currentUser} onSignIn={onSignIn} />}
           {accountDialogs}
+          </Suspense>
         </SpectatorLayout>
       )}
 
