@@ -124,7 +124,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
   return <div className="module-page placement-admin">
     <header className="dashboard-page-heading"><span className="section-overline">BATTLE ROYALE</span><h1>Lobby events and placement points.</h1>
       <p>For CODM Battle Royale. Every squad plays every game in one lobby. Standings add placement points and eliminations across all final games.</p>
-      {!creating && <button type="button" className="arena-outline mt-3" onClick={() => setCreating(true)}><Plus size={16} />New event</button>}
+      {loaded && !creating && <button type="button" className="arena-outline mt-3" onClick={() => setCreating(true)}><Plus size={16} />New event</button>}
     </header>
 
     {!loaded && !events.length && <p className="studio-muted" role="status">Loading published events…</p>}

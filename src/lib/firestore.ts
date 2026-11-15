@@ -8,7 +8,7 @@
 import { collection, onSnapshot, orderBy, query, limit, addDoc, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db, isFirebaseConfigured } from './firebase';
-import type { Tournament, Match, College, Team, User, ContentReport, AuditLogItem, GameTitle, UserStatus, BracketDraft, TournamentFormat, MatchFormat } from './types';
+import type { Tournament, Match, College, Team, User, ContentReport, AuditLogItem, GameTitle, UserStatus, BracketDraft, TournamentFormat, MatchFormat, MatchMVP, MatchTimelineEvent } from './types';
 import { seriesWinsNeeded } from './types';
 import { directoryTeams } from './playerProfiles';
 import { isRetiredGame, gameCatalog } from './gameRanks';
@@ -289,6 +289,19 @@ class FirestoreService {
     if (!updated) throw new Error('Match not found.');
     this.addAuditLog(`Player stats saved for ${updated.matchNumber}`);
     this.emit();
+  }
+
+  /** Saves the organizer-entered timeline and MVP for one published match. Pass no MVP to clear it. */
+  public async saveMatchHighlights(matchId: string, events: MatchTimelineEvent[], mvp?: MatchMVP): Promise<void> {
+    const updated = this.updateMatch(matchId, match => {
+      const next: Match = { ...match, timelineEvents: events };
+      if (mvp) next.mvp = mvp; else delete next.mvp;
+      return next;
+    });
+    if (!updated) throw new Error('Match not found. Reload and choose the match again.');
+    this.addAuditLog(`Timeline (${events.length} events) and MVP ${mvp ? `(${mvp.ign})` : '(none)'} saved for ${updated.matchNumber}`);
+    this.emit();
+    await this.syncBracketsToCloud();
   }
 
   // --- Drafts (per organizer, in Firestore) ---

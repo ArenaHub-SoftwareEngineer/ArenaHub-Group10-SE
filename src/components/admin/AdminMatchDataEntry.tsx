@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { firestoreService } from '../../lib/firestore';
 import { Match, Team, seriesGameCount } from '../../lib/types';
 import { useToast } from '../ui/Toast';
+import { MatchHighlightsEditor } from './MatchHighlightsEditor';
 import {
   Swords,
   Sparkles,
@@ -476,6 +477,8 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
           Observations are saved with the selected game and shown alongside calculated stats.
         </p>
       </div>
+
+      {selectedMatch?.team1 && selectedMatch.team2 && !selectedMatch.team1.isBye && !selectedMatch.team2.isBye && <MatchHighlightsEditor match={selectedMatch} />}
 
       {/* Stats summary Output */}
       {aiAnalysis && (

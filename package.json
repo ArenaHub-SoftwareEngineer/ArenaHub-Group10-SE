@@ -10,7 +10,7 @@
     "clean": "node scripts/clean-dist.mjs",
     "lint": "tsc --noEmit",
     "start": "tsx server/index.ts",
-    "test": "tsx --test tests/core.test.ts tests/chat-history.test.ts tests/player-calendar.test.ts tests/game-ranks.test.ts tests/fair-play.test.ts tests/stream.test.ts tests/broadcasts.test.ts tests/standings.test.ts tests/operations.test.ts tests/auth-flow.test.ts tests/institution-config.test.mjs tests/no-emoji.test.ts tests/tournament-docs.test.ts tests/integrity-risk.test.ts tests/integrity-agent.test.ts tests/chat-moderation.test.ts tests/placement.test.ts tests/bracket-studio.test.ts",
+    "test": "tsx --test tests/core.test.ts tests/chat-history.test.ts tests/player-calendar.test.ts tests/game-ranks.test.ts tests/fair-play.test.ts tests/stream.test.ts tests/broadcasts.test.ts tests/standings.test.ts tests/operations.test.ts tests/auth-flow.test.ts tests/institution-config.test.mjs tests/no-emoji.test.ts tests/tournament-docs.test.ts tests/integrity-risk.test.ts tests/integrity-agent.test.ts tests/chat-moderation.test.ts tests/placement.test.ts tests/bracket-studio.test.ts tests/match-highlights.test.ts",
     "test:auth-flow": "node --test tests/auth-flow.integration.test.mjs",
     "test:rules": "node --test --test-concurrency=1 tests/firestore.rules.test.mjs tests/operations.rules.test.mjs tests/data.rules.test.mjs tests/chat.rules.test.mjs",
     "test:video-api": "tsx --test tests/fair-play-api.test.ts",

@@ -28,6 +28,9 @@ import { CurrentLiveView } from './components/spectator/CurrentLiveView';
 import { liveRailItem, upNext, watchGames } from './lib/watchCards';
 import { ChooseTournamentView } from './components/spectator/ChooseTournamentView';
 import { BracketsView } from './components/spectator/BracketsView';
+import { MatchTimeline } from './components/spectator/MatchTimeline';
+import { MatchPlayerStatsSummary } from './components/spectator/MatchPlayerStatsSummary';
+import { MVPCard } from './components/ui/MVPCard';
 const TeamsView = lazy(() => import('./components/spectator/TeamsView').then(m => ({ default: m.TeamsView })));
 const SpectatorAIView = lazy(() => import('./components/spectator/SpectatorAIView').then(m => ({ default: m.SpectatorAIView })));
 
@@ -325,6 +328,12 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               : activeMatch?.status === 'live' ? 'Broadcast not available yet'
               : activeMatch ? 'Match is not live yet' : 'Match unavailable'}</h1>
             <p className="studio-muted">Open Match center to see the current broadcasts and upcoming matches.</p>
+            {/* A finished match still shows what organizers recorded: the MVP and the key moments. */}
+            {activeMatch?.status === 'completed' && (activeMatch.mvp || activeMatch.timelineEvents?.length || Object.keys(activeMatch.playerStats || {}).length) ? <div className="match-ended-highlights">
+              {activeMatch.mvp && <MVPCard mvp={activeMatch.mvp} status="completed" />}
+              <MatchTimeline match={activeMatch} />
+              {Object.keys(activeMatch.playerStats || {}).length > 0 && <MatchPlayerStatsSummary match={activeMatch} />}
+            </div> : null}
             <button type="button" className="arena-outline" onClick={openMatchCenter}>Back to Match center</button>
           </section>)}
 

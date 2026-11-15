@@ -1,0 +1,26 @@
+/* Match timeline (viewer) and the timeline and MVP editor (organizer). */
+.match-timeline { display: grid; gap: 10px; }
+.match-timeline header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.match-timeline h3 { font-size: 16px; }
+.match-timeline-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.match-timeline ol { display: grid; gap: 0; }
+.match-timeline li { display: grid; grid-template-columns: 48px 24px minmax(0, 1fr); gap: 10px; align-items: start; padding: 6px 0; }
+.match-timeline time { padding-top: 3px; text-align: right; font-size: 12px; font-weight: 600; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.match-timeline-icon { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-elevated); border: 1px solid var(--border-strong); color: var(--text-secondary); }
+.match-timeline-icon.type-first-blood { color: var(--danger); }
+.match-timeline-icon.type-lord, .match-timeline-icon.type-ace { color: var(--brand-ink); }
+.match-timeline-icon.type-objective { color: var(--info); }
+.match-timeline li p { font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; padding-top: 2px; }
+.match-timeline li p strong { margin-right: 6px; }
+.match-timeline li p span:last-child { color: var(--text-secondary); }
+.match-timeline-team { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--surface-soft); color: var(--text-secondary); }
+
+.highlights-editor { display: grid; gap: 14px; }
+.highlights-editor-add { display: grid; grid-template-columns: 96px minmax(0, 1.2fr) minmax(0, 1fr); gap: 10px; align-items: end; }
+.highlights-editor-add .span-all { grid-column: 1 / -1; }
+.highlights-editor ul { display: grid; gap: 6px; }
+.highlights-editor li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.highlights-editor li time { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-muted); min-width: 44px; }
+.highlights-editor li p { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 640px) { .highlights-editor-add { grid-template-columns: 1fr; } }
+.match-ended-highlights { display: grid; gap: 16px; margin: 16px 0; text-align: left; }

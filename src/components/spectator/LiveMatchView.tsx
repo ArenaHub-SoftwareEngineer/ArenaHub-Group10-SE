@@ -9,6 +9,9 @@ import { CollegeLogo } from '../common/CollegeLogo';
 import { MatchRostersAndCareerStats } from './MatchRostersAndCareerStats';
 import { WatchCardView } from './WatchCardView';
 import { LiveChatPanel } from './LiveChatPanel';
+import { MatchTimeline } from './MatchTimeline';
+import { MatchPlayerStatsSummary } from './MatchPlayerStatsSummary';
+import { MVPCard } from '../ui/MVPCard';
 import { ChevronDown, ExternalLink, Link2 } from '../ui/Icons';
 
 interface LiveMatchViewProps {
@@ -27,6 +30,8 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
   const canPost = !readOnly && hasCampusEmail(currentUser.email);
   const team1 = match.team1?.name || 'Awaiting team', team2 = match.team2?.name || 'Awaiting team';
   const links = matchBroadcasts(match);
+  // Only real entries: without recorded stats the table would show every player at 0/0/0.
+  const hasStats = Object.keys(match.playerStats || {}).length > 0;
 
   const share = async () => {
     try { await navigator.clipboard.writeText(window.location.href); showToast('Link copied. Anyone with ArenaHub access can open this match.', 'success'); }
@@ -57,8 +62,9 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
           <strong className="watch-score">{match.score.team1Score}<span>–</span>{match.score.team2Score}</strong>
           <div className="is-right"><span><strong>{team2}</strong><small>{match.team2?.collegeCode}</small></span><CollegeLogo code={match.team2?.collegeCode || team2.slice(0, 3)} size="md" /></div>
         </div>
-        {more && <div className="watch-rosters"><MatchRostersAndCareerStats match={match} /></div>}
-        <button type="button" className="watch-more" aria-expanded={more} onClick={() => setMore(value => !value)}>{more ? 'Show less' : 'Rosters and player stats'}<ChevronDown size={16} className={more ? 'rotate-180' : ''} /></button>
+        {match.mvp && <MVPCard mvp={match.mvp} status={match.status} className="mt-3" />}
+        {more && <div className="watch-rosters"><MatchTimeline match={match} className="mb-4" />{hasStats && <MatchPlayerStatsSummary match={match} className="mb-4" />}<MatchRostersAndCareerStats match={match} /></div>}
+        <button type="button" className="watch-more" aria-expanded={more} onClick={() => setMore(value => !value)}>{more ? 'Show less' : match.timelineEvents?.length ? 'Timeline, rosters and player stats' : 'Rosters and player stats'}<ChevronDown size={16} className={more ? 'rotate-180' : ''} /></button>
       </section>
     </div>
 
