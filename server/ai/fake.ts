@@ -1,0 +1,38 @@
+// Scripted provider for browser tests on the demo-arenahub emulators (ARENA_AI_PROVIDER=fake).
+// It uses the real tools, so a test sees real records flow through the real pipeline and streaming,
+// without a network call or an API key. aiConfig() refuses it for any other project.
+import { extractTeamsFromPrompt } from '../../src/lib/bracketUtils.ts';
+import { runTool, type Provider } from './provider.ts';
+
+const pause = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const timer = setTimeout(resolve, ms);
+  signal.addEventListener('abort', () => { clearTimeout(timer); reject(signal.reason); }, { once: true });
+});
+
+function words(text: string) { return text.match(/\S+\s*/g) || []; }
+
+export function fakeProvider(): Provider {
+  return {
+    id: 'fake',
+    async *stream(request) {
+      let reply: string;
+      const chat = request.question.match(/^Match data: (.+)\n\nQuestion: /s);
+      if (chat) {
+        const m = JSON.parse(chat[1]);
+        reply = m.score ? `${m.team1?.name} ${m.score} ${m.team2?.name}${m.status === 'live' ? ', live and not final.' : '.'}` : `${m.team1?.name || 'This match'} vs ${m.team2?.name || 'opponent'}: no score is recorded yet.`;
+      } else if (/score|live/i.test(request.question)) {
+        const live = await runTool(request.tools, 'getLiveMatches', {}) as any[];
+        reply = live.length ? `Live now: ${live.map(m => `${m.team1?.name} vs ${m.team2?.name}, ${m.score ?? 'no score yet'} (not final)`).join('; ')}.` : 'No match is live right now.';
+      } else {
+        const list = await runTool(request.tools, 'listTournaments', {}) as any[];
+        reply = list.length ? `Published tournaments: ${list.map(t => `${t.title} (${t.game})`).join(', ')}.` : 'No tournament is published yet.';
+      }
+      for (const word of words(reply)) { await pause(15, request.signal); yield word; }
+    },
+    async json(request) {
+      const teams = extractTeamsFromPrompt(request.prompt).map(t => ({ name: t.name, college: t.college || null }));
+      const game = /\bmlbb\b|mobile legends/i.test(request.prompt) ? 'Mobile Legends: Bang Bang' : /\bdota\b/i.test(request.prompt) ? 'Dota 2' : null;
+      return { title: null, game, format: /double/i.test(request.prompt) ? 'Double elimination' : null, matchFormat: null, finalMatchFormat: null, teams, seeding: null, constraints: [] };
+    },
+  };
+}

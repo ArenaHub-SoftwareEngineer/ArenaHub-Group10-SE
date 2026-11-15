@@ -7,6 +7,7 @@ import { createFairPlayRouter } from './fairPlay';
 import { createIntegrityRouter } from './integrity';
 import { publicAccessGuard } from './publicAccess';
 import { corsPolicy } from './cors';
+import { adminMode } from './firebaseAdmin';
 
 export interface AppOptions {
   /** Folder with the built site to serve, or null for an API-only deployment. */
@@ -25,11 +26,17 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
   const cors = corsPolicy(env);
   // Readiness only: true/false per feature, never key values or versions.
   app.get('/api/health', cors, (_req, res) => {
+    const access = adminMode(env);
     res.set('Cache-Control', 'no-store').json({
       ok: true,
-      assistant: Boolean(env.GEMINI_API_KEY),
+      // The assistant always answers from live records; these say whether a model can explain too.
+      assistant: Boolean(env.GEMINI_API_KEY || env.GROQ_API_KEY),
+      backupModel: Boolean(env.GROQ_API_KEY),
       videoReview: Boolean(env.GEMINI_API_KEY),
       firebaseProject: Boolean(env.VITE_FIREBASE_PROJECT_ID),
+      // 'rest' means no service account: sign-in still works, but rate limits are per server instance
+      // and Arena AI cannot post in live chat.
+      firebaseAccess: access,
     });
   });
   app.use('/api/ai', cors, createAiRouter(env));

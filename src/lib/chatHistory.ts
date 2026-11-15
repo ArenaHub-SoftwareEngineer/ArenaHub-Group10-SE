@@ -4,6 +4,8 @@ export const DAY_MS = 86_400_000;
 export interface ChatMessage {
   id: string; sender: 'user' | 'assistant'; text: string; timestamp: number;
   source?: string; status?: 'complete' | 'writing' | 'stopped' | 'error';
+  /** Which published records the answer was checked against (labels only). */
+  references?: string[];
 }
 export interface ChatThread {
   id: string; title: string; messages: ChatMessage[]; createdAt: number; updatedAt: number;
@@ -30,6 +32,7 @@ function parseThread(value: unknown, now: number): ChatThread | null {
     return [{ id: typeof raw.id === 'string' ? raw.id : `import-${input.id}-${Math.random().toString(36).slice(2)}`, sender: raw.sender,
       text: writing && !raw.text ? 'This response was interrupted. You can try again.' : raw.text,
       timestamp: timestamp(raw.timestamp, now), source: typeof raw.source === 'string' ? raw.source : undefined,
+      ...(Array.isArray(raw.references) ? { references: raw.references.filter((r: unknown): r is string => typeof r === 'string').slice(0, 12).map((r: string) => r.slice(0, 160)) } : {}),
       status: writing ? 'stopped' : ['complete', 'stopped', 'error'].includes(raw.status) ? raw.status : 'complete' }];
   });
   if (!messages.length || messages.length !== input.messages.length) return null;

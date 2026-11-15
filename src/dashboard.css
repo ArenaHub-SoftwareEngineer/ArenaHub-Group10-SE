@@ -320,6 +320,14 @@
 .studio-prompt-input { width: 100%; padding: 12px; line-height: 1.5; resize: vertical; }
 .studio-prompt-help, .studio-muted { color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
 .studio-prompt-help { display: block; margin-top: 6px; }
+/* Parsed bracket settings, confirmed by the organizer before anything is built. */
+.studio-confirm { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); }
+.studio-confirm-list { display: grid; gap: 6px; margin: 0; font-size: 13px; }
+.studio-confirm-list > div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; }
+.studio-confirm-list dt { color: var(--text-muted); font-weight: 600; }
+.studio-confirm-list dd { margin: 0; color: var(--text-primary); overflow-wrap: anywhere; }
+.studio-confirm .studio-muted { font-size: 12px; }
+.studio-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 
 .app-shell .studio-board {
   padding: clamp(14px, 2.5vw, 28px);

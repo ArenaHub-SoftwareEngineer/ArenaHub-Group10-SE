@@ -1,138 +1,132 @@
 import express from 'express';
-import { GoogleGenAI } from '@google/genai';
+import { getFirestore } from 'firebase-admin/firestore';
 import { originAllowed } from './cors.ts';
+import { AuthError, bearer, callerVerifier, type Caller, type VerifyCaller } from './auth.ts';
+import { publishedReader, type PublishedReader } from './data.ts';
+import { adminApp } from './firebaseAdmin.ts';
+import { aiConfig } from './ai/config.ts';
+import { askSchema, bracketSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
+import { draftBracket } from './ai/bracketDraft.ts';
+import { createAssistant, InterruptedAnswer } from './ai/index.ts';
+import type { Provider } from './ai/provider.ts';
+import { geminiProvider } from './ai/gemini.ts';
+import { groqProvider } from './ai/groq.ts';
+import { fakeProvider } from './ai/fake.ts';
+import type { ToolContext } from './ai/tools.ts';
 
-/** Provider credentials stay in the Node process. The browser receives text only. */
-export function createAiRouter(env: Record<string, string | undefined>) {
+type Env = Record<string, string | undefined>;
+export interface AiDeps {
+  verify?: VerifyCaller;
+  published?: PublishedReader;
+  providers?: Provider[];
+  rate?: RateStore;
+  fetcher?: typeof fetch;
+}
+
+/** Gemini first, Groq as the backup. The scripted provider replaces both on the test emulators only. */
+export function configuredProviders(env: Env, fetcher: typeof fetch = fetch): Provider[] {
+  const config = aiConfig(env);
+  if (config.fake) return [fakeProvider()];
+  return [
+    ...(config.gemini ? [geminiProvider(config.gemini.key, config.gemini.model)] : []),
+    ...(config.groq ? [groqProvider(config.groq.key, config.groq.model, fetcher)] : []),
+  ];
+}
+
+function openReportsReader(env: Env): ToolContext['openReports'] {
+  const app = adminApp(env);
+  if (!app) return undefined;
+  return async () => {
+    const snapshot = await getFirestore(app).collection('integrityCases').where('status', 'in', ['open', 'reviewing']).limit(20).get();
+    // Case ids, status, match and evidence count only. No reporter, reason text or details (plan Q5).
+    return snapshot.docs.map(doc => ({
+      id: doc.id, status: String(doc.get('status')), matchId: String(doc.get('matchId') || ''),
+      createdAt: doc.get('createdAt')?.toDate?.().toISOString?.() || '',
+      evidence: (Array.isArray(doc.get('evidenceFiles')) ? doc.get('evidenceFiles').length : 0) + (doc.get('evidenceUrl') ? 1 : 0),
+    }));
+  };
+}
+
+/** Provider credentials stay in this process. The browser sends a question and receives text. */
+export function createAiRouter(env: Env, deps: AiDeps = {}) {
   const router = express.Router();
   router.use(express.json({ limit: '128kb' }));
-  const requests = new Map<string, { count: number; reset: number }>();
+  const config = aiConfig(env);
+  const verify = deps.verify || callerVerifier(env, deps.fetcher);
+  const published = deps.published || publishedReader(env, { fetcher: deps.fetcher });
+  const app = adminApp(env);
+  const providers = deps.providers || configuredProviders(env, deps.fetcher);
+  const rate = deps.rate || (app ? new FirestoreRateStore(app) : new MemoryRateStore());
+  const assistant = createAssistant({ providers, config, rate, openReports: openReportsReader(env) });
+  const burst = new MemoryRateStore();
+
+  const fail = (res: express.Response, status: number, error: string) => { res.status(status).json({ error }); };
+  /** Front door, before the body is read: configuration, origin and a bearer token. Returns the token. */
+  function admit(req: express.Request, res: express.Response): string | null {
+    if (!env.VITE_FIREBASE_PROJECT_ID) { fail(res, 503, 'The assistant is not configured on this server.'); return null; }
+    // Same host, or a site listed in CORS_ORIGINS (server/cors.ts).
+    if (!originAllowed(req, env)) { fail(res, 403, 'Open the assistant from ArenaHub.'); return null; }
+    const token = bearer(req.get('authorization'));
+    if (!token || ['local-dev-token', 'demo-token'].includes(token)) { fail(res, 401, 'Sign in to use the assistant.'); return null; }
+    return token;
+  }
+  /** After the body is valid: the verified caller, who must be admitted and under the burst limit. */
+  async function identify(res: express.Response, token: string): Promise<Caller | null> {
+    try {
+      const caller = await verify(token);
+      if (!caller.admitted) { fail(res, 403, 'Join with a campus invite to use the assistant.'); return null; }
+      if (!await burst.hit(caller.uid, config.burstPerMinute, 60)) { fail(res, 429, 'Too many questions at once. Wait a minute and try again.'); return null; }
+      return caller;
+    } catch (error) {
+      fail(res, error instanceof AuthError ? error.status : 401, error instanceof AuthError ? error.message : 'Your account could not be verified.');
+      return null;
+    }
+  }
 
   router.post('/', async (req, res) => {
-    const key = env.GEMINI_API_KEY;
-    if (!key) {
-      res.status(503).json({ error: 'The online assistant is not configured.' });
-      return;
-    }
+    const token = admit(req, res);
+    if (!token) return;
+    const body = askSchema.safeParse(req.body);
+    if (!body.success) { fail(res, 400, 'Invalid assistant request.'); return; }
+    const caller = await identify(res, token);
+    if (!caller) return;
+    let data;
+    try { data = await published(token); }
+    catch { fail(res, 503, 'Tournament records could not be read. Try again.'); return; }
 
-    const token = req.get('authorization')?.replace(/^Bearer /, '') || '';
-    // Same host, or a site listed in CORS_ORIGINS (server/cors.ts).
-    if (!originAllowed(req, env)) { res.status(403).json({ error: 'Open the assistant from ArenaHub.' }); return; }
-    if (!token || ['local-dev-token', 'demo-token'].includes(token)) { res.status(401).json({ error: 'Sign in to use the online assistant.' }); return; }
-    const { query, context, history = [] } = req.body || {};
-
-    if (
-      typeof query !== 'string' ||
-      query.length < 1 ||
-      query.length > 4000 ||
-      typeof context !== 'string' ||
-      context.length > 60000
-    ) {
-      res.status(400).json({ error: 'Invalid assistant request.' });
-      return;
-    }
-
-    if (
-      !Array.isArray(history) ||
-      history.length > 24 ||
-      history.some(
-        message =>
-          !message ||
-          !['user', 'assistant'].includes(message.role) ||
-          typeof message.text !== 'string' ||
-          message.text.length < 1 ||
-          message.text.length > 4000
-      ) ||
-      history.reduce((sum, message) => sum + message.text.length, 0) > 20000
-    ) {
-      res.status(400).json({ error: 'Invalid conversation history.' });
-      return;
-    }
-
-    let userId = 'local-user';
-
-    // Verify token if provided and non-local
-    if (token && token !== 'local-dev-token' && token !== 'demo-token') {
-      try {
-        const lookup = await fetch(
-          `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(
-            env.VITE_FIREBASE_API_KEY || ''
-          )}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken: token }),
-            signal: AbortSignal.timeout(8000),
-          }
-        );
-        const account = (
-          (await lookup.json()) as {
-            users?: Array<{ localId: string; emailVerified?: boolean; disabled?: boolean }>;
-          }
-        ).users?.[0];
-
-        if (!lookup.ok || !account?.localId || !account.emailVerified || account.disabled) { res.status(401).json({ error: 'A verified account is required.' }); return; }
-        const profileResponse = await fetch(`https://firestore.googleapis.com/v1/projects/${encodeURIComponent(env.VITE_FIREBASE_PROJECT_ID || '')}/databases/(default)/documents/users/${encodeURIComponent(account.localId)}`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(8000) });
-        const profile = await profileResponse.json() as any;
-        if (!profileResponse.ok || profile.fields?.status?.stringValue !== 'active') { res.status(403).json({ error: 'This account is not active.' }); return; }
-        userId = account.localId;
-      } catch {
-        res.status(401).json({ error: 'Your account could not be verified.' }); return;
-      }
-    }
-
-    const now = Date.now();
-    for (const [id, item] of requests) if (item.reset < now) requests.delete(id);
-    const limit = requests.get(userId) || { count: 0, reset: now + 60000 };
-    if (limit.count >= 20) {
-      res.status(429).json({ error: 'Please wait before asking again.' });
-      return;
-    }
-    limit.count++;
-    requests.set(userId, limit);
-
+    res.status(200).set({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+    res.flushHeaders();
+    const send = (event: string, payload: unknown) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`); };
+    const controller = new AbortController();
+    // The viewer pressed stop or left: stop the model call too.
+    res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
     try {
-      const client = new GoogleGenAI({ apiKey: key });
-      const modelName = env.GEMINI_MODEL || 'gemini-3.8-flash';
-      const result = await client.models.generateContent({
-        model: modelName,
-        contents: [
-          ...history.map(message => ({
-            role: message.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: message.text }],
-          })),
-          {
-            role: 'user',
-            parts: [
-              {
-                text: JSON.stringify({
-                  referenceContext: context,
-                  userQuestion: query,
-                }),
-              },
-            ],
-          },
-        ],
-        config: {
-          systemInstruction:
-            'You are Arena AI, the official tournament assistant for ArenaHub and WMSU Campus Esports. ' +
-            'You have real-time access to live published tournament brackets, current match schedules, real scores, and college team rosters. ' +
-            'When users ask about brackets (such as MLBB, Mobile Legends, Valorant, Dota 2, CODM), inspect the published brackets in referenceContext ' +
-            'and give detailed, comprehensive answers including: tournament name, format, participating teams, and current round matchups with scores and status. ' +
-            'When asked "who plays next" or about schedules, list the live matches first, followed by the upcoming scheduled matches. ' +
-            'When asked about teams, provide their college, players, and match records. ' +
-            'Keep your responses clear, well-structured, energetic, and helpful.',
-          temperature: 0.2,
-          maxOutputTokens: 1200,
-          httpOptions: { timeout: 20000 },
-        },
+      const result = await assistant.answer({ caller, query: body.data.query, history: body.data.history, data, signal: controller.signal }, {
+        start: source => send('start', { source }),
+        delta: text => send('delta', { text }),
       });
+      send('done', { source: result.source, references: result.references, ...(result.limited ? { limited: true } : {}) });
+    } catch (error) {
+      if (!controller.signal.aborted) send('error', { message: error instanceof InterruptedAnswer ? error.message : 'The assistant could not answer. Try again.' });
+    } finally { res.end(); }
+  });
 
-      res.json({ text: result.text || 'There is not enough information to answer that yet.' });
-    } catch (err) {
-      console.error('[Arena AI Server Error]:', err);
-      res.status(503).json({ error: 'The online assistant is unavailable. Please try again later.' });
-    }
+  // Bracket from a prompt. Staff only; returns parameters or a clarifying question, never a bracket.
+  // Any failure is a 503 so Bracket Studio switches to its offline parser.
+  router.post('/bracket', async (req, res) => {
+    const token = admit(req, res);
+    if (!token) return;
+    const body = bracketSchema.safeParse(req.body);
+    if (!body.success) { fail(res, 400, 'Describe the bracket in up to 6,000 characters.'); return; }
+    const caller = await identify(res, token);
+    if (!caller) return;
+    if (!caller.staff) { fail(res, 403, 'Only tournament staff can draft brackets.'); return; }
+    if (!providers.length) { fail(res, 503, 'No model is configured; the offline parser will read the prompt.'); return; }
+    if (!await rate.hit(`bracket_${caller.uid}`, config.userPerMinute, 60)) { fail(res, 429, 'Too many drafts in a minute. Wait and try again.'); return; }
+    const controller = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
+    try { res.set('Cache-Control', 'no-store').json(await draftBracket(providers, body.data.prompt, controller.signal)); }
+    catch { if (!controller.signal.aborted) fail(res, 503, 'The model could not read this prompt; the offline parser will.'); }
   });
 
   return router;

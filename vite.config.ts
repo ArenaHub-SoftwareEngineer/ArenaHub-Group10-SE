@@ -19,7 +19,8 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           const api = express();
           api.disable('x-powered-by');
-          api.use('/api/ai', createAiRouter(env));
+          // Test mode never calls a real model: browser tests use the scripted provider (emulators only).
+          api.use('/api/ai', createAiRouter(mode === 'test' ? { ...env, ARENA_AI_PROVIDER: 'fake', GEMINI_API_KEY: '', GROQ_API_KEY: '' } : env));
           api.use('/api/fair-play', createFairPlayRouter(env));
           // Test mode (emulators, Playwright) never touches the event laptop's real match monitor database in data/,
           // even when Playwright reuses a dev server that was started without INTEGRITY_DATA_DIR.

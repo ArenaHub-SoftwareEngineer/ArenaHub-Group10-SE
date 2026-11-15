@@ -2,6 +2,7 @@ import type { BracketDraft, Match, Team } from './types';
 import { completedSeries, getStandings } from './standings';
 import { isRetiredGame } from './gameRanks';
 import { scheduleDate, timeOrder, manilaToday } from './calendar';
+import { computeStandings, lobbyMatches, type PlacementEvent } from './formats/placement';
 
 export interface KnowledgeReference {label:string;bracketId:string;matchId?:string}
 export interface KnowledgeSnapshot {revision:number;checkedAt:string;origin:'server'|'loaded';brackets:BracketDraft[]}
@@ -9,19 +10,38 @@ export interface KnowledgeAnswer {text:string;references:KnowledgeReference[];ki
 const str=(value:unknown,max=180)=>typeof value==='string'?value.replace(/[\u0000-\u001f]/g,' ').slice(0,max):'';
 const number=(value:unknown)=>typeof value==='number' && Number.isFinite(value)?value:NaN;
 const md=(value:string)=>value.replace(/[\\`*_{}\[\]<>#|]/g,'\\$&');
+function placementOf(value:any):PlacementEvent|undefined {
+  if(!value || typeof value!=='object' || !Array.isArray(value.teams) || !Array.isArray(value.games))return undefined;
+  const int=(v:unknown)=>Number.isInteger(v)?v as number:0;
+  return {config:{pointsTable:Array.isArray(value.config?.pointsTable)?value.config.pointsTable.slice(0,25).map(int):[],killPoints:int(value.config?.killPoints)},
+    teams:value.teams.slice(0,25).map((t:any)=>({id:str(t?.id),name:str(t?.name),collegeCode:str(t?.collegeCode,30)})),
+    games:value.games.slice(0,24).map((g:any)=>({id:str(g?.id),label:str(g?.label,40),status:['live','completed'].includes(g?.status)?g.status:'upcoming',scheduledDate:str(g?.scheduledDate,40),scheduledTime:str(g?.scheduledTime,40),results:Array.isArray(g?.results)?g.results.slice(0,25).map((r:any)=>({teamId:str(r?.teamId),placement:int(r?.placement),kills:int(r?.kills)})):[]}))};
+}
+/** Battle Royale results: placement points, never head-to-head records. */
+function placementBlock(b:BracketDraft) {
+  const event=b.placement!,rows=computeStandings(event),done=event.games.filter(g=>g.status==='completed').length;
+  if(!done)return `**${md(b.title)}**\n\nNo lobby game has finished yet. ${event.games.length} games are planned for ${event.teams.length} squads.`;
+  const finished=done===event.games.length;
+  const lead=finished?`${md(rows[0].name)} won with ${rows[0].total} points.`:`After ${done} of ${event.games.length} games (not final):`;
+  return `**${md(b.title)}**\n\n${lead}\n\n${rows.slice(0,8).map(r=>`- #${r.rank} ${md(r.name)}${r.collegeCode?` (${md(r.collegeCode)})`:''}: ${r.total} points, ${r.kills} eliminations.`).join('\n')}`;
+}
 /** Only fields needed for public tournament questions enter the assistant context. */
 export function knowledgeSnapshot(raw:unknown,revision=0,checkedAt=new Date().toISOString(),origin:KnowledgeSnapshot['origin']='server'):KnowledgeSnapshot {
+  const raw0=raw;
   const team=(value:any):Team|undefined=>value && typeof value==='object'?{id:str(value.id),name:str(value.name),collegeCode:str(value.collegeCode,30),collegeId:'',gameId:str(value.gameId),seed:number(value.seed),winRate:0,record:'',isBye:value.isBye===true,players:Array.isArray(value.players)?value.players.slice(0,12).map((p:any)=>({id:'',name:'',collegeId:'',isVerified:false,ign:str(p?.ign,80),role:str(p?.role,80)})):[]}:undefined;
   const brackets:BracketDraft[]=Array.isArray(raw)?raw.filter(b=>b?.status==='published' && !isRetiredGame(b)).slice(0,100).map(b=>({
     id:str(b.id),title:str(b.title),gameId:str(b.gameId),gameName:str(b.gameName),format:str(b.format),matchFormat:str(b.matchFormat),teamsCount:number(b.teamsCount),status:'published',createdAt:str(b.createdAt),teams:[],parsedParams:{},rawPrompt:'',seedingRule:'',
     matches:Array.isArray(b.matches)?b.matches.slice(0,2048).map((m:any)=>({id:str(m?.id),matchNumber:str(m?.matchNumber),tournamentId:str(b.id),gameId:str(m?.gameId),gameMode:m?.gameMode==='br'?'br':m?.gameMode==='mp'?'mp':undefined,round:number(m?.round),roundName:str(m?.roundName),bracketType:str(m?.bracketType),status:str(m?.status),matchFormat:str(m?.matchFormat),team1:team(m?.team1),team2:team(m?.team2),score:{team1Score:number(m?.score?.team1Score),team2Score:number(m?.score?.team2Score)},winnerId:str(m?.winnerId),nextMatchId:str(m?.nextMatchId),inactive:m?.inactive===true,conditionalReset:m?.conditionalReset===true,scheduledDate:str(m?.scheduledDate),scheduledTime:str(m?.scheduledTime),organizerName:''})):[],
-  } as unknown as BracketDraft)):[];
+  } as unknown as BracketDraft)).map(b=>{const raw=(Array.isArray(raw0)?raw0:[]).find((r:any)=>str(r?.id)===b.id);const placement=placementOf(raw?.placement);return placement?{...b,placement,matches:lobbyMatches({...b,placement})}:b;}):[];
   return {revision:Number.isFinite(revision)?revision:0,checkedAt,origin,brackets};
 }
 function gameQuery(query:string) {
   if(/\bmlbb\b|mobile legends/i.test(query))return 'mlbb';
   if(/\bdota\s*2?\b/i.test(query))return 'dota2';
   if(/\bcodm\b|call of duty/i.test(query))return /battle royale|\bbr\b/i.test(query)?'codm-br':/multiplayer|\bmp\b/i.test(query)?'codm-mp':'codm';
+  // Games ArenaHub does not run: name them so the answer says so instead of covering every game.
+  const other=query.match(/\b(valorant|league of legends|tekken|pubg|free fire|honor of kings|wild rift)\b/i);
+  if(other)return other[1].toLowerCase();
 }
 function gameOf(bracket:BracketDraft) {return gameQuery(`${bracket.gameName} ${bracket.gameId?.replaceAll('-',' ')}`);}
 export function selectKnowledge(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[]) {
@@ -49,19 +69,21 @@ export function recordedChampion(bracket:BracketDraft) {
   const terminal=finals.filter(m=>!m.nextMatchId && !m.inactive);
   return terminal.length===1?completedSeries(terminal)[0] || null:null;
 }
-function score(match:Match) {return [match.score.team1Score,match.score.team2Score].every(Number.isFinite)?`${match.score.team1Score}–${match.score.team2Score}`:'score not recorded';}
-const matchup=(m:Match)=>`${md(m.team1?.name || 'Awaiting team')} vs ${md(m.team2?.name || 'Awaiting team')}`;
+function score(match:Match) {if(match.lobby)return match.status==='completed'?`won by ${md(match.lobby.winner || 'a recorded squad')}`:match.status==='live'?'lobby in progress':'lobby game';return [match.score.team1Score,match.score.team2Score].every(Number.isFinite)?`${match.score.team1Score}–${match.score.team2Score}`:'score not recorded';}
+const matchup=(m:Match)=>m.lobby?`${md(m.roundName)}, ${m.lobby.squads} squads`:`${md(m.team1?.name || 'Awaiting team')} vs ${md(m.team2?.name || 'Awaiting team')}`;
 const validMatch=(m:Match)=>!m.inactive && !m.team1?.isBye && !m.team2?.isBye;
 export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[]):KnowledgeAnswer {
   const q=query.trim().toLowerCase(),selected=selectKnowledge(snapshot,query,history),refs:KnowledgeReference[]=[];
   const reference=(b:BracketDraft,m?:Match)=>{if(refs.length<12 && !refs.some(r=>r.bracketId===b.id && r.matchId===m?.id))refs.push({label:m?`${b.title} · ${m.matchNumber || m.roundName}`:b.title,bracketId:b.id,...(m?{matchId:m.id}:{})});};
   const reply=(text:string,kind:KnowledgeAnswer['kind']='records',needsModel=false):KnowledgeAnswer=>({text,references:refs,kind,needsModel});
-  if(/cheat|fair.?play|evidence|report/.test(q))return reply('Open Fair play to submit a recording or review match evidence. Organizers can inspect sampled frames and returned observations. A referee must confirm the finding; a replay alone cannot prove hidden software or input automation.','help',!/where|how.*(?:upload|submit|report)|can.*detect/.test(q));
-  if(!selected.brackets.length)return reply(snapshot.brackets.length?`No published bracket matches ${selected.game?selected.game.toUpperCase():'that tournament'}. Available brackets:\n\n${snapshot.brackets.slice(0,8).map(b=>`- ${md(b.title)} — ${md(b.gameName)}`).join('\n')}`:'No official brackets are published in the records I just checked. Once an organizer publishes one, I can answer questions about its matches, scores, and players.');
+  if(/cheat|fair.?play|evidence|report/.test(q))return reply('Open Fair play to submit a recording or review match evidence. Organizers can inspect sampled frames and returned observations. A referee must confirm the finding; a replay alone cannot prove hidden software or input automation.','help',!/\bwhere\b|\bhow\b.*(?:upload|submit|report)|\bcan\b.*detect/.test(q));
+  // "Explain seeding" needs no bracket; only record questions stop at "nothing is published".
+  const explanatory=/\b(explain|how|why|what (?:is|are|does)|meaning|rules?|help)\b/.test(q);
+  if(!selected.brackets.length)return reply(snapshot.brackets.length?`No published bracket matches ${selected.game?selected.game.toUpperCase():'that tournament'}. Available brackets:\n\n${snapshot.brackets.slice(0,8).map(b=>`- ${md(b.title)} — ${md(b.gameName)}`).join('\n')}`:'No official brackets are published in the records I just checked. Once an organizer publishes one, I can answer questions about its matches, scores, and players.','records',explanatory);
   const winnerQuestion=/\b(winner|won|champion|nanalo|panalo|result)\b/.test(q);
   if(winnerQuestion){
     const blocks=selected.brackets.map(b=>{
-      reference(b);const champion=recordedChampion(b);
+      reference(b);if(b.placement)return placementBlock(b);const champion=recordedChampion(b);
       const namedMatch=b.matches.filter(m=>m.matchNumber && q.includes(m.matchNumber.toLowerCase()));
       const candidates=namedMatch.length?namedMatch:b.matches.filter(m=>!selected.teamIds.size || selected.teamIds.has(m.team1?.id || '') || selected.teamIds.has(m.team2?.id || ''));
       if(champion && !namedMatch.length && !selected.teamIds.size){reference(b,champion.match);const winner=champion.winner===champion.team1.id?champion.team1:champion.team2;return `**${md(winner.name)} won ${md(b.title)}.**\n\nFinal: ${matchup(champion.match)}, ${score(champion.match)}.`;}
@@ -71,16 +93,16 @@ export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string
       return `**${md(b.title)}**\n\n${!namedMatch.length && !selected.teamIds.size?'The tournament champion is not confirmed yet. Latest completed series:\n\n':''}${latest.map(({match,winner,team1,team2})=>{reference(b,match);return `- ${md((winner===team1.id?team1:team2).name)} won against ${md((winner===team1.id?team2:team1).name)} — ${winner===team1.id?score(match):`${match.score.team2Score}–${match.score.team1Score}`} (${md(match.roundName)}).`;}).join('\n')}`;
     });return reply(blocks.join('\n\n'));
   }
-  if(/\b(standing|standings|leader|leads|record|records|points)\b/.test(q))return reply(selected.brackets.map(b=>{reference(b);const rows=getStandings(b.matches);return `**${md(b.title)}**\n\n${rows.length?rows.map(r=>`- ${md(r.team.name)}: ${r.wins} wins, ${r.losses} losses; games ${r.gameWins}–${r.gameLosses}.`).join('\n'):'No completed, valid series are recorded yet.'}\n\nThese are played-series records, not final placement or Battle Royale placement points.`;}).join('\n\n'));
+  if(/\b(standing|standings|leader|leads|record|records|points)\b/.test(q))return reply(selected.brackets.map(b=>{reference(b);if(b.placement)return placementBlock(b);const rows=getStandings(b.matches);return `**${md(b.title)}**\n\n${rows.length?rows.map(r=>`- ${md(r.team.name)}: ${r.wins} wins, ${r.losses} losses; games ${r.gameWins}–${r.gameLosses}.`).join('\n'):'No completed, valid series are recorded yet.'}\n\nThese are played-series records, not final placement or Battle Royale placement points.`;}).join('\n\n'));
   if(/\b(roster|players?|lineup|teams?)\b/.test(q) && !/bracket|format|schedule|next|score/.test(q))return reply(selected.brackets.map(b=>{reference(b);const teams=new Map(b.matches.flatMap(m=>[m.team1,m.team2]).filter((t):t is Team=>!!t&&!t.isBye&&(!selected.teamIds.size||selected.teamIds.has(t.id))).map(t=>[t.id,t]));return `**${md(b.title)}**\n\n${[...teams.values()].map(t=>`- ${md(t.name)}${t.collegeCode?` (${md(t.collegeCode)})`:''}: ${t.players.length?t.players.map(p=>`${md(p.ign)}${p.role?` — ${md(p.role)}`:''}`).join('; '):'Player names are not published yet.'}`).join('\n')}`;}).join('\n\n'));
   if(/\b(live|next|schedule|today|tonight|when|plays|score|scores|winning)\b/.test(q)){
     const today=manilaToday(new Date(snapshot.checkedAt));
     const entries=selected.brackets.flatMap(b=>b.matches.filter(validMatch).filter(m=>!selected.teamIds.size||selected.teamIds.has(m.team1?.id||'')||selected.teamIds.has(m.team2?.id||'')).map(m=>({b,m})));
     const live=entries.filter(({m})=>m.status==='live'),upcoming=entries.filter(({m})=>['upcoming','pre-match'].includes(m.status) && (!/today|tonight/.test(q)||scheduleDate(m.scheduledDate,today)===today)).sort((a,b)=>(scheduleDate(a.m.scheduledDate,today)||'9999').localeCompare(scheduleDate(b.m.scheduledDate,today)||'9999')||timeOrder(a.m.scheduledTime)-timeOrder(b.m.scheduledTime));
-    const rows=(items:typeof entries)=>items.slice(0,12).map(({b,m})=>{reference(b,m);return `- ${matchup(m)} — ${m.status==='live'?`${score(m)} (live, not final)`:scheduleDate(m.scheduledDate,today)?`${scheduleDate(m.scheduledDate,today)} · ${timeOrder(m.scheduledTime)===9999?'time not set':md(m.scheduledTime)} Manila time`:'date/time not set'} · ${md(b.gameName)}.`;}).join('\n');
+    const rows=(items:typeof entries)=>items.slice(0,12).map(({b,m})=>{reference(b,m);return `- ${matchup(m)} — ${m.status==='live'?(m.lobby?score(m):`${score(m)} (live, not final)`):scheduleDate(m.scheduledDate,today)?`${scheduleDate(m.scheduledDate,today)} · ${timeOrder(m.scheduledTime)===9999?'time not set':md(m.scheduledTime)} Manila time`:'date/time not set'} · ${md(b.gameName)}.`;}).join('\n');
     return reply(`${live.length?`**Live now**\n\n${rows(live)}\n\n`:''}**Upcoming matches**\n\n${upcoming.length?rows(upcoming):'No upcoming matches are scheduled for this selection.'}`);
   }
-  if(/bracket|tournament|format|round|seed|\bmlbb\b|mobile legends|\bdota\b|\bcodm\b|call of duty/.test(q))return reply(selected.brackets.map(b=>{reference(b);const champion=recordedChampion(b);return `**${md(b.title)}**\n\n${md(b.gameName)} · ${md(b.format)} · ${md(b.matchFormat)}\n\n${b.matches.filter(validMatch).slice(0,10).map(m=>{reference(b,m);return `- ${md(m.roundName)}: ${matchup(m)} — ${score(m)} · ${md(m.status)}.`;}).join('\n')}${champion?`\n\nChampion: ${md((champion.winner===champion.team1.id?champion.team1:champion.team2).name)}.`:''}`;}).join('\n\n'),'records',/explain|how|why|help.*(?:format|seed)/.test(q));
+  if(/bracket|tournament|format|round|seed|\bmlbb\b|mobile legends|\bdota\b|\bcodm\b|call of duty/.test(q))return reply(selected.brackets.map(b=>{reference(b);const champion=recordedChampion(b);return `**${md(b.title)}**\n\n${md(b.gameName)} · ${md(b.format)} · ${md(b.matchFormat)}\n\n${b.matches.filter(validMatch).slice(0,10).map(m=>{reference(b,m);return `- ${md(m.roundName)}: ${matchup(m)} — ${score(m)} · ${md(m.status)}.`;}).join('\n')}${champion?`\n\nChampion: ${md((champion.winner===champion.team1.id?champion.team1:champion.team2).name)}.`:''}`;}).join('\n\n'),'records',/\b(?:explain|how|why|rules?)\b|\bhelp\b.*(?:format|seed)/.test(q));
   return reply('I can check published brackets, match winners, live scores, schedules, and rosters. Try “Who won MLBB?” or “Who plays next in Dota 2?” For a report or explanation, include the game and match.','help',true);
 }
 /** Bounded, public context for optional model explanation; facts stay authoritative. */

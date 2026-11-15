@@ -23,8 +23,9 @@ await check('GET /api/health answers', async () => {
   health = await res.json();
   expect(health.ok === true, 'body.ok is not true');
   if (origin) expect(res.headers.get('access-control-allow-origin') === origin, `no CORS header for ${origin}; add it to CORS_ORIGINS`);
-  return `assistant ${health.assistant ? 'configured' : 'NOT configured'}, video review ${health.videoReview ? 'configured' : 'NOT configured'}`;
+  return `assistant model ${health.assistant ? 'configured' : 'NOT configured (live records only)'}${health.backupModel ? ' with backup' : ''}, video review ${health.videoReview ? 'configured' : 'NOT configured'}, Firebase access ${health.firebaseAccess || 'unknown'}`;
 });
+if (health.firebaseAccess === 'rest') console.log('NOTE  No service account on this server: AI limits are per instance and Arena AI cannot reply in live chat. See docs/DEPLOY.md.');
 await check('health reveals no secrets', async () => {
   const text = JSON.stringify(health);
   expect(!/AIza|gsk_|sk-|-----BEGIN/.test(text), 'health output contains something that looks like a key');
@@ -44,7 +45,7 @@ const refuses = (path, body) => async () => {
   expect([401, 503].includes(res.status), `expected 401 (or 503 when not configured), got ${res.status}`);
   return res.status === 503 ? 'not configured (503)' : 'refused (401)';
 };
-await check('POST /api/ai without sign-in is refused', refuses('/api/ai', { query: 'smoke test', context: '' }));
+await check('POST /api/ai without sign-in is refused', refuses('/api/ai', { query: 'smoke test' }));
 await check('POST /api/fair-play/analyze without sign-in is refused', refuses('/api/fair-play/analyze', {}));
 
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.note ? `  (${r.note})` : ''}`);

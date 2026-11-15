@@ -88,12 +88,13 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
     try {
       for await (const chunk of aiService.streamAnswer(prompt, modelHistory(previous), controller.signal)) {
         text += chunk.delta;
-        updateReply(threadId, messageId, { text, source: chunk.source, status: chunk.done ? 'complete' : 'writing' });
+        updateReply(threadId, messageId, { text, source: chunk.source, status: chunk.done ? 'complete' : 'writing', ...(chunk.references?.length ? { references: chunk.references.map(r => r.label) } : {}) });
         if (chunk.done) break;
       }
       if (controller.signal.aborted) throw new Error('stopped');
       updateReply(threadId, messageId, { status: 'complete' });
     } catch {
+      // A broken stream keeps what was already written; Retry asks again.
       updateReply(threadId, messageId, { text: text || (controller.signal.aborted ? 'Response stopped. You can try again.' : 'That response could not be completed. Please try again.'), status: controller.signal.aborted ? 'stopped' : 'error' });
     } finally { request.current = null; if (mounted.current) setLoading(false); }
   };
@@ -114,7 +115,7 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
     let userIndex = index - 1;
     while (userIndex >= 0 && active.messages[userIndex].sender !== 'user') userIndex--;
     if (userIndex < 0) return;
-    updateReply(active.id, message.id, { text: '', status: 'writing' });
+    updateReply(active.id, message.id, { text: '', status: 'writing', references: undefined, source: undefined });
     await runReply(active.id, message.id, active.messages[userIndex].text, active.messages.slice(0,userIndex));
   };
   const exportChats = () => {
@@ -206,6 +207,7 @@ export const SpectatorAIView: React.FC<SpectatorAIViewProps> = ({ currentUser, s
       <div className="chat-scroll" role="log" aria-label="Conversation messages" aria-live="polite" aria-busy={loading}>
         {!messages.length ? <div className="chat-empty"><span className="chat-eyebrow">ARENA HUB / ASSISTANT</span><img className="arena-character" src="/arenahub-logo.svg" alt="" width="90" height="106"/><h1>One place for every question.</h1><p>Matches, teams, fair play, or a fresh idea.<br />Just start a conversation.</p><div className="chat-suggestions">{['Who plays next?', 'Help me write a match report', 'Explain the tournament format', 'Show the COE Titans roster'].map(text => <button key={text} onClick={() => void send(text)}>{text}<ArrowUpRight size={14} aria-hidden="true" /></button>)}</div></div> : <div className="chat-messages">{messages.map((message, index) => <article key={message.id} className={`chat-message from-${message.sender}`} aria-label={message.sender === 'user' ? 'You' : 'Arena AI'}>
           {message.sender === 'user' ? <div className="chat-user-text">{message.text}</div> : <div className="chat-assistant-text"><span className="chat-answer-label"><img src="/arenahub-logo.svg" alt="" width={18} height={21} /> Arena AI</span>{message.text ? <CleanFormattedText text={message.text} isStreaming={message.status === 'writing'} /> : <span className="chat-writing"><LoaderCircle size={15} className="animate-spin" /> Writing a response…</span>}
+            {message.status !== 'writing' && !!message.references?.length && <p className="chat-references">Checked: {message.references.join(' · ')}</p>}
             {message.status !== 'writing' && <div className="chat-response-actions"><button className="quiet-icon-button" aria-label="Copy response" data-tooltip={copied === message.id ? 'Copied' : 'Copy'} onClick={async () => { try { await navigator.clipboard.writeText(message.text); setCopied(message.id); window.setTimeout(() => setCopied(null), 1600); } catch { showToast('Copy is unavailable. Select the response text to copy it.', 'error'); } }}>{copied === message.id ? <Check size={16} /> : <Copy size={16} />}</button>{index === messages.length - 1 && <button className="quiet-icon-button" disabled={loading} aria-label="Retry response" data-tooltip="Retry" onClick={() => void retry(message)}><RotateCcw size={16} /></button>}<small>{message.status === 'stopped' ? 'Stopped' : message.status === 'error' ? 'Response unavailable' : message.source || 'Saved response'}</small>{onOpenBrackets && /bracket/i.test(message.text) && <button className="chat-text-link" onClick={onOpenBrackets}>Open bracket studio <ArrowUpRight size={14} aria-hidden="true" /></button>}</div>}
           </div>}
         </article>)}<div ref={end} /></div>}

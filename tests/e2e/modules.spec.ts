@@ -126,6 +126,17 @@ test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and pu
 
   await page.getByLabel(/Tournament prompt/).fill('Create a seeded 6-team single-elimination bracket with Bo3 matches.');
   await page.getByRole('button', { name: 'Generate bracket' }).click();
+  // No game named: Arena AI asks instead of silently choosing one, and builds nothing yet.
+  await expect(page.getByText(/Which game is this bracket for/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: /Single elimination/ })).toHaveCount(0);
+  await page.getByLabel(/Your answer/).fill('MLBB');
+  await page.getByRole('button', { name: 'Send answer' }).click();
+  // The organizer checks the parsed settings, defaults marked, before building.
+  const settings = page.getByRole('region', { name: 'Check the bracket settings' });
+  await expect(settings).toContainText('Mobile Legends: Bang Bang', { timeout: 30_000 });
+  await expect(settings).toContainText('6 numbered slots');
+  await expect(settings).toContainText('Bo5 (default)');
+  await settings.getByRole('button', { name: 'Build bracket' }).click();
   await expect(page.getByRole('heading', { name: /Single elimination/ })).toBeVisible({ timeout: 30_000 });
   await openBuilder();
   await expect(page.getByText('Thinking complete')).toBeVisible();
