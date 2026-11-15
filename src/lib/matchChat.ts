@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, Timestamp, where, writeBatch, type WriteBatch } from 'firebase/firestore';
+import { collection, doc, documentId, getDoc, getDocs, limit, onSnapshot, orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch, type QueryDocumentSnapshot, type WriteBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { auditLine, KICK_HOURS, type ModerationAction } from './chatModeration';
 
@@ -95,17 +95,30 @@ export async function muteChatUser(matchId: string, staffUid: string, message: P
 export async function kickChatUser(matchId: string, staffUid: string, message: Pick<LiveChatMessage, 'id' | 'author'>, reason = '') {
   const target = await messageAuthorId(matchId, message.id);
   if (target === staffUid) throw new Error('You cannot remove yourself from chat.');
-  const posted = await getDocs(query(collection(db, 'matchChat', matchId, 'authors'), where('uid', '==', target), limit(400)));
+  // Block posting first, so nothing new arrives while the old messages are removed.
   const batch = writeBatch(db);
   const auditId = audit(batch, staffUid, matchId, { kind: 'kick' }, target);
   batch.set(muteRef(matchId, target), {
     until: Timestamp.fromMillis(Date.now() + KICK_HOURS * 3_600_000), kind: 'kick', reason: reason.slice(0, 200), name: message.author.slice(0, 80),
     by: staffUid, auditId, createdAt: serverTimestamp(),
   });
-  posted.docs.forEach(item => batch.delete(messageRef(matchId, item.id)));
   await batch.commit();
-  return posted.size;
+  // Then delete every message they posted in this match, a page at a time (a batch holds at most 500 writes).
+  const authors = collection(db, 'matchChat', matchId, 'authors');
+  let removed = 0, after: QueryDocumentSnapshot | undefined;
+  for (;;) {
+    const page = await getDocs(query(authors, where('uid', '==', target), orderBy(documentId()), ...(after ? [startAfter(after)] : []), limit(KICK_PAGE)));
+    if (page.empty) break;
+    const deletes = writeBatch(db);
+    page.docs.forEach(item => deletes.delete(messageRef(matchId, item.id)));
+    await deletes.commit();
+    removed += page.size;
+    if (page.size < KICK_PAGE) break;
+    after = page.docs[page.docs.length - 1];
+  }
+  return removed;
 }
+const KICK_PAGE = 400;
 
 export async function unmuteChatUser(matchId: string, staffUid: string, targetUid: string) {
   const batch = writeBatch(db);

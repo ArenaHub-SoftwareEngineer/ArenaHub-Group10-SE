@@ -10,6 +10,7 @@ const suites = [
   ['auth-flow', 'node --test tests/auth-flow.integration.test.mjs'],
   ['stream', 'node --test tests/stream.integration.test.mjs'],
   ['operations', 'node --test tests/operations.integration.test.mjs'],
+  ['chat kick', 'node --test tests/chat-kick.integration.test.mjs'],
   ['migration', 'npx tsx --test tests/migration.integration.test.ts'],
   ['roles', 'npx tsx --test tests/set-role.integration.test.ts'],
 ];
