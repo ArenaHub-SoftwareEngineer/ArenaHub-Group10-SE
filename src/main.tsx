@@ -8,6 +8,8 @@ import './auth.css';
 import './interactions.css';
 // Design system last: it is the single source of truth for tokens, type and motion (see the file header).
 import './design.css';
+// The school's brand colours, generated from institution.config.json (npm run configure:institution).
+import './generated/institution.css';
 import './shell.css';
 import './illustrations.css';
 import './watch.css';

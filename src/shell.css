@@ -20,9 +20,11 @@
 .shell-brand { display: flex; align-items: center; padding: 4px; border-radius: 10px; cursor: pointer; }
 .shell-brand:hover { background: var(--surface-hover); }
 .shell-context {
+  display: inline-flex; align-items: center; gap: 4px;
   font-size: 12px; font-weight: 600; color: var(--brand-ink); background: var(--brand-soft);
   border: 1px solid var(--brand-border); padding: 2px 8px; border-radius: 999px; margin-left: 2px;
 }
+.shell-context img { width: 16px; height: 16px; object-fit: contain; border-radius: 3px; }
 
 /* Search: Kaggle/YouTube style pill with a results dropdown */
 .shell-search { position: relative; width: 100%; max-width: 560px; }

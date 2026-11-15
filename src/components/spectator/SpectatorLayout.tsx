@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
 import { Home, CalendarDays, Trophy, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag } from '../ui/Icons';
 import { hasCampusEmail } from '../../lib/campusAccess';
+import { CAMPUS_LOGO, CAMPUS_SHORT_NAME } from '../../lib/institution';
 import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
 import { ProfileMenu, type AccountPanel } from '../common/ProfileMenu';
 import { NotificationBell } from '../common/NotificationBell';
@@ -48,7 +49,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
 
   const status = isGuest ? 'Preview' : campus ? 'WMSU member' : 'Spectator';
   return <div className="spectator-shell">
-    <AppShell context={campus ? 'WMSU' : undefined} groups={groups} live={live} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
+    <AppShell context={campus ? CAMPUS_SHORT_NAME : undefined} contextLogo={campus ? CAMPUS_LOGO || undefined : undefined} groups={groups} live={live} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
       mobileTabs={['home', 'current-live', 'brackets', 'schedule', 'ai-assistant']} pageKey={activeTab} fullBleed={activeTab === 'ai-assistant'}
       actions={<>
         <span className="shell-status" title={status}><i aria-hidden="true" />{status}</span>

@@ -38,7 +38,8 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
   // briefly omits it (as one can right after publishing) must not flash the create form back.
   const [seenEvent, setSeenEvent] = useState(false);
   useEffect(() => { if (events.length) setSeenEvent(true); }, [events.length > 0]);
-  const creating = creatingRequested || (!events.length && !seenEvent);
+  const loaded = firestoreService.isPublishedLoaded();
+  const creating = creatingRequested || (loaded && !events.length && !seenEvent);
   const [title, setTitle] = useState('');
   const [squads, setSquads] = useState('');
   const [games, setGames] = useState(6);
@@ -126,6 +127,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
       {!creating && <button type="button" className="arena-outline mt-3" onClick={() => setCreating(true)}><Plus size={16} />New event</button>}
     </header>
 
+    {!loaded && !events.length && <p className="studio-muted" role="status">Loading published events…</p>}
     {creating && <form className="arena-panel module-form" onSubmit={review} aria-labelledby="placement-create-title">
       <h2 id="placement-create-title">New Battle Royale event</h2>
       <label><Req>Event title</Req><input required minLength={3} maxLength={160} value={title} onChange={e => setTitle(e.target.value)} placeholder="Intramurals 2026 CODM BR Finals" /></label>

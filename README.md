@@ -26,6 +26,20 @@ Copy `.env.example` to `.env` and set this project's Firebase web configuration.
 
 Email verification uses Firebase's real verification links. Staff access comes from trusted Firebase custom claims (`admin: true`, or an authorized `role` claim), never email text or profile labels. Registered account status changes are restricted to project administrators. Users receive profile status updates during their session.
 
+### School name, domain and colours
+
+`institution.config.json` holds the school's name, short name, email domain, colleges and `theme`:
+
+| Field | Used for | Contrast rule (WCAG AA) |
+|---|---|---|
+| `primary` | primary buttons, active navigation, highlights | 3:1 against every dark surface |
+| `accent` | hover state of primary buttons | `onPrimary` must read on it at 4.5:1 |
+| `primaryInk` | text, links and focus rings in the school colour | 4.5:1 against every dark surface |
+| `onPrimary` | text on `primary` and `accent` fills | 4.5:1 |
+| `logo` | small logo in the school chip, a file in `public/` such as `/school-logo.svg`, or `""` | |
+
+`npm run configure:institution` (also run by `npm run dev` and `npm run build`) writes the email rules into `firestore.rules` and `storage.rules` and the colours into `src/generated/institution.css`. It stops with the failing colour pairs and their ratios when a palette does not pass. Dark school colours, such as a deep maroon, usually need a lighter `primaryInk` for text.
+
 ## Data and module boundaries
 
 - Signed-out visitors can see the welcome page. The event workspace requires a verified campus account or spectator admission.

@@ -14,7 +14,7 @@ playwright-report/
 service-account*.json
 *-service-account.json
 # Match monitor database and recordings stay on the event laptop
-data/
+/data/
 dist-agent/
 # Local demo mode (npm run demo): its own build and the emulator accounts and data
 dist-demo/

@@ -26,6 +26,8 @@ export interface ShellLive { id: string; title: string; subtitle: string; image?
 
 interface AppShellProps {
   context?: string;
+  /** Optional logo shown inside the context chip (the school's logo in the viewer workspace). */
+  contextLogo?: string;
   groups: ShellGroup[];
   isActive: (id: string) => boolean;
   onNavigate: (id: string) => void;
@@ -105,7 +107,7 @@ function ShellSearch({ items, onNavigate, onDone }: { items: ShellItem[]; onNavi
   </div>;
 }
 
-export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, actions, railFooter, pageKey, fullBleed = false, navLabel, live = [], children }: AppShellProps) {
+export function AppShell({ context, contextLogo, groups, isActive, onNavigate, mobileTabs, actions, railFooter, pageKey, fullBleed = false, navLabel, live = [], children }: AppShellProps) {
   const reduced = useReducedMotion() || (typeof document !== 'undefined' && document.documentElement.dataset.motion === 'reduced');
   const phone = useMedia('(max-width: 767px)'), wide = useMedia('(min-width: 1200px)');
   const [railPref, setRailPref] = useState(readRail);
@@ -153,7 +155,7 @@ export function AppShell({ context, groups, isActive, onNavigate, mobileTabs, ac
         <button type="button" className="shell-icon-button" onClick={toggle} aria-label={phone ? 'Open navigation' : collapsed ? 'Expand navigation' : 'Collapse navigation'}
           aria-expanded={phone ? drawer : !collapsed} data-tip={phone ? undefined : collapsed ? 'Expand menu' : 'Collapse menu'}><Menu size={20} aria-hidden="true" /></button>
         <button type="button" className="shell-brand" onClick={() => go(items[0]?.id)} aria-label="ArenaHub home"><Brand compact context={context} /></button>
-        {context && <span className="shell-context">{context}</span>}
+        {context && <span className="shell-context">{contextLogo && <img src={contextLogo} alt="" width="16" height="16" />}{context}</span>}
       </div>
       <div className="shell-topbar-center"><ShellSearch items={items} onNavigate={go} /></div>
       <div className="shell-topbar-end">

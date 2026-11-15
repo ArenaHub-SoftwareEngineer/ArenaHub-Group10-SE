@@ -101,7 +101,12 @@ class FirestoreService {
     }, () => this.fail('Live tournament updates are unavailable. Check your connection and refresh.'));
   }
 
+  private publishedLoaded = false;
+  /** True once the first published-tournaments snapshot has arrived, so pages can tell "none" from "not loaded yet". */
+  public isPublishedLoaded(): boolean { return this.publishedLoaded; }
+
   private applySnapshot(items: LiveTournament[]) {
+    this.publishedLoaded = true;
     this.published = items.map(item => item.bracket);
     this.cloud = new Map(items.map(item => [item.bracket.id, { revision: item.revision, fingerprint: matchContentFingerprint(item.bracket) }]));
     this.featuredTournaments = new Set(items.filter(item => item.featured).map(item => item.bracket.id));

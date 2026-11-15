@@ -2,6 +2,13 @@
   "name": "Western Mindanao State University",
   "shortName": "WMSU",
   "emailDomain": "wmsu.edu.ph",
+  "theme": {
+    "logo": "",
+    "primary": "#ff6600",
+    "accent": "#ff7a1f",
+    "primaryInk": "#ff8a3d",
+    "onPrimary": "#1a0b00"
+  },
   "colleges": [
     { "code": "CCS", "name": "College of Computing Studies", "color": "#3B82F6" },
     { "code": "COE", "name": "College of Engineering", "color": "#EF4444" },
