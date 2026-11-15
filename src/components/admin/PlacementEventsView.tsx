@@ -112,6 +112,12 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
       const next = recordGame(event.placement, game.id, toResults(), status);
       const withSchedule = { ...next, games: next.games.map(g => g.id === game.id ? { ...g, scheduledDate: when.date || undefined, scheduledTime: when.time || undefined } : g) };
       await firestoreService.savePlacementEvent(event.id, withSchedule, `Battle Royale "${event.title}": ${game.label} saved as ${status}`);
+      // Move to the next game now. Waiting for the snapshot would switch the form later, possibly
+      // after the organizer has started typing the next results, and wipe them.
+      if (status === 'completed') {
+        const nextGame = withSchedule.games.find(g => g.id !== game.id && g.status !== 'completed');
+        if (nextGame) setGameId(nextGame.id);
+      }
       showToast(`${game.label} saved${status === 'completed' ? ' and standings updated' : ''}.`, 'success');
     } catch (error) { setEntryError(error instanceof Error ? error.message : 'Could not save these results.'); }
     finally { setSaving(false); }
