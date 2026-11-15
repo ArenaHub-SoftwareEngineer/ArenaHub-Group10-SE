@@ -7,6 +7,7 @@ export function geminiProvider(apiKey: string, model: string): Provider {
   const client = new GoogleGenAI({ apiKey });
   return {
     id: 'gemini',
+    model,
     async *stream(request) {
       const contents: Content[] = [
         ...request.history.map(item => ({ role: item.role === 'assistant' ? 'model' : 'user', parts: [{ text: item.text }] })),

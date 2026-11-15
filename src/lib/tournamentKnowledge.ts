@@ -31,7 +31,7 @@ export function knowledgeSnapshot(raw:unknown,revision=0,checkedAt=new Date().to
   const team=(value:any):Team|undefined=>value && typeof value==='object'?{id:str(value.id),name:str(value.name),collegeCode:str(value.collegeCode,30),collegeId:'',gameId:str(value.gameId),seed:number(value.seed),winRate:0,record:'',isBye:value.isBye===true,players:Array.isArray(value.players)?value.players.slice(0,12).map((p:any)=>({id:'',name:'',collegeId:'',isVerified:false,ign:str(p?.ign,80),role:str(p?.role,80)})):[]}:undefined;
   const brackets:BracketDraft[]=Array.isArray(raw)?raw.filter(b=>b?.status==='published' && !isRetiredGame(b)).slice(0,100).map(b=>({
     id:str(b.id),title:str(b.title),gameId:str(b.gameId),gameName:str(b.gameName),format:str(b.format),matchFormat:str(b.matchFormat),teamsCount:number(b.teamsCount),status:'published',createdAt:str(b.createdAt),teams:[],parsedParams:{},rawPrompt:'',seedingRule:'',
-    matches:Array.isArray(b.matches)?b.matches.slice(0,2048).map((m:any)=>({id:str(m?.id),matchNumber:str(m?.matchNumber),tournamentId:str(b.id),gameId:str(m?.gameId),gameMode:m?.gameMode==='br'?'br':m?.gameMode==='mp'?'mp':undefined,round:number(m?.round),roundName:str(m?.roundName),bracketType:str(m?.bracketType),status:str(m?.status),matchFormat:str(m?.matchFormat),team1:team(m?.team1),team2:team(m?.team2),score:{team1Score:number(m?.score?.team1Score),team2Score:number(m?.score?.team2Score)},winnerId:str(m?.winnerId),nextMatchId:str(m?.nextMatchId),inactive:m?.inactive===true,conditionalReset:m?.conditionalReset===true,scheduledDate:str(m?.scheduledDate),scheduledTime:str(m?.scheduledTime),organizerName:''})):[],
+    matches:Array.isArray(b.matches)?b.matches.slice(0,2048).map((m:any)=>({id:str(m?.id),matchNumber:str(m?.matchNumber),tournamentId:str(b.id),gameId:str(m?.gameId),gameMode:m?.gameMode==='br'?'br':m?.gameMode==='mp'?'mp':undefined,round:number(m?.round),roundName:str(m?.roundName),bracketType:str(m?.bracketType),status:str(m?.status),matchFormat:str(m?.matchFormat),team1:team(m?.team1),team2:team(m?.team2),score:{team1Score:number(m?.score?.team1Score),team2Score:number(m?.score?.team2Score)},winnerId:str(m?.winnerId),nextMatchId:str(m?.nextMatchId),inactive:m?.inactive===true,conditionalReset:m?.conditionalReset===true,scheduledDate:str(m?.scheduledDate),scheduledTime:str(m?.scheduledTime),organizerName:'',...(m?.mvp && typeof m.mvp==='object' && str(m.mvp.ign,80)?{mvp:{playerName:'',ign:str(m.mvp.ign,80),role:str(m.mvp.role,80),teamCode:str(m.mvp.teamCode,30)}}:{})})):[],
   } as unknown as BracketDraft)).map(b=>{const raw=(Array.isArray(raw0)?raw0:[]).find((r:any)=>str(r?.id)===b.id);const placement=placementOf(raw?.placement);return placement?{...b,placement,matches:lobbyMatches({...b,placement})}:b;}):[];
   return {revision:Number.isFinite(revision)?revision:0,checkedAt,origin,brackets};
 }
@@ -79,17 +79,27 @@ export function recordedChampion(bracket:BracketDraft) {
   const terminal=finals.filter(m=>!m.nextMatchId && !m.inactive);
   return terminal.length===1?completedSeries(terminal)[0] || null:null;
 }
-function score(match:Match) {if(match.lobby)return match.status==='completed'?`won by ${md(match.lobby.winner || 'a recorded squad')}`:match.status==='live'?'lobby in progress':'lobby game';return [match.score.team1Score,match.score.team2Score].every(Number.isFinite)?`${match.score.team1Score}–${match.score.team2Score}`:'score not recorded';}
+function score(match:Match) {if(match.lobby)return match.status==='completed'?`won by ${md(match.lobby.winner || 'a recorded squad')}`:match.status==='live'?'lobby in progress':'lobby game';
+  // An unplayed match has no score; "0–0" would read as a result.
+  if(match.status==='upcoming'||match.status==='pre-match')return 'not played yet';
+  return [match.score.team1Score,match.score.team2Score].every(Number.isFinite)?`${match.score.team1Score}–${match.score.team2Score}`:'score not recorded';}
 const matchup=(m:Match)=>m.lobby?`${md(m.roundName)}, ${m.lobby.squads} squads`:`${md(m.team1?.name || 'Awaiting team')} vs ${md(m.team2?.name || 'Awaiting team')}`;
 const validMatch=(m:Match)=>!m.inactive && !m.team1?.isBye && !m.team2?.isBye;
 export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[],focus?:KnowledgeFocus|null):KnowledgeAnswer {
   const q=query.trim().toLowerCase(),selected=selectKnowledge(snapshot,query,history,focus),refs:KnowledgeReference[]=[];
   const reference=(b:BracketDraft,m?:Match)=>{if(refs.length<12 && !refs.some(r=>r.bracketId===b.id && r.matchId===m?.id))refs.push({label:m?`${b.title} · ${m.matchNumber || m.roundName}`:b.title,bracketId:b.id,...(m?{matchId:m.id}:{})});};
-  const reply=(text:string,kind:KnowledgeAnswer['kind']='records',needsModel=false):KnowledgeAnswer=>({text,references:refs,kind,needsModel});
+  // Questions a model answers better (judgement, stories, predictions); the records reply is the fallback without one.
+  const askModel=/\b(best player|best team|pinakamagaling|magaling|highlights?|what happened|nangyari|timeline|key moments|predict|prediction|chances?|mananalo|favou?rites?|will [\w ]{2,30} win|who should)\b/.test(q);
+  const reply=(text:string,kind:KnowledgeAnswer['kind']='records',needsModel=false):KnowledgeAnswer=>({text,references:refs,kind,needsModel:needsModel||askModel});
   if(/cheat|fair.?play|evidence|report/.test(q))return reply('Open Fair play to submit a recording or review match evidence. Organizers can inspect sampled frames and returned observations. A referee must confirm the finding; a replay alone cannot prove hidden software or input automation.','help',!/\bwhere\b|\bhow\b.*(?:upload|submit|report)|\bcan\b.*detect/.test(q));
   // "Explain seeding" needs no bracket; only record questions stop at "nothing is published".
   const explanatory=/\b(explain|how|why|what (?:is|are|does)|meaning|rules?|help)\b/.test(q);
   if(!selected.brackets.length)return reply(snapshot.brackets.length?`No published bracket matches ${selected.game?selected.game.toUpperCase():'that tournament'}. Available brackets:\n\n${snapshot.brackets.slice(0,8).map(b=>`- ${md(b.title)} — ${md(b.gameName)}`).join('\n')}`:'No official brackets are published in the records I just checked. Once an organizer publishes one, I can answer questions about its matches, scores, and players.','records',explanatory);
+  // MVPs are recorded by organizers per match and credited by in-game name.
+  if(/\bmvp\b/.test(q)){
+    const rows=selected.brackets.flatMap(b=>b.matches.filter(m=>m.mvp && typeof m.mvp==='object' && (!selected.teamIds.size||selected.teamIds.has(m.team1?.id||'')||selected.teamIds.has(m.team2?.id||''))).filter(m=>!/\bm\d+\b/.test(q)||q.includes((m.matchNumber||'').toLowerCase())).map(m=>({b,m,mvp:m.mvp as Exclude<Match['mvp'],string|undefined>})));
+    return reply(rows.length?rows.slice(0,8).map(({b,m,mvp})=>{reference(b,m);return `- ${md(m.matchNumber||m.roundName)} (${md(m.roundName)}), ${matchup(m)}: MVP ${md(mvp.ign)}${mvp.role?`, ${md(mvp.role)}`:''}${mvp.teamCode?` (${md(mvp.teamCode)})`:''}.`;}).join('\n'):'No MVP is recorded yet for this selection. Organizers add one after a match ends.');
+  }
   // English and Taglish ("sino nanalo", "kelan laban", "sino maglalaro mamaya").
   const winnerQuestion=/\b(winner|won|champion|champs?|nanalo|panalo|nagwagi|nagchampion|result|resulta)\b/.test(q);
   if(winnerQuestion){

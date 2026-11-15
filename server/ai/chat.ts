@@ -11,7 +11,7 @@ import { AnswerCache, normalizeQuestion } from './cache.ts';
 import type { AiConfig } from './config.ts';
 import { screenQuestion, type RateStore } from './guard.ts';
 import { chatPrompt } from './prompt.ts';
-import { attemptSignal, runTool, type Provider } from './provider.ts';
+import { attemptSignal, runTool, sharedCooldown, type Cooldown, type Provider } from './provider.ts';
 import { groundingFacts, groundingProblems } from './grounding.ts';
 import { cleanReply } from './sanitize.ts';
 import { buildTools } from './tools.ts';
@@ -57,6 +57,7 @@ export interface ChatDeps {
   config: Pick<AiConfig, 'chatUserIntervalSec' | 'chatMatchPerMinute'> & Partial<Pick<AiConfig, 'firstTokenMs'>>;
   rate: RateStore;
   sink: ChatSink;
+  cooldown?: Cooldown;
   cache?: AnswerCache<{ text: string; source: string }>;
   log?: (message: string) => void;
 }
@@ -91,6 +92,7 @@ export function createChatResponder(deps: ChatDeps) {
         if (deps.providers.length && await deps.rate.hit(`chatmatch_${matchId}`, deps.config.chatMatchPerMinute, 60)) {
           const facts = groundingFacts(data.brackets);
           for (const [index, provider] of deps.providers.entries()) {
+            if ((deps.cooldown || sharedCooldown).active(provider)) continue;
             const attempt = attemptSignal(signal, deps.config.firstTokenMs ?? 12_000);
             try {
               let text = '';
@@ -106,6 +108,7 @@ export function createChatResponder(deps: ChatDeps) {
               if (clean) { reply = { text: clean, source: index > 0 || provider.id === 'groq' ? 'Arena AI (backup model)' : 'Arena AI' }; break; }
             } catch (error) {
               if (signal.aborted) throw error;
+              (deps.cooldown || sharedCooldown).failed(provider, error);
               log(`${provider.id} failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`);
             } finally { attempt.done(); }
           }

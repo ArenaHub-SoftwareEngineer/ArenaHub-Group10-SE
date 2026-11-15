@@ -115,7 +115,7 @@ export function buildTools(ctx: ToolContext): Tool[] {
         const matches = scheduleMatches(b).filter(playable).slice(0, 64);
         return { data: { id: b.id, title: b.title, game: b.gameName, format: b.format, series: b.matchFormat, matches: matches.map(m => matchView(m, today)) }, references: [ref(b)] };
       }),
-    tool({ name: 'getMatch', description: 'One match: teams, score, status, schedule, both rosters (in-game names and roles), recorded timeline and MVP.', parameters: object({ matchId: { type: 'string' } }, ['matchId']) },
+    tool({ name: 'getMatch', description: 'One match by id or match number: teams, score, status, schedule, both rosters (in-game names and roles), the recorded timeline of key moments and the MVP. Use it for "what happened", "who was MVP" and "how did it go". Find ids with getBracket.', parameters: object({ matchId: { type: 'string' } }, ['matchId']) },
       z.object({ matchId: z.string().min(1).max(160) }), ({ matchId }) => {
         for (const b of ctx.brackets) {
           const m = scheduleMatches(b).find(x => x.id === matchId || x.matchNumber === matchId);

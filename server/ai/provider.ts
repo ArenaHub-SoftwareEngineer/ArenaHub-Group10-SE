@@ -14,6 +14,8 @@ export interface JsonRequest { system: string; prompt: string; schema: Record<st
 
 export interface Provider {
   id: 'gemini' | 'groq' | 'fake' | 'mock';
+  /** The model name, for the cooldown key and logs. Never shown to viewers. */
+  model?: string;
   stream(request: ProviderRequest): AsyncGenerator<string>;
   json(request: JsonRequest): Promise<unknown>;
 }
@@ -42,6 +44,25 @@ export function attemptSignal(parent: AbortSignal, firstTokenMs: number) {
     done: () => { clearTimeout(timer); parent.removeEventListener('abort', onAbort); },
   };
 }
+
+/**
+ * Benches a model that is over quota (429) or silent, so the next questions go straight to the next
+ * model instead of waiting on it again. Shared by the assistant page and live chat in this process.
+ */
+export class Cooldown {
+  private until = new Map<string, number>();
+  constructor(private readonly now: () => number = Date.now) {}
+  private key = (p: Provider) => `${p.id}:${p.model || ''}`;
+  active(p: Provider) { return (this.until.get(this.key(p)) || 0) > this.now(); }
+  /** Records a failure; returns how long the model is benched (0 when the error is not one that repeats). */
+  failed(p: Provider, error: unknown) {
+    const text = error instanceof Error ? `${(error as { status?: number }).status ?? ''} ${error.message}` : String(error);
+    const ms = /\b429\b|RESOURCE_EXHAUSTED|quota|rate limit/i.test(text) ? 60_000 : /no reply within|DEADLINE_EXCEEDED|\b504\b|\b503\b|UNAVAILABLE|overloaded/i.test(text) ? 30_000 : 0;
+    if (ms) this.until.set(this.key(p), this.now() + ms);
+    return ms;
+  }
+}
+export const sharedCooldown = new Cooldown();
 
 export async function runTool(tools: Tool[], name: string | undefined, args: unknown) {
   const tool = tools.find(t => t.name === name);

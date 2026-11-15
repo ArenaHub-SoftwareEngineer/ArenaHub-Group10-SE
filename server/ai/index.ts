@@ -13,7 +13,7 @@ import { AnswerCache, normalizeQuestion } from './cache.ts';
 import type { AiConfig } from './config.ts';
 import { MemoryRateStore, screenQuestion, type RateStore } from './guard.ts';
 import { assistantPrompt } from './prompt.ts';
-import { attemptSignal, type Provider } from './provider.ts';
+import { attemptSignal, sharedCooldown, type Cooldown, type Provider } from './provider.ts';
 import { groundingFacts, SentenceGate, UngroundedSentence } from './grounding.ts';
 import { cleanReply, StreamCleaner } from './sanitize.ts';
 import { buildTools, type Tool, type ToolContext } from './tools.ts';
@@ -41,6 +41,8 @@ export interface AssistantDeps {
   /** Whole-server model budget for this instance. */
   globalRate?: RateStore;
   openReports?: ToolContext['openReports'];
+  /** Models benched after a quota error or a timeout. Defaults to the process-wide one. */
+  cooldown?: Cooldown;
   cache?: AnswerCache<AnswerResult>;
   now?: () => Date;
   log?: (message: string) => void;
@@ -52,6 +54,7 @@ const sourceOf = (provider: Provider, index: number): Source => index > 0 || pro
 export function createAssistant(deps: AssistantDeps) {
   const cache = deps.cache || new AnswerCache<AnswerResult>(60_000);
   const globalRate = deps.globalRate || new MemoryRateStore();
+  const cooldown = deps.cooldown || sharedCooldown;
   const now = deps.now || (() => new Date());
   const log = deps.log || ((message: string) => console.warn(`[Arena AI] ${message}`));
 
@@ -92,6 +95,7 @@ export function createAssistant(deps: AssistantDeps) {
 
     const facts = groundingFacts(input.data.brackets);
     for (const [index, provider] of deps.providers.entries()) {
+      if (cooldown.active(provider)) continue;
       const cleaner = new StreamCleaner(MAX_REPLY);
       // Model text reaches the viewer one checked sentence at a time.
       const gate = new SentenceGate(facts);
@@ -116,7 +120,8 @@ export function createAssistant(deps: AssistantDeps) {
         return remember({ source, text, references: [...references] });
       } catch (error) {
         if (input.signal.aborted) throw error;
-        log(`${provider.id} failed: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`);
+        const benched = cooldown.failed(provider, error);
+        log(`${provider.id} ${provider.model || ''} failed${benched ? ` (skipped for ${benched / 1000} s)` : ''}: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`);
         if (error instanceof UngroundedSentence && started) {
           // Part of the answer is on screen, the next sentence is not supported: show the records instead.
           const result = recordsAnswer();

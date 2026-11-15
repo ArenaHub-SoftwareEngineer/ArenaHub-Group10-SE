@@ -11,6 +11,7 @@ export function groqProvider(apiKey: string, model: string, fetcher: typeof fetc
   });
   return {
     id: 'groq',
+    model,
     async *stream(request) {
       const messages: any[] = [
         { role: 'system', content: request.system },
