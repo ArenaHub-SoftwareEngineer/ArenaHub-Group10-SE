@@ -39,7 +39,7 @@
           },
           {
             "key": "Content-Security-Policy",
-            "value": "script-src 'self' https://apis.google.com https://accounts.google.com https://www.gstatic.com https://www.google.com https://www.recaptcha.net 'sha256-OAwTQ8jRFcTvqzHXT8pu80EKGLvmXnDSTZNpL3F75fc='; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+            "value": "script-src 'self' https://apis.google.com https://accounts.google.com https://www.gstatic.com https://www.google.com https://www.recaptcha.net 'sha256-FPWBuVOhqVWKgBoAQynxkUXKrtsNSHDCXL4aA0QVulc='; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
           }
         ]
       },
