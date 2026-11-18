@@ -1,5 +1,6 @@
 import type { Match, Team } from './types';
 import { validateScore } from './integrityChecks';
+import { swissStandings } from './formats/swiss';
 function playing(team?:Team):team is Team {return Boolean(team?.id && !team.isBye && !['bye','tbd'].includes(team.name.trim().toLowerCase()));}
 export function completedSeries(matches:Match[]) {
   return matches.flatMap(match=>{
@@ -16,4 +17,14 @@ export function getStandings(matches:Match[]) {
     [team1,team2].forEach((team,side)=>{const row=rows.get(team.id)||{team,wins:0,losses:0,gameWins:0,gameLosses:0};row.wins+=Number(team.id===winner);row.losses+=Number(team.id!==winner);row.gameWins+=side===0?match.score.team1Score:match.score.team2Score;row.gameLosses+=side===0?match.score.team2Score:match.score.team1Score;rows.set(team.id,row);});
   }
   return [...rows.values()].sort((a,b)=>b.wins-a.wins||a.losses-b.losses||a.team.name.localeCompare(b.team.name));
+}
+
+/** Competition ranking shared by the viewer and Arena AI. Game totals always exclude BYEs. */
+export function getTournamentStandings(matches: Match[]) {
+  const played = getStandings(matches);
+  if (!matches.some(match => match.tournamentFormat === 'swiss')) return played.map(row => ({ ...row, buchholz: undefined as number | undefined, byes: 0 }));
+  return swissStandings(matches).filter(row => row.wins + row.losses > 0).map(row => {
+    const games = played.find(item => item.team.id === row.team.id);
+    return { team: row.team, wins: row.wins, losses: row.losses, gameWins: games?.gameWins || 0, gameLosses: games?.gameLosses || 0, buchholz: row.buchholz as number | undefined, byes: row.byes };
+  });
 }

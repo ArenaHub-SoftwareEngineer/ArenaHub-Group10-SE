@@ -43,6 +43,16 @@ test('grants each staff role, keeps unrelated claims, and revokes', async () => 
   assert.equal(JSON.parse(shown.stdout).role, null);
 });
 
+test('mirrors the role onto an existing profile for display, and resets it on revoke', async () => {
+  const uid = (await getAuth(app).getUserByEmail(email)).uid;
+  const profile = getFirestore(app).collection('users').doc(uid);
+  await profile.set({ uid, email, role: 'user', status: 'active' });
+  assert.equal(run([email, 'organizer']).status, 0);
+  assert.equal((await profile.get()).data()?.role, 'organizer');
+  assert.equal(run([email, 'none']).status, 0);
+  assert.equal((await profile.get()).data()?.role, 'user');
+});
+
 test('every change is written to the audit log by id, not by email', async () => {
   const uid = (await getAuth(app).getUserByEmail(email)).uid;
   const events = await getFirestore(app).collection('auditEvents').where('actorId', '==', 'cli:set-role').get();

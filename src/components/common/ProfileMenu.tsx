@@ -24,8 +24,10 @@ export function ProfileMenu({ user, placement, onOpenPanel, onSwitch, switchLabe
     action();
   };
 
+  const roleLabel = guest ? 'Guest' : user.role.replace('-', ' ');
   return <div className={`profile-menu profile-menu-${placement}`}>
-    <button ref={trigger} type="button" className="profile-trigger" aria-label={`Profile options for ${user.name}`}
+    {/* The visible name is the button's name (voice control: "click Test Student"); the initials are decoration. */}
+    <button ref={trigger} type="button" className="profile-trigger"
       popoverTarget={id} onClick={event => {
         const bounds = event.currentTarget.getBoundingClientRect();
         const panel = popover.current;
@@ -41,10 +43,11 @@ export function ProfileMenu({ user, placement, onOpenPanel, onSwitch, switchLabe
           panel.style.maxHeight = `${window.innerHeight - bounds.bottom - 16}px`;
         }
       }}>
-      <span className="identity-avatar h-8 w-8 shrink-0 text-xs">{user.avatarInitials}</span>
+      <span className="identity-avatar h-8 w-8 shrink-0 text-xs" aria-hidden="true">{user.avatarInitials}</span>
       <span className="profile-trigger-name">
         <strong>{user.name}</strong>
-        <small>{guest ? 'Guest' : user.role.replace('-', ' ')}</small>
+        <small>{roleLabel}</small>
+        <span className="sr-only">, profile options</span>
       </span>
       <ChevronDown size={14} aria-hidden="true" />
     </button>

@@ -136,37 +136,21 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
         })()}
       </section>
 
-      {publishedBrackets.length > 1 && <label className="module-form viewer-bracket-selector">Published game
-        <select value={activeBracket.status === 'published' ? activeBracket.id : ''} onChange={event => setSelectedBracketId(event.target.value)}>
-          {activeBracket.status !== 'published' && <option value="" disabled>Choose a published bracket</option>}
-          {publishedBrackets.map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.gameName} · {bracket.title}</option>)}
-        </select>
-      </label>}
+      {/* One toolbar: view tabs on the left, the tournament switcher on the right (it changes context, not the view). */}
+      <div className="page-toolbar">
+        {!activeBracket.placement ? <div className="ah-tabs" role="tablist" aria-label="Bracket views">
+          {([['bracket', 'Bracket'], ['standings', 'Standings']] as const).map(([id, label]) =>
+            <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id)}>{label}</button>)}
+        </div> : <span />}
+        {publishedBrackets.length > 1 && <label className="module-form viewer-bracket-selector viewer-bracket-switch">Switch tournament
+          <select value={activeBracket.status === 'published' ? activeBracket.id : ''} onChange={event => setSelectedBracketId(event.target.value)}>
+            {activeBracket.status !== 'published' && <option value="" disabled>Choose a published bracket</option>}
+            {publishedBrackets.map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.gameName} · {bracket.title}</option>)}
+          </select>
+        </label>}
+      </div>
 
       {activeBracket.placement ? <PlacementStandingsView event={activeBracket.placement} /> : <>
-      {/* Navigation Tabs */}
-      <div className="flex items-center gap-1 border-b border-[var(--border)] pb-3">
-        <button
-          onClick={() => setActiveTab('bracket')}
-          className={`px-4 py-1.5 rounded-[4px] text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'bracket'
-              ? 'bg-white/[0.10] text-(--text-primary) shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-(--text-primary) hover:bg-white/[0.05]'
-          }`}
-        >
-          Tournament Bracket
-        </button>
-        <button
-          onClick={() => setActiveTab('standings')}
-          className={`px-4 py-1.5 rounded-[4px] text-xs font-semibold transition-all cursor-pointer ${
-            activeTab === 'standings'
-              ? 'bg-white/[0.10] text-(--text-primary) shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-(--text-primary) hover:bg-white/[0.05]'
-          }`}
-        >
-          Standings
-        </button>
-      </div>
 
       {/* Tab Content */}
       {activeTab === 'standings' ? (
@@ -175,26 +159,18 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
         <div className="space-y-6">
           {/* Live Match Banner Alert if any match is currently live */}
           {liveMatches.length > 0 && (
-            <div className="p-3.5 rounded-[6px] bg-(--surface-soft) border-2 border-(--success) flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-(color:--success)/10">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-(--success) animate-pulse" />
-                <div>
-                  <span className="text-xs font-bold text-(--success) block">
-                    LIVE MATCH IN PROGRESS
-                  </span>
-                  <span className="text-xs font-bold text-(--text-primary)">
-                    {liveMatches[0].team1?.name || 'Team 1'} ({liveMatches[0].score.team1Score}) vs{' '}
-                    {liveMatches[0].team2?.name || 'Team 2'} ({liveMatches[0].score.team2Score}) · {liveMatches[0].roundName}
-                  </span>
-                </div>
+            <div className="live-callout">
+              <span className="live-callout-dot" aria-hidden="true" />
+              <div className="live-callout-text">
+                <span>Live now{liveMatches.length > 1 ? ` · ${liveMatches.length} matches` : ''}</span>
+                <strong>
+                  {liveMatches[0].team1?.name || 'Team 1'} {liveMatches[0].score.team1Score}–{liveMatches[0].score.team2Score} {liveMatches[0].team2?.name || 'Team 2'}
+                </strong>
+                <small>{liveMatches[0].roundName}</small>
               </div>
-
-              <button
-                onClick={() => onSelectMatch(liveMatches[0])}
-                className="px-3.5 py-1.5 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
-              >
-                <Radio className="w-3.5 h-3.5" />
-                <span>Watch Live Stream</span>
+              <button type="button" className="arena-primary" onClick={() => onSelectMatch(liveMatches[0])}>
+                <Radio size={16} aria-hidden="true" />
+                Watch live
               </button>
             </div>
           )}
@@ -341,18 +317,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
             </div>
           </div>}
 
-          {/* Footer note */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-(--text-muted) pt-2 px-1">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-(--success)" />
-              <span>
-                Bracket updates dynamically in real-time as admins save results and report match scores.
-              </span>
-            </div>
-            <div className="text-xs text-(--text-muted)">
-              Accommodates any tournament size with standard competitive seeding.
-            </div>
-          </div>
+          <p className="viewer-bracket-footnote"><i aria-hidden="true" /> Scores update here as soon as organizers save a result.</p>
         </div>
       )}
       </>}

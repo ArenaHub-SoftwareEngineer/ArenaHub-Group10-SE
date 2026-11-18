@@ -1,3 +1,4 @@
+import { PageHeading } from '../ui/PageHeading';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { hasCampusEmail } from '../../lib/campusAccess';
@@ -52,62 +53,36 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-heading font-bold text-(--text-primary) tracking-tight">
-            Users
-          </h2>
-          <span className="text-xs text-(--text-muted)">
-            Registered accounts · account status changes apply to ArenaHub access
-          </span>
+      <PageHeading title="Users" description="Find registered accounts, review their status, and manage ArenaHub access." />
+      <div className="page-toolbar">
+        <div className="ah-chips" role="group" aria-label="Filter users by account status">
+          {(['all', 'active', 'suspended', 'banned'] as const).map(tab => (
+            <button key={tab} type="button" className="ah-chip capitalize" aria-pressed={filter === tab} onClick={() => setFilter(tab)}>{tab}</button>
+          ))}
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Segmented Filter Pills */}
-          <div className="flex items-center bg-(--surface-soft) p-1 rounded-[4px] border border-(--border)">
-            {(['all', 'active', 'suspended', 'banned'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setFilter(tab)}
-                className={`px-3 py-1 rounded-[3px] text-xs font-semibold capitalize transition-colors ${
-                  filter === tab
-                    ? 'bg-(--surface) text-(--text-primary) shadow-xs'
-                    : 'text-(--text-muted) hover:text-(--text-primary)'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Box */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-(--text-muted) absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search users"
-              className="bg-(--surface-soft) border border-(--border) rounded-[4px] pl-8 pr-3 py-1.5 text-xs text-(--text-primary) placeholder-(--text-muted) outline-hidden w-48 sm:w-60"
-            />
-          </div>
-        </div>
+        <label className="page-search">
+          <Search size={16} aria-hidden="true" />
+          <input type="search" aria-label="Search users" value={search}
+            onChange={event => setSearch(event.target.value)} placeholder="Search users" />
+        </label>
       </div>
 
-      {/* Users Table */}
-      <div className="rounded-[4px] border border-(--border) bg-(--surface-soft) overflow-x-auto shadow-xl">
-        <table className="w-full text-left border-collapse text-xs">
+      <div className="page-panel overflow-x-auto" role="region" aria-label="Registered accounts" tabIndex={0}>
+        <table className="users-table w-full text-left border-collapse text-sm">
           <thead>
-            <tr className="border-b border-(--border) text-xs font-bold text-(--text-muted)">
-              <th className="py-3 px-4">USER</th>
-              <th className="py-3 px-4">COLLEGE</th>
-              <th className="py-3 px-4">STATUS</th>
-              <th className="py-3 px-4">ROLE</th>
-              <th className="py-3 px-4">JOINED</th>
-              <th className="py-3 px-4 text-right">ACTIONS</th>
+            <tr className="border-b border-(--border) text-xs font-semibold text-(--text-muted)">
+              <th className="py-3 px-4">User</th>
+              <th className="py-3 px-4">College</th>
+              <th className="py-3 px-4">Status</th>
+              <th className="py-3 px-4">Role</th>
+              <th className="py-3 px-4">Joined</th>
+              <th className="py-3 px-4 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-(--border)">
+            {!filteredUsers.length && <tr><td colSpan={6} className="p-6 text-(--text-secondary)">
+              <span role="status">{users.length ? 'No users match these filters.' : 'No registered accounts yet.'}</span>
+            </td></tr>}
             {filteredUsers.map((user) => (
               <tr key={user.id} className="hover:bg-(--surface-elevated) transition-colors">
                 {/* User Info */}
@@ -128,54 +103,47 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                 </td>
 
                 {/* College */}
-                <td className="py-3 px-4 font-semibold text-(--text-primary)">
+                <td className="py-3 px-4 font-semibold text-(--text-primary)" data-label="College">
                   {user.collegeName.replace('College of ', '')}
                 </td>
 
                 {/* Status Badge */}
-                <td className="py-3 px-4">
-                  <span
-                    className={`inline-block px-2.5 py-0.5 rounded-[3px] text-xs font-bold ${
-                      user.status === 'active'
-                        ? 'bg-(--surface-soft) border border-(--success-border) text-(--success)'
-                        : user.status === 'suspended'
-                        ? 'bg-(--surface-soft) border border-(--warning-border) text-(--brand-ink)'
-                        : 'bg-(--surface-soft) border border-(--danger-border) text-(--danger)'
-                    }`}
-                  >
+                <td className="py-3 px-4" data-label="Status">
+                  <span className={`status-pill ${user.status === 'active' ? 'is-success' : user.status === 'suspended' ? 'is-warning' : 'is-danger'}`}>
                     {user.status === 'suspended'
-                      ? `SUSPENDED · ${user.suspendedUntil || 'TEMP'}`
-                      : user.status.toUpperCase()}
+                      ? `Suspended · ${user.suspendedUntil || 'temporary'}`
+                      : user.status === 'active' ? 'Active' : 'Banned'}
                   </span>
                 </td>
 
                 {/* Role Dropdown */}
-                <td className="py-3 px-4">
+                <td className="py-3 px-4" data-label="Role">
                   <span className="text-xs capitalize" title="Staff permissions are assigned separately by the project administrator.">{user.role}</span>
                 </td>
 
                 {/* Joined Date */}
-                <td className="py-3 px-4 text-(--text-muted) tabular-nums text-xs">
+                <td className="py-3 px-4 text-(--text-muted) tabular-nums text-xs" data-label="Joined">
                   {user.joinedDate}
                 </td>
 
                 {/* Actions */}
                 <td className="py-3 px-4 text-right">
+                  <div className="user-row-actions">
                   {hasCampusEmail(user.email) && (user.status === 'active' || user.spectatorInviteApproved) && (
-                    <button type="button" className="arena-outline mb-2" onClick={() => setInviteApprovalUser(user)}>
+                    <button type="button" className="arena-outline arena-sm whitespace-nowrap" onClick={() => setInviteApprovalUser(user)}>
                       {user.spectatorInviteApproved ? 'Revoke QR access' : 'Approve student QR'}
                     </button>
                   )}
                   {user.status === 'active' ? (
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="user-row-buttons">
                       <button
                         onClick={() => {
                           setSelectedUser(user);
                           setActionType('suspend');
                         }}
-                        className="px-2.5 py-1 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-secondary) hover:text-(--text-primary) transition-colors"
+                        type="button" className="arena-outline arena-sm"
                       >
-                        <PauseCircle className="w-3 h-3 inline mr-1 text-(--brand-ink)" />
+                        <PauseCircle size={14} aria-hidden="true" />
                         Suspend
                       </button>
 
@@ -184,9 +152,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                           setSelectedUser(user);
                           setActionType('ban');
                         }}
-                        className="px-2.5 py-1 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--danger) transition-colors"
+                        type="button" className="arena-outline arena-sm arena-danger-text"
                       >
-                        <Ban className="w-3 h-3 inline mr-1" />
+                        <Ban size={14} aria-hidden="true" />
                         Ban
                       </button>
                     </div>
@@ -196,12 +164,13 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                         setSelectedUser(user);
                         setActionType('restore');
                       }}
-                      className="px-2.5 py-1 rounded-[3px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--success-border) text-xs font-semibold text-(--brand-ink) transition-colors"
+                      type="button" className="arena-outline arena-sm"
                     >
-                      <RotateCcw className="w-3 h-3 inline mr-1" />
+                      <RotateCcw size={14} aria-hidden="true" />
                       Restore
                     </button>
                   )}
+                  </div>
                 </td>
               </tr>
             ))}

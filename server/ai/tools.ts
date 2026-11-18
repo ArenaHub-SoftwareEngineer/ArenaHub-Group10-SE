@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { BracketDraft, Match, Team } from '../../src/lib/types.ts';
 import type { KnowledgeReference } from '../../src/lib/tournamentKnowledge.ts';
 import { recordedChampion } from '../../src/lib/tournamentKnowledge.ts';
-import { completedSeries, getStandings } from '../../src/lib/standings.ts';
+import { completedSeries, getTournamentStandings as getStandings } from '../../src/lib/standings.ts';
 import { computeStandings, scheduleMatches } from '../../src/lib/formats/placement.ts';
 import { bracketTeams } from '../../src/lib/data/tournamentDocs.ts';
 import { publicationGameKey } from '../../src/lib/bracketPublication.ts';
@@ -60,6 +60,7 @@ const object = (properties: Record<string, unknown>, required: string[] = []) =>
 const gameParam = { type: 'string', enum: [...GAMES], description: 'mlbb, dota2, codm-mp (Multiplayer) or codm-br (Battle Royale).' };
 
 const FORMATS: Record<string, string> = {
+  swiss: 'Swiss: every team plays each round. Pairings favor similar records and avoid rematches where possible. An odd field gives one team a bye, counted as a series win. Rank by series wins, then Buchholz (opponents’ wins), game difference and seed. The next round is drawn after all current results are saved.',
   'single-elimination': 'Single elimination: lose one series and you are out. The winner of each match advances until one team is left.',
   'double-elimination': 'Double elimination: a team is out only after losing two series. Losers drop to the lower bracket; the upper-bracket finalist may need to be beaten twice in the grand final (a bracket reset).',
   'round-robin': 'Round robin: every team plays every other team in its group. Standings rank teams by series wins, then game difference.',
@@ -71,7 +72,7 @@ const HELP: Record<string, string> = {
   brackets: 'Open Brackets to see each published tournament, its rounds and results. Battle Royale events show placement standings instead of a bracket.',
   live: 'Open Match center for live matches. Each live match has a stream, the score and a live chat for signed-in campus students.',
   chat: 'Live chat is for signed-in campus students. Staff can turn on slow mode, mute or remove viewers, and pin a message. Type @Arena before a question to ask Arena AI about the match.',
-  'fair-play': 'Open Fair play to submit evidence about a match: choose the match, add a replay timestamp and a viewable link. Organizers review every report; ArenaHub does not detect in-game cheats.',
+  'fair-play': 'Open Fair play to submit evidence about a match: choose the match, add a replay timestamp and a viewable link. Organizers review every report. At organized matches staff can also pair a player’s device with Match monitor, which flags known cheating tools for a referee to check; a flag is not proof, and referees decide.',
   admission: 'Personal accounts join as spectators by scanning a campus student\'s invite QR code. Campus accounts can read everything public after signing in.',
   registration: 'Team registration and rosters are handled by facilitators on the organizer side. Only in-game names, roles and colleges are public.',
   account: 'Sign in with your campus Google account. Organizer access is granted by the project administrator only.',
@@ -149,7 +150,7 @@ export function buildTools(ctx: ToolContext): Tool[] {
           const event = b.placement, done = event.games.filter(g => g.status === 'completed').length;
           return { data: { title: b.title, kind: 'placement points', gamesFinished: done, gamesPlanned: event.games.length, final: done === event.games.length && done > 0, rows: computeStandings(event).map(r => ({ rank: r.rank, squad: r.name, college: r.collegeCode, points: r.total, eliminations: r.kills, wins: r.wins })) }, references: [ref(b)] };
         }
-        return { data: { title: b.title, kind: 'series records', rows: getStandings(b.matches).map(r => ({ team: r.team.name, college: r.team.collegeCode, wins: r.wins, losses: r.losses, games: `${r.gameWins}-${r.gameLosses}` })) }, references: [ref(b)] };
+        return { data: { title: b.title, kind: b.format.toLowerCase() === 'swiss' ? 'Swiss standings' : 'series records', rows: getStandings(b.matches).map(r => ({ team: r.team.name, college: r.team.collegeCode, wins: r.wins, losses: r.losses, games: `${r.gameWins}-${r.gameLosses}`, ...(r.buchholz === undefined ? {} : { buchholz: r.buchholz, byes: r.byes }) })) }, references: [ref(b)] };
       }),
     tool({ name: 'getTeam', description: 'Find a team by name or college code: its tournaments, roster (in-game names and roles) and series record.', parameters: object({ name: { type: 'string' } }, ['name']) },
       z.object({ name: z.string().min(2).max(80) }), ({ name: query }) => {

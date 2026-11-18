@@ -16,6 +16,10 @@ export interface CheckIn {
 }
 export interface IntegrityFlag { code: string; message: string }
 export const normalizeIdentifier = (value: string) => value.trim().toLowerCase().replace(/\s+/g, '');
+export function matchTeamIds(match?: Match): string[] {
+  const teams = match?.lobby ? match.lobby.teams || [] : [match?.team1, match?.team2];
+  return [...new Set(teams.filter(team => team && !team.isBye).map(team => team!.id))];
+}
 export function parseRoster(text: string): RosterPlayer[] {
   const players = text.split(/\r?\n/).filter(row => row.trim()).map(row => {
     const [name = '', ign = '', studentId = '', accountId = '', role = 'starter'] = row.split('|').map(v => v.trim());
@@ -40,7 +44,7 @@ export function inspectCheckIn(registration: Registration, checkIn: CheckIn, pol
   if (registration.sanction === 'disqualified') add('INELIGIBLE_TEAM', 'A referee has disqualified this team from this tournament.');
   if (registration.revision !== checkIn.rosterRevision) add('STALE_ROSTER', 'The check-in refers to a different roster revision.');
   if (checkIn.lineup.length !== policy.playersRequired) add('LINEUP_SIZE', `Expected ${policy.playersRequired} players; received ${checkIn.lineup.length}.`);
-  if (match && ![match.team1?.id, match.team2?.id].includes(registration.teamId)) add('WRONG_MATCH', 'The registered team is not a participant in this match.');
+  if (match && !matchTeamIds(match).includes(registration.teamId)) add('WRONG_MATCH', 'The registered team is not a participant in this match.');
   const students = new Set<string>(), accounts = new Set<string>();
   for (const row of checkIn.lineup) {
     const student = normalizeIdentifier(row.studentId), account = normalizeIdentifier(row.accountId);

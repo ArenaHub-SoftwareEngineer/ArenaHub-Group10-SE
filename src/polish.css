@@ -1,0 +1,316 @@
+/*
+ * Consistency layer (UI/UX pass, 2026-11-16). Loaded after every other stylesheet.
+ *
+ * The app grew page by page, so equivalent controls drifted apart: four button shapes, four tab styles,
+ * three kinds of stat tile. This file gives each kind of control ONE look, using the tokens in design.css:
+ *
+ *   Buttons      .arena-primary (filled) / .arena-outline (quiet), both pills. .arena-sm for row actions.
+ *   View tabs    .ah-tabs (and the older .module-tabs, .studio-modes, .broadcast-segments): one segmented bar.
+ *                Tabs switch what a page shows. Chips (.ah-chip) filter a list. They look different on purpose.
+ *   Stat tiles   .feature-summary and .organizer-summary: same padding, number size and label.
+ *   Status       .status-pill with is-success / is-warning / is-danger / is-info.
+ *   Motion       page sections rise in on arrival (240 ms, staggered 40 ms), cards lift on hover,
+ *                skeletons while a page loads. All of it is off for reduced motion.
+ */
+
+/* ---------- Buttons ---------- */
+.app-shell :is(.arena-primary, .arena-outline) {
+  min-height: 40px; padding: 0 18px; gap: 8px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+}
+.app-shell .arena-primary { background: var(--brand); color: var(--on-brand); border: 1px solid transparent; }
+.app-shell .arena-primary:hover:not(:disabled) { background: var(--brand-hover); }
+.app-shell .arena-outline { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-primary); }
+.app-shell .arena-outline:hover:not(:disabled) { border-color: var(--brand-border); background: var(--surface-soft); color: var(--brand-ink); }
+.app-shell .arena-outline[aria-pressed=true] { border-color: var(--brand-border); background: var(--brand-soft); color: var(--brand-ink); }
+.app-shell :is(.arena-primary, .arena-outline):active:not(:disabled) { transform: scale(.97); }
+.app-shell :is(.arena-primary, .arena-outline) svg { flex: none; }
+/* Compact row actions (table rows, card footers). Still a 32px hit area, above the 24px minimum. */
+.app-shell :is(.arena-primary, .arena-outline).arena-sm { min-height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; }
+.app-shell .arena-icon-only { padding: 0; width: 32px; justify-content: center; }
+.app-shell .arena-primary.arena-danger { background: var(--danger); color: #16080a; }
+.app-shell .arena-primary.arena-danger:hover:not(:disabled) { background: var(--danger); filter: brightness(1.08); }
+.app-shell .arena-outline.arena-danger-text { color: var(--danger); }
+.app-shell .arena-outline.arena-danger-text:hover:not(:disabled) { border-color: var(--danger-border); background: var(--danger-soft); color: color-mix(in srgb, var(--danger) 45%, #fff); }
+.app-shell .arena-text-button { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer; }
+.app-shell .arena-text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- View tabs: one segmented bar ---------- */
+.app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) {
+  display: inline-flex; flex-wrap: nowrap; align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none;
+  gap: 4px; margin: 0; padding: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft);
+}
+.app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments)::-webkit-scrollbar { display: none; }
+.app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) > button {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent;
+  color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: none;
+}
+.app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) > button:hover:not([aria-selected=true], [aria-pressed=true]) {
+  color: var(--text-primary); background: var(--surface-hover);
+}
+.app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) > button:is([aria-selected=true], [aria-pressed=true]) {
+  background: var(--surface-elevated); color: var(--text-primary); box-shadow: var(--shadow-1), inset 0 -2px 0 var(--brand);
+}
+.app-shell .studio-modes { margin-bottom: 18px; }
+
+/* ---------- Filter chips ---------- */
+.ah-chip-count {
+  min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px;
+  background: var(--surface-elevated); color: var(--text-secondary); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.ah-chip[aria-pressed=true] .ah-chip-count { background: var(--brand); color: var(--on-brand); }
+
+/* ---------- Status pills ---------- */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--border-strong); background: var(--surface-soft); color: var(--text-secondary);
+  font-size: 12px; font-weight: 600; white-space: nowrap;
+}
+.status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status-pill.is-success { color: var(--success); border-color: var(--success-border); background: var(--success-soft); }
+.status-pill.is-warning { color: var(--warning); border-color: var(--warning-border); background: var(--warning-soft); }
+.status-pill.is-danger { color: var(--danger); border-color: var(--danger-border); background: var(--danger-soft); }
+.status-pill.is-info { color: var(--info); border-color: var(--info-border); background: var(--info-soft); }
+
+/* ---------- Stat tiles ---------- */
+.app-shell :is(.feature-summary, .organizer-summary) {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 12px; margin: 0;
+}
+.app-shell :is(.feature-summary > div, .organizer-tile) {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0;
+  padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left;
+}
+.app-shell :is(.feature-summary, .organizer-summary) strong {
+  display: block; order: 1; font-size: 28px; line-height: 1.15; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+.app-shell :is(.feature-summary, .organizer-summary) span { order: 2; font-size: 13px; color: var(--text-muted); }
+.app-shell .organizer-tile > svg { order: 0; margin-bottom: 4px; color: var(--brand-ink); }
+.app-shell .organizer-tile { cursor: pointer; }
+
+/* ---------- Panels and section rhythm ---------- */
+.app-shell .module-page { gap: 24px; }
+.app-shell .page-panel { padding: 20px; }
+.app-shell .feature-section-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 20px; flex-wrap: wrap; }
+.app-shell .feature-section-bar h2 { font-size: 20px; }
+.ah-empty-panel {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; text-align: center;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text-secondary);
+}
+.ah-empty-panel > svg { color: var(--brand-ink); }
+.ah-empty-panel strong { color: var(--text-primary); font-size: 16px; }
+.ah-empty-panel p { max-width: 46ch; font-size: 14px; }
+.ah-empty-panel .arena-outline { margin-top: 8px; }
+
+/* ---------- Game picker tiles: artwork plus a name, always ---------- */
+.app-shell .artwork-picker .schedule-game-tile {
+  aspect-ratio: auto; display: flex; flex-direction: column; align-items: stretch; place-items: stretch;
+  padding: 0; background: var(--surface); text-align: left; cursor: pointer;
+}
+.artwork-media { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
+.artwork-media > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-3) var(--ease), filter var(--dur-2) var(--ease); }
+.artwork-picker .schedule-game-tile[data-game^=codm] .artwork-media > img { filter: brightness(.48) saturate(.7); }
+.artwork-caption { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 12px; min-width: 0; }
+.artwork-caption strong { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artwork-caption small { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artwork-picker .schedule-game-tile[aria-pressed=true] .artwork-caption strong { color: var(--brand-ink); }
+@media (hover: hover) {
+  .artwork-picker .schedule-game-tile:hover .artwork-media > img { transform: scale(1.04); }
+  .artwork-picker .schedule-game-tile[data-game^=codm]:hover .artwork-media > img { filter: brightness(.58) saturate(.9); }
+}
+.artwork-picker-compact .artwork-caption { padding: 8px 10px; }
+.artwork-picker-compact .artwork-caption small { display: none; }
+@media (max-width: 600px) {
+  .artwork-picker-compact .schedule-game-tile { aspect-ratio: auto; }
+  .artwork-picker-compact .artwork-caption strong { font-size: 12px; }
+}
+
+/* ---------- Interactive cards: one hover language ---------- */
+.app-shell :is(.stream-game-card, .directory-game:not(.is-empty), .directory-colleges > button, .organizer-tile, .artwork-picker .schedule-game-tile, .fairplay-report-card) {
+  transition: transform var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease), border-color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
+}
+@media (hover: hover) {
+  .app-shell :is(.stream-game-card, .directory-game:not(.is-empty), .directory-colleges > button, .organizer-tile, .artwork-picker .schedule-game-tile, .fairplay-report-card):hover {
+    transform: translateY(-2px); box-shadow: var(--shadow-2); border-color: var(--border-strong);
+  }
+}
+.app-shell :is(.stream-game-card, .directory-game:not(.is-empty), .directory-colleges > button, .organizer-tile, .artwork-picker .schedule-game-tile):active { transform: translateY(0) scale(.99); }
+
+/* College cards: logo row, name, then the counts pinned to the bottom so every card lines up. */
+.app-shell .directory-colleges > button { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; height: 100%; text-align: left; }
+.app-shell .directory-colleges > button > strong { min-height: 2.6em; }
+.app-shell .directory-colleges > button > small:first-of-type { margin-top: auto; }
+
+/* ---------- Brackets ---------- */
+.viewer-bracket-footnote { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.viewer-bracket-footnote i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+/* ---------- Standings: percentage and bar on one line ---------- */
+.published-standings td:last-child { white-space: nowrap; }
+.published-standings .standings-percent { display: inline-block; min-width: 3.5ch; vertical-align: middle; }
+.published-standings .standings-record-bar {
+  display: inline-block; vertical-align: middle; width: 72px; height: 6px; margin-left: 10px; border-radius: 999px; overflow: hidden; background: var(--surface-elevated);
+}
+.published-standings .standings-record-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
+
+/* ---------- Fair play ---------- */
+.fairplay-report-start { display: flex; flex-direction: column; gap: 16px; }
+.app-shell .fairplay-game-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.app-shell .fairplay-game-grid .directory-game > img { aspect-ratio: 16 / 9; height: auto; }
+.app-shell .fairplay-game-grid .directory-game > div { padding: 12px 14px; }
+.app-shell .fairplay-report-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 240px)); justify-content: start; gap: 12px; margin: 16px 0; }
+.app-shell .fairplay-report-filters label { align-items: stretch; text-align: left; }
+
+/* ---------- Support: FAQ as a real accordion ---------- */
+.app-shell .faq-item { padding: 0; border-bottom: 1px solid var(--border); }
+.app-shell .faq-item:last-child { border-bottom: 0; }
+.app-shell .faq-item summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 12px 4px;
+  list-style: none; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--text-primary); border-radius: var(--radius-sm);
+}
+.app-shell .faq-item summary::-webkit-details-marker { display: none; }
+.app-shell .faq-item summary::after {
+  content: ""; flex: none; width: 10px; height: 10px; margin-right: 6px; border-right: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted);
+  transform: rotate(45deg) translateY(-3px); transition: transform var(--dur-2) var(--ease);
+}
+.app-shell .faq-item[open] summary::after { transform: rotate(225deg) translateY(-3px); border-color: var(--brand-ink); }
+.app-shell .faq-item summary:hover { color: var(--brand-ink); }
+.app-shell .faq-item p { margin: 0 4px 16px; max-width: 72ch; font-size: 14px; line-height: 1.6; }
+.app-shell .faq-item[open] p { animation: ah-rise var(--dur-2) var(--ease) both; }
+
+/* ---------- Admin overview rows: art | text | chevron, meta wraps under the text on phones ---------- */
+.app-shell .organizer-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px; padding: 10px 12px; }
+.app-shell .organizer-row > :is(.organizer-game-art, .match-center-row-icon) { grid-row: span 2; }
+.app-shell .organizer-row-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+@media (max-width: 767px) {
+  .app-shell .organizer-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .app-shell .organizer-row-meta { grid-column: 2; grid-row: 2; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 0; text-align: left; }
+  .app-shell .organizer-row > svg:last-child { grid-column: 3; grid-row: 1 / span 2; }
+  .app-shell .organizer-row-label { grid-column: 2; grid-row: 1; }
+}
+
+/* ---------- Users: the table becomes labelled cards on phones (no sideways scrolling) ---------- */
+.user-row-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.user-row-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+@media (max-width: 767px) {
+  .app-shell .users-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .app-shell .users-table, .app-shell .users-table tbody, .app-shell .users-table tr, .app-shell .users-table td { display: block; width: 100%; }
+  .app-shell .users-table tr { padding: 12px 0; }
+  .app-shell .users-table td { padding: 6px 16px; text-align: left; }
+  .app-shell .users-table td[data-label] { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .app-shell .users-table td[data-label]::before { content: attr(data-label); color: var(--text-muted); font-size: 12px; font-weight: 600; }
+  .user-row-actions { align-items: stretch; padding-top: 4px; }
+  .user-row-buttons { justify-content: flex-start; }
+}
+
+/* ---------- Match stats: timeline form on a grid ---------- */
+.app-shell .highlights-editor { display: flex; flex-direction: column; gap: 16px; }
+.app-shell .highlights-editor-add { display: grid; grid-template-columns: minmax(110px, 160px) repeat(2, minmax(0, 1fr)); gap: 12px 16px; align-items: end; }
+.app-shell .highlights-editor-add > label { align-items: stretch; text-align: left; }
+.app-shell .highlights-editor-add .span-all { grid-column: 1 / -1; }
+.app-shell .highlights-editor ul { display: flex; flex-direction: column; gap: 8px; }
+.app-shell .highlights-editor li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-soft); }
+.app-shell .highlights-editor li time { font-variant-numeric: tabular-nums; color: var(--brand-ink); font-weight: 600; }
+.app-shell .highlights-editor li p { flex: 1; min-width: 0; }
+@media (max-width: 640px) { .app-shell .highlights-editor-add { grid-template-columns: 1fr; } }
+
+/* ---------- Match monitor ---------- */
+.monitor-more { align-self: center; margin-top: 12px; }
+.monitor-alerts .monitor-more { margin-top: 8px; }
+
+/* ---------- Match center: the carousel stays inside its column ---------- */
+.featured { overflow: hidden; overflow: clip; isolation: isolate; padding-block: 4px; }
+
+/* ---------- Loading: a skeleton of the page instead of a bare spinner box ---------- */
+.app-shell .tab-loading {
+  min-height: 0; display: grid; gap: 16px; padding: 0; border: 0; background: none; justify-content: stretch; align-items: start;
+}
+.tab-loading-text { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
+.skeleton-block { display: block; border-radius: var(--radius); background: linear-gradient(90deg, var(--surface) 0%, var(--surface-elevated) 50%, var(--surface) 100%); background-size: 200% 100%; animation: ah-shimmer 1.3s linear infinite; }
+.skeleton-title { width: min(320px, 70%); height: 36px; border-radius: var(--radius-sm); }
+.skeleton-line { width: min(520px, 90%); height: 14px; border-radius: 6px; }
+.skeleton-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.skeleton-tile { height: 96px; }
+.skeleton-panel { height: 220px; }
+@keyframes ah-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* ---------- Arrival motion: page sections rise in, staggered ---------- */
+@keyframes ah-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.shell-main:not(.is-full) .shell-page > * > :is(header, section, div, form, nav, aside, p):not(.tab-loading, [role=dialog], dialog) {
+  animation: ah-rise 240ms var(--ease) both;
+}
+.shell-main:not(.is-full) .shell-page > * > :nth-child(2) { animation-delay: 40ms; }
+.shell-main:not(.is-full) .shell-page > * > :nth-child(3) { animation-delay: 80ms; }
+.shell-main:not(.is-full) .shell-page > * > :nth-child(4) { animation-delay: 120ms; }
+.shell-main:not(.is-full) .shell-page > * > :nth-child(5) { animation-delay: 160ms; }
+.shell-main:not(.is-full) .shell-page > * > :nth-child(n+6) { animation-delay: 200ms; }
+/* Grid children (tiles, cards) follow their section in. */
+.shell-main:not(.is-full) :is(.feature-summary, .organizer-summary, .artwork-picker, .viewer-bracket-grid, .directory-colleges, .watch-grid, .fairplay-game-grid) > * {
+  animation: ah-rise 260ms var(--ease) both;
+}
+.shell-main:not(.is-full) :is(.feature-summary, .organizer-summary, .artwork-picker, .viewer-bracket-grid, .directory-colleges, .watch-grid, .fairplay-game-grid) > :nth-child(2) { animation-delay: 50ms; }
+.shell-main:not(.is-full) :is(.feature-summary, .organizer-summary, .artwork-picker, .viewer-bracket-grid, .directory-colleges, .watch-grid, .fairplay-game-grid) > :nth-child(3) { animation-delay: 100ms; }
+.shell-main:not(.is-full) :is(.feature-summary, .organizer-summary, .artwork-picker, .viewer-bracket-grid, .directory-colleges, .watch-grid, .fairplay-game-grid) > :nth-child(4) { animation-delay: 150ms; }
+.shell-main:not(.is-full) :is(.feature-summary, .organizer-summary, .artwork-picker, .viewer-bracket-grid, .directory-colleges, .watch-grid, .fairplay-game-grid) > :nth-child(n+5) { animation-delay: 200ms; }
+
+/* Everything above is decoration: reduced motion (device or the in-app setting) turns it off. */
+@media (prefers-reduced-motion: reduce) {
+  .shell-page *, .skeleton-block, .faq-item p { animation: none !important; }
+  .app-shell :is(.stream-game-card, .directory-game, .directory-colleges > button, .organizer-tile, .artwork-picker .schedule-game-tile, .fairplay-report-card):hover { transform: none; }
+}
+html[data-motion=reduced] :is(.shell-page *, .skeleton-block) { animation: none !important; }
+html[data-motion=reduced] .app-shell :is(.stream-game-card, .directory-game, .directory-colleges > button, .organizer-tile, .artwork-picker .schedule-game-tile, .fairplay-report-card):hover { transform: none; }
+
+/* Small spacing restorations for the shared rules above. */
+.app-shell .broadcast-segments { margin: 12px 0; }
+.app-shell .arena-panel:has(> .faq-item) { padding: 4px 20px; }
+
+/* Bracket page: live call-out and the tournament switcher in the toolbar. */
+.live-callout {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px;
+  border: 1px solid var(--danger-border); border-left: 4px solid var(--live); border-radius: var(--radius); background: var(--surface);
+}
+.live-callout-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--live); animation: shell-live 1.8s var(--ease) infinite; }
+.live-callout-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
+.live-callout-text > span { font-size: 12px; font-weight: 700; color: var(--danger); }
+.live-callout-text strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.live-callout-text small { font-size: 12px; color: var(--text-muted); }
+.app-shell .viewer-bracket-switch { flex-direction: row; align-items: center; gap: 10px; min-width: 0; max-width: 100%; white-space: nowrap; }
+.app-shell .viewer-bracket-switch select { width: min(360px, 60vw); min-height: 40px; }
+@media (max-width: 640px) {
+  .app-shell .viewer-bracket-switch { flex-direction: column; align-items: stretch; width: 100%; }
+  .app-shell .viewer-bracket-switch select { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .live-callout-dot { animation: none; } }
+
+/* Fair play: staff case summary (a reading aid, never a decision). */
+.case-summary { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-soft); }
+.case-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.case-summary-head h3 { font-size: 15px; }
+.case-summary-source { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+.case-summary-text { white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--text-primary); }
+
+/* ---------- Two-way form choice (collector 3.2) ----------
+ * A required radio pair inside a form, such as an iPhone inspection indicator: "Not present" / "Found".
+ * Not a view tab (nothing on the page switches) and not a filter chip. "Found" is styled as danger when chosen. */
+.app-shell .ah-choice { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.app-shell .ah-choice > label {
+  display: inline-flex; flex-direction: row; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
+  border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface);
+  color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.app-shell .ah-choice > label:hover { color: var(--text-primary); background: var(--surface-hover); }
+.app-shell .ah-choice > label:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+.app-shell .ah-choice > label.is-active { border-color: var(--brand-border); background: var(--brand-soft); color: var(--text-primary); }
+.app-shell .ah-choice > label.is-active:has(input[value=found]) { border-color: var(--danger-border); background: var(--danger-soft); }
+/* .module-form styles labels as columns and inputs as full-width text boxes; undo both for the radio pair. */
+.app-shell .ah-choice > label { flex-direction: row; }
+.app-shell .ah-choice input[type=radio] { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; border: 0; background: none; accent-color: var(--brand); }
+.app-shell .ios-indicators { display: grid; gap: 14px; margin: 0; padding: 14px; border: 1px solid var(--border); border-radius: 14px; }
+.app-shell .ios-indicators legend { padding: 0 6px; font-weight: 700; }
+.app-shell .ios-indicator { display: grid; gap: 8px; }
+.app-shell .ios-indicator p { margin: 0; }
+@media (max-width: 480px) {
+  .app-shell .ah-choice > label { padding: 0 11px; gap: 6px; }
+  .app-shell .ios-indicators { padding: 12px 10px; }
+}

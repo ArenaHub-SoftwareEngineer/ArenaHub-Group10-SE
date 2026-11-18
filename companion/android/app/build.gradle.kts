@@ -6,17 +6,25 @@ plugins {
 android {
     namespace = "ph.edu.wmsu.arenahub.companion"
     compileSdk = 35
+    buildFeatures { buildConfig = true }
 
     defaultConfig {
         applicationId = "ph.edu.wmsu.arenahub.companion"
         // Android 10+: needed for the screen-recording service type and app-op checks used here.
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "3.2.0"
+        // Public builds require TLS. A separate, explicit LAN-test build may permit local HTTP.
+        val allowLan = providers.gradleProperty("allowLanHttp").orNull == "true"
+        manifestPlaceholders["allowLanHttp"] = allowLan.toString()
+        buildConfigField("boolean", "ALLOW_LAN_HTTP", allowLan.toString())
     }
 
     buildTypes {
+        debug {
+            isDebuggable = false
+        }
         release {
             isMinifyEnabled = false
         }
@@ -28,5 +36,8 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
-// No third-party libraries: the platform SDK, org.json and HttpURLConnection cover everything.
-dependencies {}
+// Runtime uses the platform SDK. JVM tests use a real JSON implementation instead of SDK stubs.
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
+}

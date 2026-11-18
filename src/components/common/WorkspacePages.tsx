@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
-import { CalendarDays, HelpCircle, ArrowUpRight } from '../ui/Icons';
-import { Match } from '../../lib/types';
-import { matchLabel } from '../../lib/integrityChecks';
+import React from 'react';
+import { ArrowUpRight } from '../ui/Icons';
+import { PageHeading } from '../ui/PageHeading';
 import { PreferencesPage } from './PreferencesPage';
 export { PreferencesPage };
 
 export function SupportPage({ onNavigate, inDialog = false }: { onNavigate: (tab: string) => void; inDialog?: boolean }) {
-  return <div className="module-page">{!inDialog && <header className="module-header"><span className="cute-icon mint"><HelpCircle /></span><div><h1>A little help for your next play.</h1><p>Find your way around ArenaHub.</p></div></header>}<div className="arena-panel">{[
+  return <div className="module-page">{!inDialog && <PageHeading title="Support" description="Find answers about matches, accounts, and fair play." />}<div className="arena-panel">{[
     ['Where do I find my next match?', 'Open Schedule to see the scheduled date, time, teams, and round. Your tournament organizer controls the official schedule.'],
     ['How do I report a match concern?', 'Open Fair play, choose Submit evidence, and include the match, a replay timestamp, and a viewable evidence link. A verified account is required.'],
-    ['Does ArenaHub detect in-game cheats?', 'ArenaHub checks registration records and provides a private evidence review process. It does not inspect devices or detect game modifications. Game publishers provide in-game anti-cheat.'],
+    ['Does ArenaHub detect in-game cheats?', 'Partly. At organized matches, staff can pair a player’s phone or PC with Match monitor, which flags known cheating and modding tools, rooted phones and unusual device settings, and can record the screen. A flag is a reason for a referee to look, not proof: a private cheat that beats the game’s own anti-cheat cannot be detected from outside. Referees make every decision, and players can send evidence through Fair play.'],
     ['Why am I seeing sample matches?', 'The sample arena demonstrates the experience. Tournament cards and sample records are not a claim that a real event is currently live. Published organizer brackets are listed separately.'],
     ['Who can access the organizer console?', 'Access requires a trusted account role assigned by the project administrator. Choosing a school or entering an admin-looking email never grants organizer access.'],
     ['The stream is unavailable. What can I do?', 'Try the embedded player’s controls or check back later. Your tournament organizer must attach a working stream. For registration or schedule corrections, contact your school’s esports committee.'],

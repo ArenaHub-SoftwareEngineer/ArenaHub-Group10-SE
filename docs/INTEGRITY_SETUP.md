@@ -1,137 +1,161 @@
-# Match monitor: event setup (LAN mode)
+# Match monitor: hosting and verification
 
-This runbook is for tournament staff running ArenaHub's Match monitor from one Windows laptop at an on-campus event. It costs nothing to run: Firebase stays on the free Spark plan, and recordings stay on the laptop.
+Updated 17 November 2026 for the confirmed public website/API deployment. This runbook describes implemented behavior, not proof that production is configured or that every cheat can be detected.
 
-## What it does, and what it cannot do
+## Required pre-match scans (3.1)
 
-ArenaHub cannot see inside Mobile Legends, CODM or Dota 2. iOS blocks it completely. On Android, reading another game's memory needs root, and the game's own anti-cheat would ban the player. On PC, touching Dota 2's memory risks a Valve Anti-Cheat (VAC) ban. So the monitor never does any of that.
+The primary flow is now **Anti-cheat**, not filing a manual cheating report. In the player workspace, Anti-cheat opens the required companion scan; disputes and appeals are secondary. In the staff workspace, Anti-cheat lists every player in a published match and whether admission is locked.
 
-It does three things instead:
+1. Publish complete rosters first. For CODM BR, captains can now register their squads through My team; staff approve/lock them, and all squad rosters are hydrated for each lobby game. A lobby scan covers every squad, not just two teams.
+2. In **Anti-cheat > Before players join**, choose the match. Press **Scan player** for each roster slot, then create that player's code. Roster selection uses stable team/player IDs, so duplicate IGNs do not clear the wrong slot. Screenshots/recording are off by default for this flow.
+3. Each player downloads the verified 3.1 Windows agent or Android companion and consents locally. It scans automatically. Restricted tools show **Action required**; close/remove them and let the app scan again. Old findings remain in history but do not permanently block a corrected current scan.
+4. Wait until every roster player shows **Scan passed**. The API checks current observations, essential inspection completion, the session challenge, latest policy and the published roster. Pairing, a stale connection, an old companion, a missing game trust reference or an iPhone check-in cannot pass. Required app scans must stay current within 45 seconds.
+5. The ordinary **Go live** / resume / live-stream connection actions call the admission API and wait for a confirmed cloud save. CODM BR transitions to live use the same check. A missing or blocked scan prevents the official live transition. Changing a roster invalidates prior clearance, including a replacement that reuses the same roster slot ID.
+6. Keep every companion open during the match. Disconnects lose readiness. Use a supported organizer device if a player declines on their own device or only has an iPhone. This is an admission requirement, not an automatic cheating ban.
 
-1. It checks the device around the game:
-   - Is the game app the official build?
-   - Are known cheat tools installed?
-   - Is the phone rooted?
-   - Are screen-control or overlay apps on?
-   - Is debugging enabled?
-   - On PC, are blocklisted programs running?
-2. It records evidence: screen recordings from phones, a screenshot every 20 seconds from PCs, and Dota 2's official live data.
-3. It scores the risk from 0 to 100 and shows a referee why. The score only says how soon a referee should look. A referee decides, through the normal Fair play case flow.
+The basic Android gate requires visible installed packages and trusted regional game certificates. Overlay inspection is best effort and its failure is shown as a warning; it is not mislabeled as a complete overlay scan. Windows requires completed process/registered-software checks and completed executable hash checks when staff configured hashes. Low-severity installed dual-use tools are not automatically treated as cheating.
 
-| Device | Tool | Status |
-|---|---|---|
-| Android phone (MLBB, CODM) | ArenaHub Companion app | Run `npm run build:companion`. Players download it from the laptop through the QR code |
-| Windows PC (Dota 2) | `arenahub-agent.exe` | Run `npm run build:agent`. Players download it from the laptop through the QR code |
-| iPhone (MLBB, CODM) | Check-in page on the laptop | Nothing to install and no device checks (Apple does not allow any app to check other apps). The player agrees or declines; a referee records the match from the observer slot |
+This gate governs ArenaHub's official match controls. ArenaHub cannot stop someone launching MLBB, CODM or Dota independently, and privileged staff with direct database administration can bypass application workflows. Companion scan metadata binds the current session/policy but is not hardware attestation; a modified client can still lie.
 
-**Every player scans the same kind of QR code with their phone camera.** It opens `join.html` on the laptop, which shows the right next step for the device the code was made for: download or open the Android app, check in an iPhone, or download and run the PC agent. Every version has a **Decline** button.
+### API/service choice
 
-**Record from the observer slot.** For MLBB and CODM, a referee joins the custom room as an observer (spectator) on a laptop or spare phone and records the whole match with OBS or the phone's screen recorder. This covers iPhone players, puts no load on any player's phone, and shows every player at once.
+The implemented scanner uses local Windows/Android observations and ArenaHub's authenticated admission API. [Epic's anti-cheat SDK](https://dev.epicgames.com/docs/epic-online-services/trust-and-safety/anti-cheat-interfaces/anti-cheat-interfaces) expects integration with the protected game and does not support Android/iOS anti-cheat clients. It cannot simply be wrapped around these publishers' games. [Google Play Integrity](https://developer.android.com/google/play/integrity/verdicts) can add genuine-app/device and Play Protect risk checks after project/app provisioning, but those verdicts do not specifically identify every MLBB/CODM cheat. [VirusTotal](https://docs.virustotal.com/reference/intro/getting-started) provides file reputation, with API-use restrictions; it is not a universal cheat detector. No external service is falsely shown as connected, and player binaries/inventories are not uploaded to a new provider.
 
-**Dota 2 players install the PC agent, not a phone app.** The cheats run on the PC, so that is where the checks run. For every Dota 2 match, a referee should also join the lobby as an observer and write down the match ID, so the replay can be reviewed from each player's view.
+## Choose the runtime
 
-## One-time preparation
+Use a persistent Node 24 process with a private persistent volume. `npm start` runs the full Express application, including `/api/integrity`, the built website and `join.html`. Keep `data/` outside the public document root. Back it up securely, restrict its filesystem permissions to the service account, and monitor free space. SQLite, pending uploads and playback tickets currently assume **one active API process**. Ephemeral functions and multiple replicas are not supported for this monitor.
 
-1. **Build the PC agent.** Run `npm run build:agent`. It writes `dist-agent/arenahub-agent.exe` (about 90 MB, with no install needed). Copy it to a USB drive for player PCs. Windows SmartScreen may warn that it is unsigned. Choose "More info", then "Run anyway".
-2. **Build the Android app.** Run `npm run build:companion` (details in `companion/android/README.md`). It writes `dist-agent/arenahub-companion.apk`, which the laptop serves to players.
-3. **Allow phones to reach the laptop.** Open PowerShell as Administrator once and run:
-   ```powershell
-   New-NetFirewallRule -DisplayName "ArenaHub LAN 3210" -Direction Inbound -Protocol TCP -LocalPort 3210 -Action Allow -Profile Private
-   ```
-   Then, in Windows Settings > Network, mark the event network as **Private**. The rule never opens the port on public networks.
-4. **Review the blocklists.** Open Admin > Match monitor > Blocklists and thresholds. The starter lists are a guide only, because cheat tools rename themselves often. A trailing `*` matches the start of a name.
-5. **Trust the official game builds.** Do this before the first match, and again after each big game update:
-   1. Install MLBB and CODM from the Play Store on a phone that staff control.
-   2. Pair that phone like a player's phone.
-   3. Open its session. The signal "Game signature not on the trusted list" shows a **Trust** button. Press it.
+The website can use the same HTTPS origin as the API, or Firebase Hosting with `VITE_API_BASE_URL=https://api.example.org` in its build and `CORS_ORIGINS=https://site.example.org` on the API host. Both layouts now support the staff monitor, including settings and playback. Serve the complete `dist/` on the persistent API host too, so pairing links open its own join page.
 
-   From then on, any phone whose game is signed differently is flagged as critical. That is what a modified game app looks like.
+Configure the public API host:
 
-## Event day
+```text
+HOST=0.0.0.0
+PORT=<host-assigned port>
+INTEGRITY_HOSTED_URL=https://api.example.org
+INTEGRITY_DATA_DIR=<private persistent volume>/integrity
+INTEGRITY_DOWNLOAD_DIR=<release directory>/dist-agent
+CORS_ORIGINS=https://site.example.org
+```
 
-1. **Choose how players reach the laptop.**
-   - **Online mode (recommended for Palaro-style events).** Players use their own Wi-Fi or mobile data, anywhere. The laptop only needs internet. From the project folder:
-     ```powershell
-     npm run build
-     npm run online
-     ```
-     The first run downloads `cloudflared`, Cloudflare's free tunnel program, into `%LOCALAPPDATA%\ArenaHubBuild`. It prints an address like `https://quiet-river-1234.trycloudflare.com`. No account, domain or payment is needed. Things to know:
-     - The address **changes every time** `npm run online` starts, so make new QR codes after a restart. Sessions already running stop reporting when the address changes.
-     - Keep the laptop awake, plugged in and online for the whole event. If the laptop sleeps, every device shows "Cannot reach the referee laptop".
-     - Through the online address, **only the player pages work**: the join page, the device API, the two downloads and Dota 2 live data. The staff page, the staff API, recordings and the rest of ArenaHub answer "not found", so a stranger with the link cannot see anything. Staff keep using `http://localhost:3210` on the laptop.
-     - Rate limits use each player's real address (Cloudflare passes it on), so many players joining together do not block each other.
-     - Recording on mobile data: the Android app switches to 480p at about 4.5 MB a minute (11 MB on Wi-Fi). A 20-minute match is about 90 MB of the player's data. Turn recording off for matches where that is too much; device checks use almost no data.
-     - Quick tunnels are Cloudflare's free test service, with no uptime guarantee. For a fixed address that never changes, a named Cloudflare tunnel needs a domain (about PHP 600 a year).
-   - **LAN mode (same Wi-Fi only).** Connect the laptop and every player device to the same network. Many campus Wi-Fi networks block devices from reaching each other ("client isolation"); then use Windows **Mobile hotspot** on the laptop. Start with `npm run build`, then `$env:HOST = "0.0.0.0"; npm start`. You can combine both: `$env:HOST = "0.0.0.0"; npm run online`.
-2. **Check the address.** On the Match monitor page, the pairing form says **Online: players can join from any Wi-Fi or mobile data** when the online address is selected.
-3. On the laptop itself, open `http://localhost:3210`. Sign in with a staff account and go to **Admin > Match monitor**. Use the laptop for the staff page, because Google sign-in only works on `localhost`, not on the Wi-Fi address.
-4. **Pair each player.** For each player:
-   1. Choose the match, the game, the device (Android, iPhone or PC), the team and the player.
-   2. Choose whether to **record the screen** (Android) or **take screenshots** (PC). Turn it off for casual matches to keep phones light; device checks still run.
-   3. Check the address players will use. It fills itself in: the online address in online mode, for example `https://quiet-river-1234.trycloudflare.com`, or a Wi-Fi address such as `http://192.168.137.1:3210` in LAN mode.
-   4. Press **Create pairing code**. Each code works once and expires after 5 minutes.
+Set Firebase project configuration and the server service account through the host's secret manager; see ENV_CHECKLIST.md. Terminate TLS at a trusted reverse proxy, preserve the original Host header, and sanitize forwarded-client headers. The app trusts loopback proxies only; verify rate limiting on the actual ingress. Apply edge connection/body/concurrency limits and a global storage quota. Per-session recording limits alone are not a disk-capacity guarantee. Configure Firebase authorized sign-in domains and deploy the tested Firestore/Storage rules separately.
 
-   The player scans the QR code with their phone camera:
-   - **Android:** the page offers **Download the app** the first time (the phone may ask to allow installing apps from the browser), then **Open ArenaHub Companion**. In the app the player ticks the box and presses **Agree and start monitoring**, or presses **Decline monitoring**. If recording is on, Android asks to record the screen; refusing is allowed and is reported to you. A "monitoring is ON" notification stays visible for the whole match. The app re-checks the installed apps once a minute (or immediately when an app is installed or removed) so it stays light.
-   - **iPhone:** the page shows what checking in means and two buttons: **Agree and check in** or **Decline**. Nothing is installed. If you need the player's own recording, they can upload it from the same page.
-   - **PC:** the page offers the agent download and the exact command to run, for example `arenahub-agent.exe --server http://192.168.137.1:3210 --code ABCD2345`. The player types YES to agree or NO to decline. For Dota 2, the player must **restart Dota 2** after the agent starts.
-5. **During the match**, the session list refreshes every 5 seconds:
-   - A red **Needs your attention** box appears when a player declines, refuses screen recording, or their device stops reporting. The browser tab shows the count. Press **Turn on desktop alerts** once to get a Windows notification even when the page is in the background.
-   - "Not reporting" means the device went quiet for more than 45 seconds.
-   - Coloured edges show the level: watch (blue), review (amber), urgent (red).
-6. **After the match:**
-   - Press **End monitoring** on each session, or let the window close by itself. Devices stop on their next report.
-   - For Dota 2, press **Check stats on OpenDota**. This only works once OpenDota has the match, and only if the player has "Expose Public Match Data" turned on in Dota 2 settings.
-   - For a flagged session, review the recordings. If it needs a case, press **Copy case summary**, file it in **Fair play** with the clip, then tick **Keep this evidence past 30 days** and save the review.
+Do not set `INTEGRITY_PUBLIC_URL` in hosted mode. That variable belongs to the alternative **player-only event-laptop tunnel**, where staff APIs are deliberately hidden from tunnel visitors. Conflicting hosted/tunnel settings fail at startup.
 
-## Reading the match arena
+`api/index.ts` remains an AI/video-only serverless entry: it intentionally disables the disk-backed monitor. Hosting only that entry will not provide anti-cheat sessions.
 
-The **Match arena** on the Match monitor page shows one match in 3D. Each player is a pillar, grouped by team.
+## Build and verify downloads
 
-- Pillar height is the risk score from 0 to 100. A flat tile means nothing has been reported.
-- The coloured layers show where the score comes from: game build, cheat tools, device state, connection and recording, and behaviour.
-- Drag the view or use the slider to turn it. Select a player's label to open their session.
+```powershell
+npm.cmd run build
+npm.cmd run build:agent
+npm.cmd run build:companion
+npm.cmd run test:collector
+```
 
-Set the **Team** when you pair each player, or the arena cannot group them.
+The Windows executable and Android APK appear in `dist-agent/`. Publish reviewed SHA-256 download fingerprints through a trusted staff channel. These are test artifacts: the executable is unsigned and the APK uses a development signing key, although debugging is disabled. Sign release artifacts with organization-controlled keys before broad distribution. Never teach players to ignore security warnings for an unverified download.
 
-## Reviewing behaviour: the cheat catalogue
+The standard Android build requires HTTPS. For an isolated, staff-controlled LAN test only, set `ARENAHUB_ALLOW_HTTP_LAN=1` before building the companion. That separate build permits HTTP only to localhost/private IPv4 addresses. Remove the variable and rebuild for public distribution. Cleartext LAN traffic can expose pairing credentials and recordings; prefer HTTPS even at the venue.
 
-Device checks catch known tools. A private cheat that hides from them still shows in how the player plays. Each session lists the known cheat types for its game (for example map hack, wall hack, aimbot, drone view, auto-cast scripts), which layer can catch each one, and what to look for in the recording.
+## Configure detection policy
 
-When you watch a recording and see one of those signs:
+Open **Admin > Match monitor > Blocklists and thresholds**. Review every starter entry against tournament rules. Editors, debuggers, virtual devices, accessibility services and macro tools have legitimate uses. Their presence alone does not establish cheating.
 
-1. Open the session and find the cheat type under **What to look for**.
-2. Under **I saw signs of**, choose the type and how strong the evidence is.
-3. Write what you saw and the time in the recording, then press **Record observation**.
+- Package/process/registered-software entries use `pattern | label | severity`. Only a trailing `*` is supported; otherwise names match exactly, ignoring case.
+- **PC installed software** checks registered display names in the current-user and machine Uninstall registry locations, including the 32-bit view. It can find listed registered software even when stopped. It does not discover every portable program or every Windows Store app.
+- **PC executable fingerprints** use `SHA-256 | label | severity`. The agent hashes accessible running executables and loaded Dota libraries when this list is configured. Renaming identical bytes does not evade a fingerprint; changing the bytes does. Unreadable files, time/size limits and failed observations are reported as incomplete.
+- **Android certificate fingerprints** match configured signer hashes across visible installed apps. Repackaging under a different key can evade a signer list. A shared certificate may also identify legitimate apps, so verify the provenance of each entry.
+- Game trust lists are initially empty. Establish the correct regional publisher certificate using an independently verified, staff-controlled Android device and official distribution. Do not trust an unknown player's self-report as the reference. Legitimate publisher key rotation requires review.
 
-The observation counts in the Behaviour category and appears in the case summary. It is still one referee's reading of the evidence. Get a second referee to watch the same moment before any penalty.
+No current cheat binary hashes are invented or bundled. Research does not supply a reliable universal signature database. Record each real indicator's source, sample version, date, false-positive assessment and reviewer before using it in a tournament policy. Do not install live cheats on a gaming account or staff workstation to obtain samples.
 
-## Storage and retention
+## Pair and monitor
 
-- Data lives in `data/` in the project folder: `integrity.db` plus `recordings/<session>/`. It is git-ignored and never uploaded.
-- A phone records at about 2.5 Mbit/s, which is roughly **1.1 GB per player per hour**. For example, ten phones over a three-hour event need about 33 GB. Check free disk space before the event.
-- Ended sessions older than 30 days are deleted automatically, except sessions a referee marked to keep.
+1. Select a match, game, player and platform. Choose recording on/off explicitly. The suggested address is the configured public API origin; verify it before creating a QR code.
+2. A pairing code expires after five minutes and can be claimed once. Keep it private to the intended player. Re-pair all players with the 3.1 companions before required admission: legacy reports do not contain the current scan metadata. Dota sessions also use a separate telemetry-only GSI token.
+3. Windows players download the verified agent, check its server address, then type YES to consent or NO to decline. Keep the window open. Restart Dota after pairing to load the GSI configuration. The agent does not read game memory or inject code; publisher compatibility still needs event validation.
+4. Android players install the verified companion, review consent and agree or decline. Screen capture requires a separate OS prompt. The foreground notification stays visible. Package inventories refresh at most once a minute and on package changes.
+5. iPhone players use Safari to check in or decline. Nothing is installed or inspected. When recording is enabled for the session, they can upload their own recording if requested. A real iPhone test remains necessary.
+6. Staff see findings, their evidence, and **Detection coverage** in each session. GSI and media do not refresh scanner liveness. A scanner silent for more than 45 seconds becomes **Not reporting**. A zero score means no listed indicators were reported; it is not a clean-device certificate.
+7. Review recordings/replays from player perspective. Observer vision, normal game mechanics, latency and skill can explain apparent anomalies. Neither an AI frame review nor an unusual statistic detects installed cheats.
+8. End the session after the match. Tokens are revoked when it ends/expires. If a case needs evidence, record the review note and enable the explicit evidence hold. Otherwise ended sessions older than 30 days are removed by cleanup. Held evidence needs a staff-managed release/deletion process.
 
-## Known limits
+## Test devices and release limits
 
-- Every check runs on the player's own device, so a skilled attacker with a modified companion app could send false reports. The monitor raises the cost of cheating and creates evidence. It does not replace referees watching in person.
-- Accessibility and overlay apps include normal apps (password managers, chat heads, TalkBack). They are "medium" or "low" for that reason. Read the evidence before acting.
-- Stat outliers mean a player had an unusually good game. They are context only.
-- A cheat that hides from the game publisher's own anti-cheat will usually hide from the device checks too. For those, the recording and the referee checklist are the only evidence, and they show signs, not proof.
-- No app can open MLBB's or CODM's game folder on Android 11 or newer: Android locks each app's data so only that app can read it. The companion instead flags what file-injector hacks need to get in (root, Shizuku, virtual-phone apps, modified game builds, games installed from APK sites).
-- iPhone sessions have no device checks at all. The observer recording and the referee are the only evidence.
-- The join page and the iPhone check-in were tested in a desktop browser pretending to be a phone, not yet on a real iPhone or Android phone.
-- The Android app compiles and passes Android's lint checks, but has not been run on a real phone yet. Test it on two or three phones with different Android versions before the first event.
-- Remote (off-campus) matches need a tunnel such as Cloudflare Tunnel, which is not set up yet.
+Windows process hashing and installed-software collection have native local tests using harmless matches. Automated tests also cover API decisions, Android fact validation, consent/decline flows, iPhone upload simulation and desktop/mobile layouts. The Windows registry test reads entries locally, writes no registry keys and uploads no full inventory.
 
-## Troubleshooting
+Android compiles and has static lint coverage; physical Android validation is pending device availability. Test visibility permissions, denial paths, app install/uninstall invalidation, certificate matching, background operation and screen capture on several supported Android versions before using it in an event. iPhone Safari behavior must be verified on your available device. No live MLBB, CODM or Dota cheat was downloaded or executed, and real-game publisher compatibility was not certified.
 
-| Problem | Fix |
-|---|---|
-| The phone shows "Cannot reach ..." | Same network? Firewall rule added? Network set to Private? Try the laptop hotspot. |
-| `localhost:3210` shows a different app | Another project is using the port. Start ArenaHub on a free one: `$env:PORT = "3300"` before `npm start`, and open the firewall for that port. ArenaHub moved off 3000 because FloodSight uses it and its offline cache keeps showing FloodSight at `localhost:3000`. |
-| No address is shown | Start the server with `npm run online` (players anywhere) or with `HOST=0.0.0.0` (same Wi-Fi only). |
-| Players see "Cannot reach the referee laptop" in online mode | The laptop slept, lost internet, or `npm run online` was restarted and the address changed. Make new QR codes. |
-| "That pairing code is wrong, already used or expired" | Create a new code. |
-| Dota 2 live data is empty | The player must restart Dota 2 after pairing. Steam must be installed normally. |
-| Recording stopped | The player stopped screen sharing, or Android ended it. The session shows "Screen recording stopped". Ask the player to pair again. |
+A player controlling their OS can modify the collector or forge its reports. Private/kernel cheats, inactive portable files, hidden or manually mapped modules, external hardware and unknown signatures remain outside reliable detection coverage. For high-stakes matches use staff-controlled devices and independent observers alongside publisher anti-cheat.
+
+See [ANTI_CHEAT_COVERAGE.md](ANTI_CHEAT_COVERAGE.md) for the source-backed threat categories and [SECURITY_REVIEW.md](SECURITY_REVIEW.md) for changes and remaining release conditions.
+
+
+## Using companion 3.1
+
+Update the Windows agent and Android companion together with the API. Windows players can double-click the app and enter the tournament server address and their match scan code, then explicitly consent. Command-line arguments remain supported.
+
+Staff can edit Dota 2 restricted-library names in Anti-cheat settings. Name patterns use the same exact/prefix rules and severity levels as process indicators. Optional PC SHA-256 fingerprints now apply to accessible executables and normally loaded Dota libraries. Keep the companion open after launching Dota. A restricted DLL blocks current readiness, and a library-access failure keeps the scan incomplete while the game runs. Remove the restricted tool and restart the game if its library remains loaded.
+
+Android 3.1 sends the current session/policy stamp independently of cached observations and updates its ongoing notification with scan status. Official regional game certificates remain required for admission. Run `npm run test:companion` for JVM JSON regression tests, Android lint and an APK build. The production APK includes no added runtime libraries from these tests.
+
+
+## Using collector 3.2 (17 November 2026)
+
+Update the Windows agent (3.2.0) and Android companion (3.2.0) together with the API. A 3.1 Windows agent can no longer clear a Dota 2 player: admission now requires the Dota 2 install audit.
+
+**Dota 2 install audit (always on for Dota sessions).** Valve ships `game/bin/win64/dota.signatures` with every Dota 2 build: the SHA-1 of every program file plus `gameinfo.gi`. The agent finds Dota 2 in every Steam library and, read-only:
+
+1. hashes every listed file and reports any that differ or are missing (`client.dll`, `engine2.dll`, `dota2.exe`, `gameinfo.gi` and the rest);
+2. reports DLL, ASI, EXE or SYS files in `game/bin/win64` or `game/dota/bin/win64` that Valve's list does not name. This is the proxy-DLL loader route (a fake `version.dll`, `dxgi.dll` or `winmm.dll` that Dota loads at start);
+3. reports content packs (VPK) Valve does not ship: extra packs in `game/dota` or `game/core`, any pack in a language folder (Valve ships only `gameinfo.gi` there), packs in `dota_lv` outside Valve's dashboard scenes, unknown folders, and search paths added to any `gameinfo.gi`. `dota_addons` (custom games) is not flagged;
+4. reports `-insecure`, `+sv_cheats 1` and `-language <non-Valve name>` in each Steam account's saved launch options and in the running `dota2.exe` command line;
+5. reads Steam's `appmanifest_570.acf` for the build ID and whether an update is pending.
+
+Only relative game paths, flags, the build ID and the SHA-256 of Valve's list leave the PC. The first pass hashes about 600 MB and took 2 to 3 seconds on the test PC; later passes reuse a size/time cache and rehash at least every 10 minutes. On a Steam-verified install of build 26632873 the audit reported no findings.
+
+When a player is blocked for a file finding, ask them to close Dota 2, run **Steam > Dota 2 > Properties > Installed Files > Verify integrity**, remove any listed extra file, folder or launch option, and rescan.
+
+**Optional reference copy of Valve's list.** A cheater could edit both a game file and `dota.signatures` so that they agree. To close that gap, verify Dota 2 on an organizer PC, start the agent once and copy the line it prints (`Dota 2 build ...; Valve file list SHA-256 ...`). The session dialog shows the same value. Paste it into **Fingerprint checks > Dota 2 reference file lists** as `sha256 | Build 26632873 | high`. Add a line for each build in use and update it when Valve patches mid-event, or every player will be blocked until you do.
+
+**Unsigned libraries from user folders.** While Dota 2 runs, the agent checks the Authenticode signature of every library Dota loaded from outside Windows, Program Files and the audited game folder. A library that is not validly signed (typical of injected cheats in Downloads, Temp or AppData) blocks admission with its name, status and SHA-256. Signed overlays such as Steam, Discord and NVIDIA pass. Some small unsigned overlay or hotkey tools will also be flagged; the player closes that program and restarts Dota 2. A cheat installed into Program Files, or one signed with a certificate the player trusted locally, is not covered.
+
+**Cheat-file folder check (off by default).** **Cheat-file folder check on player PCs** in Anti-cheat settings makes the agent ask the player for a second permission. It then looks in Desktop, Downloads, Documents and Temp, including OneDrive-redirected Desktop and Documents, up to four levels deep, with limits of 40,000 entries and 25 seconds. It reports:
+
+- Cheat Engine tables (`.CT`) that target `dota2.exe`, and Cheat Engine trainers named for Dota;
+- AutoHotkey scripts that target `dota2.exe`;
+- executables named like a listed program (portable copies that are not running);
+- files that match a staff SHA-256 fingerprint;
+- folders named like listed installed software.
+
+Only the file name, a folder label and the reason are sent. A player who declines cannot pass the scan, so publish the rule before the event. Turn it on only if your tournament rules and the school's data-privacy guidance allow it.
+
+**Android 3.2.** Adds hooking-framework indicators (Frida, Xposed/LSPosed, Zygisk, Riru, Substrate libraries in the companion's memory map, root-framework mounts, a Frida server on port 27042), cloned or virtual-space detection (an unexpected app data folder, or code loaded from a listed cloner), debuggable system builds and permissive SELinux. Hook and container findings block admission. The starter list adds LSPatch, KernelSU, APatch, Magisk Alpha, Octopus, Mantis, VPhoneGaga and Termux (low severity, shown as a warning). Verify each package name on a test phone before the event. Physical-device testing is still pending.
+
+**iPhone inspection.** The referee form now lists six sideload and jailbreak indicators, each with where to look on the phone: Developer Mode, trusted enterprise or developer apps, sideload or jailbreak apps, the game's App Store page showing Get instead of Open, a duplicate or renamed game, and a VPN or profile the venue did not provide. Each indicator must be marked Not present or Found. Any Found blocks approval, and a revoke records what was found.
+
+
+## Collector 3.3: content-based detection (17 November 2026)
+
+**Tournament rule:** the cheat-file folder check is **on by default** (Kerr's decision, 17 November 2026). Players are still asked for permission, and a player who declines cannot pass the pre-match scan. Staff can switch it off in Anti-cheat settings.
+
+**Why 3.3 exists.** Name lists are easy to evade: renaming `cheatengine-x86_64.exe` to `chrome_updater.exe`, or a `.CT` table to `notes.txt`, hid it from 3.2. Version 3.3 judges files by what they contain:
+
+| Trick | What 3.3 looks at |
+| --- | --- |
+| Renamed listed tool | The internal identity stamped into Windows programs (OriginalFilename, InternalName, ProductName, FileDescription), matched against the process and installed-software lists |
+| Unknown or private cheat | An unsigned program that names `dota2.exe` or the Dota install folder |
+| Injector under any name | An unsigned program with the four DLL-injection functions (OpenProcess, VirtualAllocEx, WriteProcessMemory, CreateRemoteThread or equivalents) |
+| Protected cheat loader | An unsigned program wrapped in VMProtect, Themida or Enigma |
+| Fake extension | Files are recognised by their header bytes, so an `.exe` named `.txt`, `.log`, `.bin` or `.mp4` is still a program |
+| Renamed tables and macros | A Cheat Engine table is an XML document whose root is `CheatTable`; an AutoHotkey or Python macro has line-start directives or imports that name `dota2.exe` |
+| Zipped | ZIP archives are opened in memory (one level, entries up to 32 MB) and each entry is judged the same way |
+| Running under a fake name | The same content rules run on every running program outside Windows, Program Files and the game folder, whether or not the folder check is on |
+
+**Blocking vs. warning.** These block admission: anything that targets Dota 2, a listed tool (renamed or not), a Cheat Engine table, a Dota macro script, a staff fingerprint match, and any unsigned injector or protected program that is running during the match. An unsigned injector or protected program that only sits on disk is a staff warning, because ordinary software has the same traits. The real-PC run found Java's `attach.dll` in a Minecraft runtime this way. A valid Authenticode signature clears the behaviour rules but never clears a listed tool.
+
+**Coverage and limits.** Order: Desktop, Documents (including OneDrive), Downloads, Temp, AppData, the rest of the user profile, then every other fixed drive. Skipped: Windows, Program Files, ProgramData, `steamapps`, `node_modules`, `.git` and package caches. Photos, video and office files are checked last. Limits: 150 seconds, 400,000 entries, 3 GB read, 8 folder levels, 5 seconds per file, 60 seconds for signature checks. The check runs in the background, and admission shows "Folder check running" until the first pass ends; it repeats every 10 minutes. Reaching any limit reports "partial", which is a staff warning and never "clean". A cheat stored in a skipped folder, a password-protected or RAR/7z archive, or an encrypted container is not opened. If it runs, the running-program check still sees it.
+
+**Measured on the development PC** (a heavy developer profile with 388,000 entries): the check finished in 84 seconds and reached the 3 GB read budget. Apart from the harmless test simulators, its only finding was Java's `attach.dll`, reported as a warning. Two false positives found during testing were fixed: sample text inside source code, and installer archives whose entries cannot be signature-checked. A regex that backtracked for minutes on comment-heavy XML was also fixed.
+
+**How it was tested without real cheats.** `tests/fixtures/cheat-sim` holds harmless C programs, built with MinGW gcc during `npm run test:collector`, that copy the traits of cheat software without doing anything: injector imports that are never called, a `dota2.exe` target string, a listed tool's internal identity, a VMProtect section name, and an unsigned Dota-targeting DLL. The test hides them the way cheaters do: renamed, with fake extensions, buried in folders, zipped, disguised as a video, run under system-looking names, and loaded into a process called `dota2.exe`. It also checks that an ordinary unsigned program, a zipped ordinary program, a signed Windows program and an essay that mentions dota2.exe are not flagged. Real cheat downloads were deliberately not used: they are a common malware route, and the test PC has Steam accounts and Dota 2 installed.

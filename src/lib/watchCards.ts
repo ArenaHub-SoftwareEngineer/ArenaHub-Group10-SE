@@ -59,6 +59,7 @@ export function liveRailItem(card: WatchCard) {
     title: card.match.lobby ? `${short(card.bracket.title)} · ${card.match.roundName}` : `${short(card.match.team1?.name)} vs ${short(card.match.team2?.name)}`,
     subtitle: card.state === 'live' ? card.gameLabel : `${card.gameLabel} · starting soon`,
     image: card.image,
+    broadcasting: card.state === 'live',
     score: card.match.lobby ? '' : `${card.match.score.team1Score}–${card.match.score.team2Score}`,
   };
 }

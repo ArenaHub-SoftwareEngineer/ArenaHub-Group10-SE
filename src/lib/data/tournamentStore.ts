@@ -9,7 +9,7 @@ import type { BracketDraft } from '../types';
 import { publicationGameKey } from '../bracketPublication';
 import { notificationRecord } from '../notificationService';
 import {
-  announcementChanges, assertDocSize, contentFingerprint, fromDocs, toRosterDoc, toTournamentDoc,
+  announcementChanges, placementAnnouncementChanges, assertDocSize, contentFingerprint, fromDocs, toRosterDoc, toTournamentDoc,
   type RosterDoc, type TournamentDoc,
 } from './tournamentDocs';
 
@@ -85,6 +85,14 @@ export async function saveTournament(bracket: BracketDraft, expectedRevision: nu
       if (kind === 'schedule') announce(tx, 'schedule', 'Match schedule updated', `${names} · ${match.scheduledDate}, ${match.scheduledTime}`, 'schedule', match.id);
       else if (kind === 'result') announce(tx, 'result', 'Match result published', `${names} · ${match.score.team1Score}–${match.score.team2Score}`, 'schedule', match.id);
       else announce(tx, 'live', 'A match is live', `${names} · ${match.roundName}`, 'current-live', match.id);
+    }
+    for (const { game, kind } of placementAnnouncementChanges(current.placement, next.placement)) {
+      const label = `${next.title} · ${game.label}`;
+      if (kind === 'schedule') announce(tx, kind, 'Lobby schedule updated', `${label} · ${game.scheduledDate || 'Date to be confirmed'}, ${game.scheduledTime || 'Time to be confirmed'}`, 'schedule', game.id);
+      else if (kind === 'result') {
+        const winner = next.placement?.teams.find(team => team.id === game.results.find(result => result.placement === 1)?.teamId);
+        announce(tx, kind, 'Lobby results published', `${label} · ${winner ? `${winner.name} placed first` : `${game.results.length} squads scored`}`, 'schedule', game.id);
+      } else announce(tx, kind, 'A Battle Royale lobby is live', label, 'schedule', game.id);
     }
     return expectedRevision + 1;
   });

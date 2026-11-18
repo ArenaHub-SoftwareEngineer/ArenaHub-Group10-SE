@@ -1,6 +1,7 @@
 import { originAllowed } from './cors.ts';
 import { AuthError, callerVerifier, requireStaff } from './auth.ts';
 import { publishedReader } from './data.ts';
+import { scheduleMatches } from '../src/lib/formats/placement.ts';
 import express from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { REVIEW_GAMES, validateFrameFindings, type ReviewFrame, type ReviewGame } from '../src/lib/videoReview.ts';
@@ -37,7 +38,7 @@ export function createFairPlayRouter(env: Record<string, string | undefined>, de
       res.status(status).json({ error: status === 403 ? (error as Error).message : 'Your organizer access could not be verified. Sign in again.' }); return;
     }
     try {
-      const match = (await published(token)).brackets.flatMap(b => b.matches).find(m => m.id === matchId);
+      const match = (await published(token)).brackets.flatMap(scheduleMatches).find(m => m.id === matchId);
       const validIds = game === 'mlbb' ? ['game-mlbb'] : game === 'dota2' ? ['game-dota2', 'game-dota-2', 'game-dota', 'dota2'] : ['game-codm', 'game-call-of-duty-mobile', 'codm', `game-${game}`, `game-call-of-duty-mobile-${game.slice(5)}`];
       if (!match || !validIds.includes(match.gameId) || (game.startsWith('codm') && match.gameMode && match.gameMode !== game.slice(5))) { res.status(400).json({ error: 'Select a published match for this game and mode.' }); return; }
     } catch { res.status(503).json({ error: 'Published matches could not be checked. Try again.' }); return; }

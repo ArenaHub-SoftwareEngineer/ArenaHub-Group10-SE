@@ -81,7 +81,7 @@ export interface Team {
   isBye?: boolean;
 }
 
-export type TournamentFormat = 'single-elimination' | 'double-elimination' | 'round-robin';
+export type TournamentFormat = 'single-elimination' | 'double-elimination' | 'round-robin' | 'swiss';
 export const MATCH_FORMATS = ['Bo1', 'Bo3', 'Bo5', 'Bo7'] as const;
 export type MatchFormat = typeof MATCH_FORMATS[number];
 
@@ -179,12 +179,14 @@ export interface Match {
   conditionalReset?: boolean;
   inactive?: boolean;
   tournamentFormat?: TournamentFormat;
+  /** Swiss only: how many rounds the event has. Rounds are paired one at a time (lib/formats/swiss.ts). */
+  swissRounds?: number;
   timelineEvents?: MatchTimelineEvent[];
   mvp?: MatchMVP | string;
   statGames?: Record<string, { playerStats: NonNullable<Match['playerStats']>; notes: string }>;
   playerStats?: Record<string, { kills: number; deaths: number; assists: number; [key: string]: any }>;
   /** Present on a Battle Royale lobby game shown in schedules and Match center (see lobbyMatches). It has no team1/team2. */
-  lobby?: { eventId: string; squads: number; winner?: string };
+  lobby?: { eventId: string; squads: number; winner?: string; teams?: Team[] };
 }
 
 export interface GameCategory {
@@ -247,6 +249,8 @@ export interface AIParsedBracketParams {
 }
 
 export interface BracketDraft {
+  /** Public roster hydration, also used by Battle Royale squads without head-to-head matches. */
+  rosterTeams?: Team[];
   gameId?: string;
   id: string;
   title: string;

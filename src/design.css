@@ -10,8 +10,8 @@
  * - "Stages" (brackets, the stream player, the 3D arena, the home hero) sit one step deeper than the page.
  */
 
-/* ---------- The app (signed-in app and the welcome page) ---------- */
-.app-shell, .auth-entry, .auth-entry-dialog, .auth-status-screen {
+/* ---------- Semantic tokens shared across the app and auth gates ---------- */
+:root {
   color-scheme: dark;
   --bg-base: #0e0e10;
   --sidebar: #141416;
@@ -62,6 +62,54 @@
 }
 .stage, .stage-board, .dashboard-media { background-color: var(--surface); }
 
+/* ---------- Workspace elements ---------- */
+.app-shell :is(.dashboard-page-heading, .module-header, .directory-heading, .studio-header, .watch-home-head, .desk-head) h1 {
+  font-size: clamp(26px, 2.8vw, 36px);
+  line-height: 1.15;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.app-shell :is(.dashboard-page-heading, .module-header, .directory-heading, .studio-header, .watch-home-head, .desk-head) p {
+  max-width: 68ch;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.app-shell .module-page { width: 100%; max-width: none; margin: 0; animation: none; }
+.module-page > .dashboard-page-heading { margin-bottom: 0; }
+.dashboard-page-heading.with-actions {
+  display: flex; justify-content: space-between; align-items: end; gap: 12px 20px; flex-wrap: wrap;
+}
+.page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.page-panel { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.page-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; }
+.page-search { position: relative; min-width: min(100%, 250px); }
+.page-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+.page-search input {
+  min-height: 44px; width: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--surface); padding: 0 12px 0 36px; font-size: 14px;
+}
+.tab-loading {
+  min-height: 160px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-secondary); background: var(--surface);
+}
+.is-full .tab-loading { margin: 16px; }
+.app-shell :is(.arena-primary, .arena-outline):active:not(:disabled) { transform: translateY(1px); }
+.app-shell :is(.arena-primary, .arena-outline):disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.app-shell .ah-chips { scrollbar-width: thin; }
+.app-shell .ah-chips::-webkit-scrollbar { display: revert; }
+.app-shell .ah-chip:hover { border-color: var(--border-strong); }
+.app-shell .ah-chip:is([aria-pressed=true], [aria-selected=true]) {
+  background: var(--brand-soft); color: var(--brand-ink); border-color: var(--brand-border);
+}
+.app-shell .ah-chip:active { transform: scale(.98); }
+@media (max-width: 767px) {
+  .app-shell .module-page { gap: 16px; }
+  .app-shell .ah-chip { min-height: 40px; }
+  .app-shell .page-toolbar > .page-search { width: 100%; }
+  .app-shell .module-form :is(input, select, textarea), .app-shell .page-search input { font-size: 16px; }
+}
+
 /* ---------- Typography ---------- */
 .app-shell, .auth-entry, .auth-entry-dialog, .auth-status-screen, .stage {
   font-family: var(--font-arena);
@@ -101,7 +149,9 @@
 }
 .ah-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
 .ah-card-interactive { cursor: pointer; }
-.ah-card-interactive:hover { box-shadow: var(--shadow-2); border-color: transparent; transform: translateY(-2px); }
+@media (hover: hover) {
+  .ah-card-interactive:hover { box-shadow: var(--shadow-2); border-color: var(--border-strong); transform: translateY(-2px); }
+}
 .ah-card-interactive:active { transform: translateY(0); box-shadow: var(--shadow-1); }
 @media (prefers-reduced-motion: reduce) {
   .app-shell *, .stage * { transition-duration: 1ms !important; animation-duration: 1ms !important; animation-iteration-count: 1 !important; }

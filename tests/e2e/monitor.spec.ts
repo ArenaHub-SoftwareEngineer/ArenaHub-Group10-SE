@@ -5,7 +5,7 @@ test('organizer creates a match monitor pairing code', async ({ page }, testInfo
   const errors = watchErrors(page);
   await signIn(page, ORGANIZER);
   await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
-  await expect(page.getByRole('heading', { name: /watch the devices/i })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^anti-cheat$/i })).toBeVisible({ timeout: 20_000 });
 
   // Labels wrap their selects, so select by the label element rather than its accessible name.
   const form = page.locator('.monitor-pair-form');
@@ -55,9 +55,9 @@ test('the 3D arena shows flagged players by category and opens their evidence', 
   await signIn(page, ORGANIZER);
   await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
   const arena = page.locator('.monitor3d');
-  await expect(arena.getByRole('button', { name: /^Cinder, Android, risk 85 of 100, urgent/ })).toBeVisible({ timeout: 20_000 });
-  await expect(arena.getByRole('button', { name: /^Ace, Android, risk 0 of 100, clear/ })).toBeVisible();
-  await expect(arena.getByRole('button', { name: /^Dusk, iPhone, risk 0 of 100/ })).toBeVisible();
+  await expect(arena.getByRole('button', { name: /^85 Cinder Android, urgent risk/ })).toBeVisible({ timeout: 20_000 });
+  await expect(arena.getByRole('button', { name: /^0 Ace Android, clear risk/ })).toBeVisible();
+  await expect(arena.getByRole('button', { name: /^0 Dusk iPhone/ })).toBeVisible();
   await expect(arena.locator('.monitor3d-pillar.urgent .monitor3d-block.cat-cheat-tools')).toHaveCount(1);
   await arena.scrollIntoViewIfNeeded();
   await arena.screenshot({ path: testInfo.outputPath('arena.png') });
@@ -65,7 +65,7 @@ test('the 3D arena shows flagged players by category and opens their evidence', 
   await arena.screenshot({ path: testInfo.outputPath('arena-turned.png') });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
 
-  await arena.getByRole('button', { name: /^Cinder/ }).click();
+  await arena.getByRole('button', { name: /^85 Cinder/ }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Risk by category');
   await expect(dialog.locator('.monitor-breakdown li', { hasText: 'Cheat tools' })).toContainText('35');
@@ -118,7 +118,7 @@ test('the iPhone page checks in and can still upload a recording', async ({ brow
   const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId: `ios-${Date.now()}`, matchLabel: 'iPhone test match', game: 'codm-mp', platform: 'ios', playerName: 'Echo', serverUrl: 'http://192.168.50.10:3210' } })).json();
   await page.goto(`/join.html?c=${pair.code}`);
   await expect(page.getByRole('heading', { name: 'Hi Echo' })).toBeVisible();
-  await expect(page.locator('#collects')).toContainText('no checks run on your phone');
+  await expect(page.locator('#collects')).toContainText('Requires a referee to check your playing device');
   await page.getByRole('button', { name: 'Agree and check in' }).click();
   await expect(page.getByRole('heading', { name: 'You are checked in' })).toBeVisible();
   expect((await (await request.get(`/api/integrity/sessions/${pair.id}`, { headers: staff })).json()).connection).toBe('paired');
@@ -143,7 +143,7 @@ test('a player who declines is shown to staff as an alert', async ({ page, brows
   const label = `Decline test ${Date.now() % 100000}`;
   await signIn(page, ORGANIZER);
   await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
-  await expect(page.getByRole('heading', { name: /watch the devices/i })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^anti-cheat$/i })).toBeVisible({ timeout: 20_000 });
 
   const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId, matchLabel: label, game: 'mlbb', platform: 'ios', team: 'COE Titans', playerName: 'Fable', serverUrl: 'http://192.168.50.10:3210' } })).json();
   const phone = await browser.newPage({ userAgent: IPHONE });

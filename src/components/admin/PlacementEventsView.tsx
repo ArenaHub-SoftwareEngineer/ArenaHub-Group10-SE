@@ -31,7 +31,9 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
   const events = brackets.filter(b => b.placement);
   const occupying = brackets.find(b => publicationGameKey(b) === 'game-codm-br');
   const [selectedId, setSelectedId] = useState<string>('');
-  const event = events.find(e => e.id === selectedId) || events[0];
+  // A just-published event may arrive after the confirmation. Never substitute the outgoing
+  // event while waiting: results typed into that form would disappear when the new event arrives.
+  const event = selectedId ? events.find(e => e.id === selectedId) : events[0];
 
   // --- Create form ---
   const [creatingRequested, setCreating] = useState(false);
@@ -91,6 +93,8 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
     const gameKey = `${event.id}|${game.id}`;
     if (gameKey === loadedGame.current && dirty.current) return;
     loadedGame.current = gameKey; dirty.current = false;
+    // Pin the displayed game instead of letting a late completion snapshot change the form implicitly.
+    if (gameId !== game.id) setGameId(game.id);
     setRows(Object.fromEntries(event.placement.teams.map(team => {
       const result = game.results.find(r => r.teamId === team.id);
       return [team.id, { placement: result ? String(result.placement) : '', kills: result ? String(result.kills) : '' }];
@@ -138,9 +142,9 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
   const duplicatePlace = (value: string) => !!value && usedPlaces.filter(v => v === value).length > 1;
 
   return <div className="module-page placement-admin">
-    <header className="dashboard-page-heading"><span className="section-overline">BATTLE ROYALE</span><h1>Lobby events and placement points.</h1>
-      <p>For CODM Battle Royale. Every squad plays every game in one lobby. Standings add placement points and eliminations across all final games.</p>
-      {loaded && !creating && <button type="button" className="arena-outline mt-3" onClick={() => setCreating(true)}><Plus size={16} />New event</button>}
+    <header className="dashboard-page-heading with-actions"><div><h1>Battle Royale</h1>
+      <p>For CODM Battle Royale. Every squad plays every game in one lobby. Standings add placement points and eliminations across all final games.</p></div>
+      {loaded && !creating && <button type="button" className="arena-primary" onClick={() => setCreating(true)}><Plus size={16} />New event</button>}
     </header>
 
     {!loaded && !events.length && <p className="studio-muted" role="status">Loading published events…</p>}
@@ -179,6 +183,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
       <select value={event?.id} onChange={e => { setSelectedId(e.target.value); setGameId(''); }}>{events.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}</select>
     </label>}
 
+    {loaded && selectedId && !event && <p className="studio-muted" role="status">Waiting for the selected event to sync. If it was unpublished, create a new event.</p>}
     {event?.placement && game && <form className="arena-panel module-form placement-admin-entry" onSubmit={save} aria-labelledby="placement-entry-title">
       <h2 id="placement-entry-title">{event.title}: results</h2>
       <div className="operations-two-fields">
@@ -203,9 +208,9 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
           return <tr key={team.id}>
             <th scope="row">{team.name}{team.collegeCode && <small className="studio-muted"> · {team.collegeCode}</small>}</th>
             <td><input type="number" inputMode="numeric" min={1} max={teamCount} aria-label={`${team.name} placement`} aria-invalid={dup || undefined} title={dup ? 'Another squad already has this placement' : undefined} value={row.placement}
-              onChange={e => edit(r => ({ ...r, [team.id]: { ...row, placement: e.target.value } }))} /></td>
+              onChange={e => { const value = e.target.value; edit(r => ({ ...r, [team.id]: { ...(r[team.id] || { placement: '', kills: '' }), placement: value } })); }} /></td>
             <td><input type="number" inputMode="numeric" min={0} max={MAX_KILLS} aria-label={`${team.name} eliminations`} value={row.kills}
-              onChange={e => edit(r => ({ ...r, [team.id]: { ...row, kills: e.target.value } }))} /></td>
+              onChange={e => { const value = e.target.value; edit(r => ({ ...r, [team.id]: { ...(r[team.id] || { placement: '', kills: '' }), kills: value } })); }} /></td>
           </tr>;
         })}</tbody>
       </table>

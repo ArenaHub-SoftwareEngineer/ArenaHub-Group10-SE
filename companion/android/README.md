@@ -1,14 +1,14 @@
 # ArenaHub Companion (Android)
 
-A small Android app that pairs a player's phone with an ArenaHub match and reports to the referee laptop. The staff runbook is in [docs/INTEGRITY_SETUP.md](../../docs/INTEGRITY_SETUP.md). The player notice is in [docs/INTEGRITY_POLICY.md](../../docs/INTEGRITY_POLICY.md).
+A small Android app that pairs a player's phone with an ArenaHub match and reports to the tournament API server. The staff runbook is in [docs/INTEGRITY_SETUP.md](../../docs/INTEGRITY_SETUP.md). The player notice is in [docs/INTEGRITY_POLICY.md](../../docs/INTEGRITY_POLICY.md).
 
 - **Minimum Android version:** Android 10 (API 29). The target is Android 15 (API 35).
 - **Dependencies:** none. It uses the platform SDK, `org.json` and `HttpURLConnection`.
-- **Distribution:** sideloaded APK, not Google Play. That allows `QUERY_ALL_PACKAGES`, which is needed to compare installed apps with the blocklist on the phone.
+- **Distribution:** sideloaded APK, not Google Play. It declares `QUERY_ALL_PACKAGES` for local policy matching. Actual visibility must be verified on target devices; Google Play distribution would require a separate policy review.
 
 ## Build (free)
 
-**On the event laptop:** run `npm run build:companion` from the project folder. It writes `dist-agent/arenahub-companion.apk`. While the ArenaHub server is running, phones can download it from `http://<laptop address>:3210/api/integrity/downloads/arenahub-companion.apk`, and the pairing panel shows that link.
+**On the event laptop:** run `npm run build:companion` from the project folder. It writes `dist-agent/arenahub-companion.apk`. While the ArenaHub server is running, phones can download it from `https://<api-host>/api/integrity/downloads/arenahub-companion.apk`, and the pairing panel shows that link.
 
 The command uses build tools that were set up once in `%LOCALAPPDATA%`: `ArenaHubBuild\jdk17` (Temurin JDK 17), `ArenaHubBuild\gradle-8.10.2`, and `Android\Sdk` (command-line tools, `platforms;android-35`, `build-tools;34.0.0`). It copies the project to `ArenaHubBuild\companion` first, because Android's build tools fail when the project path has non-ASCII characters and this repo's folder name has a long dash.
 
@@ -19,14 +19,14 @@ The command uses build tools that were set up once in `%LOCALAPPDATA%`: `ArenaHu
 3. Choose **Build > Build App Bundle(s) / APK(s) > Build APK(s)**. The file is `app/build/outputs/apk/debug/app-debug.apk`.
 4. To install it on a phone, turn on "Install unknown apps" for the app you open the APK with (Files, Chrome or Drive), then open the APK.
 
-A debug APK is fine for school events. For a longer-term release, create a signing key (Build > Generate Signed App Bundle / APK). Keep the keystore out of git; `.gitignore` already excludes it.
+The generated APK is a test artifact signed with a development key, with debugging disabled. Use it on consenting test devices. Create an organization-controlled signing key for a public release and keep it outside git; `.gitignore` excludes common keystore/signing-secret files. The standard build requires HTTPS. An explicit `ARENAHUB_ALLOW_HTTP_LAN=1` build flag enables private/loopback HTTP for isolated LAN tests; do not distribute that build as the public release.
 
 ## How it works
 
 | File | Purpose |
 |---|---|
 | `MainActivity.kt` | Pairing (QR deep link `arenahub://pair?s=...&c=...` or typed code), consent, screen-capture permission, status |
-| `MonitorService.kt` | Foreground service: a report every 15 s, a segment upload queue (holds up to about 20 minutes offline), and stop when the server answers 410 |
+| `MonitorService.kt` | Foreground service: a report every 15 s, a segment upload queue (holds up to about 20 minutes offline), and stop at the local consent deadline even without connectivity, or when the server answers 410 |
 | `DeviceChecks.kt` | The facts sent each report. The format must match `androidFactsSchema` in `src/lib/integrityRisk.ts` |
 | `ScreenRecorder.kt` | 30-second, 720p H.264 MP4 segments through MediaProjection, with no audio |
 | `Api.kt` | POST JSON and files to `/api/integrity` |
@@ -35,14 +35,28 @@ If you change the report format, change `src/lib/integrityRisk.ts` and its tests
 
 ## Test checklist before the first event
 
-The app compiles with no warnings (12 Nov 2026), but it has not been run on a phone yet.
+The v3 app builds and Android lint reports zero errors and no security-category warnings (17 Nov 2026). Nine localization/resource warnings remain. Physical Android testing is pending a consenting device.
 
 - [x] It builds without errors.
 - [ ] Scanning the referee QR code with the phone camera opens the app with the address and code filled in.
 - [ ] Pairing works, and the staff page shows "Online".
 - [ ] The screen-capture prompt appears. The staff page receives 30-second MP4 files, and they play.
-- [ ] Installing a blocklisted package (for example a cloner app) shows a signal within about 15 seconds.
+- [ ] A harmless test package added to a test-only blocklist is detected, with unrelated apps excluded from reports.
+- [ ] Configured signer matches are included from the first report, and denied/incomplete visibility is shown honestly.
 - [ ] Turning on USB debugging shows a signal.
+- [ ] With the API unreachable, the local match deadline stops capture and reporting.
+- [ ] Backup/device-transfer exclusions and HTTPS-only transport work on the test device.
 - [ ] Stopping from the notification ends the session ("player stopped" in the activity log).
 - [ ] Ending the session on the staff page stops the phone within about 15 seconds.
 - [ ] Repeat on Android 10, 13 and 14 or newer if possible. Android 14 changed the screen-capture rules.
+
+## Required scan admission in v3
+
+The first scan carries its session challenge and current policy version. The app displays Scan passed, Action required or Scan incomplete from the API. A required scan is linked to a published roster slot. The player keeps the companion running throughout the match. Closing a restricted tool allows the next valid scan to clear it. Staff create a new code when the published roster changes.
+
+
+## Companion 3.1
+
+The scan-stamp serializer now has JVM tests using real org.json serialization. Run `npm run test:companion` from the repository root to execute those tests, Android lint and the HTTPS-only APK build. Test dependencies are excluded from the production app.
+
+The app identifies itself as ArenaHub Anti-cheat, shows the required-scan workflow and updates its ongoing notification with the latest scan result. Installed-package match overflow remains incomplete. The API requires actual game-certificate evidence for admission even if a coverage flag claims the check succeeded. Hardware validation is still pending an available Android device.

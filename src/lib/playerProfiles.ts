@@ -1,5 +1,5 @@
 import type { BracketDraft, Player, Team } from './types';
-import rankAssets from './rankAssets.json';
+import rankAssets from './rankAssets.json' with { type: 'json' };
 import { rankGame, rankTiers, rankUnit, isRetiredGame } from './gameRanks';
 const assets: Record<string, string> = rankAssets;
 const tiers: Record<string, string[]> = {

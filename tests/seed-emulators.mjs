@@ -26,7 +26,7 @@ try {
     });
     if (!update.ok) throw new Error('Could not configure the local account: ' + fixture.email);
     await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'users', user.uid), {
-      uid: user.uid, name: fixture.name, email: fixture.email, role: 'user', status: 'active',
+      uid: user.uid, name: fixture.name, email: fixture.email, role: fixture.admin ? 'admin' : 'user', status: 'active',
       collegeName: 'Western Mindanao State University', spectatorInviteApproved: !fixture.admin,
       avatarInitials: fixture.initials, emailVerified: true, joinedAt: new Date(),
     }, { merge: true }));

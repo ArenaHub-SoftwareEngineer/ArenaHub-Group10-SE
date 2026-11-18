@@ -5,10 +5,11 @@
 // result before createBracketFromTeams builds anything. Pure: shared by the browser and the server.
 import type { ExtractedTeam, MatchFormat } from './types';
 import { detectTournamentSizeFromPrompt, extractTeamsFromPrompt, extractTournamentTitle, MAX_BRACKET_TEAMS } from './bracketUtils';
+import { SWISS_MAX_TEAMS } from './formats/swiss';
 
 export const BRACKET_GAMES = ['Mobile Legends: Bang Bang', 'Dota 2', 'Call of Duty: Mobile Multiplayer'] as const;
 export const BR_GAME = 'Call of Duty: Mobile Battle Royale';
-export const BRACKET_FORMATS = ['Single elimination', 'Double elimination', 'Round robin'] as const;
+export const BRACKET_FORMATS = ['Single elimination', 'Double elimination', 'Round robin', 'Swiss'] as const;
 export const SERIES = ['Bo1', 'Bo3', 'Bo5', 'Bo7'] as const;
 export const SEEDING = ['Win rate', 'Skill rating', 'Random draw'] as const;
 
@@ -64,7 +65,7 @@ export function parseBracketPromptLocally(prompt: string): ParsedRequest {
     : /\bdota\s*2?\b/.test(p) ? 'Dota 2'
     : /\bcodm\b|call of duty/.test(p) ? 'Call of Duty: Mobile Multiplayer'
     : null;
-  const format = /double[- ]?elim/.test(p) ? 'Double elimination' : /round[- ]robin|\bgroups?\b/.test(p) ? 'Round robin' : /single[- ]?elim|knockout/.test(p) ? 'Single elimination' : null;
+  const format = /double[- ]?elim/.test(p) ? 'Double elimination' : /round[- ]robin|\bgroups?\b/.test(p) ? 'Round robin' : /\bswiss\b/.test(p) ? 'Swiss' : /single[- ]?elim|knockout/.test(p) ? 'Single elimination' : null;
   const final = p.match(/\b(?:grand )?finals?(?: (?:is|as|to|uses))?\s+(?:bo|best[- ]of[- ]?)([1357])\b|\b(?:bo|best[- ]of[- ]?)([1357])\s+(?:grand )?finals?\b/);
   const series = (final ? p.replace(final[0], '') : p).match(/\b(?:bo|best[- ]of[- ]?)([1357])\b/);
   const seeding = /skill rating|\brating\b|\belo\b/.test(p) ? 'Skill rating' : /random|\bdraw\b/.test(p) ? 'Random draw' : /win rate|seeded/.test(p) ? 'Win rate' : null;
@@ -110,9 +111,11 @@ export function resolveBracketRequest(prompt: string, parsed: ParsedRequest): Re
 
   const defaults: BracketRequest['defaults'] = [];
   const format = pick(BRACKET_FORMATS, parsed.format) ?? (defaults.push('format'), 'Single elimination');
+  const limit = format === 'Swiss' ? SWISS_MAX_TEAMS : format === 'Round robin' ? 32 : MAX_BRACKET_TEAMS;
+  if (teamsCount! > limit) return { kind: 'question', text: `${format} supports 2 to ${limit} teams. How many teams are playing?`, missing: ['teams'] };
   const matchFormat = (pick(SERIES, parsed.matchFormat) ?? (defaults.push('matchFormat'), 'Bo3')) as MatchFormat;
   // The builder plays the final as Bo5 unless told otherwise; say so instead of doing it silently.
-  const finalMatchFormat = (pick(SERIES, parsed.finalMatchFormat) ?? (defaults.push('finalMatchFormat'), matchFormat === 'Bo7' ? 'Bo7' : 'Bo5')) as MatchFormat;
+  const finalMatchFormat = (format === 'Swiss' || format === 'Round robin' ? matchFormat : pick(SERIES, parsed.finalMatchFormat) ?? (defaults.push('finalMatchFormat'), matchFormat === 'Bo7' ? 'Bo7' : 'Bo5')) as MatchFormat;
   const seeding = pick(SEEDING, parsed.seeding) ?? (defaults.push('seeding'), 'Win rate');
   const title = parsed.title?.trim().slice(0, 160) || (defaults.push('title'), `${game} ${format}`);
   if (teams.length < teamsCount!) defaults.push('team names');

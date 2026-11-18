@@ -6,6 +6,8 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, PAIRING_ALPHABET, scoreSignals, type MonitorConfig, type MonitorGame, type MonitorPlatform, type Signal, type SignalId, type Severity } from '../src/lib/integrityRisk.ts';
+import { preMatchScan } from '../src/lib/preMatchScan.ts';
+import { IOS_CLEARANCE_MS, foundIndicators, iosReviewSchema, type IosReviewInput, type IosClearance } from '../src/lib/iosAntiCheat.ts';
 
 export const HEARTBEAT_SECONDS = 15;
 export const LOST_AFTER_MS = 45_000;
@@ -15,8 +17,8 @@ export const RETENTION_MS = 30 * 24 * 3600_000;
 export interface SessionRow {
   id: string; match_id: string; match_label: string; game: MonitorGame; platform: MonitorPlatform; player_name: string;
   expected_steam_id: string; created_by: string; created_at: number; expires_at: number; code_hash: string | null; code_expires_at: number;
-  token_hash: string | null; claimed_at: number | null; device: string | null; status: 'pending' | 'active' | 'ended' | 'declined'; ended_at: number | null;
-  team: string; record: number; last_seen: number | null; last_facts: string | null; gsi: string | null; review_note: string; hold: number; media_bytes: number;
+  token_hash: string | null; gsi_token_hash: string | null; claimed_at: number | null; device: string | null; status: 'pending' | 'active' | 'ended' | 'declined'; ended_at: number | null;
+  team: string; player_key: string; scan_challenge: string; roster_version: string; record: number; last_seen: number | null; last_facts: string | null; gsi: string | null; review_note: string; hold: number; media_bytes: number;
 }
 export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
@@ -49,10 +51,16 @@ export class IntegrityStore {
       CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, kind TEXT NOT NULL, file TEXT NOT NULL, bytes INTEGER NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, session_id TEXT NOT NULL, note TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS config (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+    this.db.exec(`CREATE TABLE IF NOT EXISTS ios_clearances (session_id TEXT PRIMARY KEY, value TEXT NOT NULL)`);
     // Databases created before teams existed get the column added in place.
     const columns = this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[];
     if (!columns.some(c => c.name === 'team')) this.db.exec(`ALTER TABLE sessions ADD COLUMN team TEXT NOT NULL DEFAULT ''`);
     if (!columns.some(c => c.name === 'record')) this.db.exec(`ALTER TABLE sessions ADD COLUMN record INTEGER NOT NULL DEFAULT 1`);
+    if (!columns.some(c => c.name === 'gsi_token_hash')) this.db.exec('ALTER TABLE sessions ADD COLUMN gsi_token_hash TEXT');
+    if (!columns.some(c => c.name === 'player_key')) this.db.exec("ALTER TABLE sessions ADD COLUMN player_key TEXT NOT NULL DEFAULT ''");
+    if (!columns.some(c => c.name === 'scan_challenge')) this.db.exec("ALTER TABLE sessions ADD COLUMN scan_challenge TEXT NOT NULL DEFAULT ''");
+    if (!columns.some(c => c.name === 'roster_version')) this.db.exec("ALTER TABLE sessions ADD COLUMN roster_version TEXT NOT NULL DEFAULT ''");
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS sessions_gsi_token ON sessions(gsi_token_hash)');
   }
 
   config(): MonitorConfig {
@@ -71,13 +79,14 @@ export class IntegrityStore {
     this.db.prepare('INSERT INTO audit (at, actor, action, session_id, note) VALUES (?, ?, ?, ?, ?)').run(this.now(), actor, action, sessionId, note.slice(0, 500));
   }
 
-  createPairing(input: { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; playerName: string; team?: string; record?: boolean; expectedSteamId: string; hours: number }, actor: string) {
+  createPairing(input: { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; playerName: string; team?: string; playerKey?: string; rosterVersion?: string; record?: boolean; expectedSteamId: string; hours: number }, actor: string) {
     const id = randomBytes(12).toString('base64url');
     const code = Array.from({ length: 8 }, () => PAIRING_ALPHABET[randomInt(PAIRING_ALPHABET.length)]).join('');
     const now = this.now();
     this.db.prepare(`INSERT INTO sessions (id, match_id, match_label, game, platform, player_name, team, record, expected_steam_id, created_by, created_at, expires_at, code_hash, code_expires_at, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`).run(id, input.matchId, input.matchLabel, input.game, input.platform, input.playerName, input.team || '', input.record === false ? 0 : 1, input.expectedSteamId, actor, now, now + input.hours * 3600_000, sha256(code), now + PAIRING_TTL_MS);
     this.audit(actor, 'pairing-created', id, `${input.playerName} on ${input.platform} for ${input.matchLabel}`);
+    this.db.prepare('UPDATE sessions SET player_key = ?, scan_challenge = ?, roster_version = ? WHERE id = ?').run(input.playerKey || '', randomBytes(24).toString('hex'), input.rosterVersion || '', id);
     return { id, code, codeExpiresAt: now + PAIRING_TTL_MS };
   }
   /** A pending pairing for a valid, unexpired code, without using the code up. */
@@ -101,29 +110,52 @@ export class IntegrityStore {
     const row = this.db.prepare(`SELECT * FROM sessions WHERE code_hash = ? AND status = 'pending'`).get(sha256(code.trim().toUpperCase())) as SessionRow | undefined;
     if (!row || row.code_expires_at < now || row.expires_at < now) return null;
     const token = randomBytes(32).toString('base64url');
-    this.db.prepare(`UPDATE sessions SET code_hash = NULL, token_hash = ?, claimed_at = ?, device = ?, status = 'active', last_seen = ? WHERE id = ?`).run(sha256(token), now, JSON.stringify(device), now, row.id);
+    const gsiToken = row.game === 'dota2' && row.platform === 'pc' ? randomBytes(32).toString('base64url') : undefined;
+    this.db.prepare(`UPDATE sessions SET code_hash = NULL, token_hash = ?, gsi_token_hash = ?, claimed_at = ?, device = ?, status = 'active', last_seen = ? WHERE id = ?`).run(sha256(token), gsiToken ? sha256(gsiToken) : null, now, JSON.stringify(device), now, row.id);
     this.audit('device', 'device-paired', row.id, `${device.model || 'device'} ${device.os || ''}`.trim());
-    return { token, session: this.session(row.id)! };
+    return { token, ...(gsiToken ? { gsiToken } : {}), session: this.session(row.id)! };
   }
   session(id: string) {
     this.expire();
     return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
   }
+  policyVersion() { return sha256(JSON.stringify(this.config())); }
+  scan(row: SessionRow) {
+    const clearance = this.iosClearance(row.id);
+    return preMatchScan({ platform: row.platform, game: row.game, status: row.status, lastSeen: row.last_seen, expiresAt: row.expires_at, facts: row.last_facts ? JSON.parse(row.last_facts) : null, challenge: row.scan_challenge, policyVersion: this.policyVersion(), config: this.config(), now: this.now(), iosClearance: clearance?.rosterVersion === row.roster_version ? clearance : null });
+  }
+  iosClearance(id: string): IosClearance | null {
+    const row = this.db.prepare('SELECT value FROM ios_clearances WHERE session_id = ?').get(id) as { value: string } | undefined;
+    return row ? JSON.parse(row.value) : null;
+  }
+  reviewIos(id: string, actor: string, value: IosReviewInput) {
+    const input = iosReviewSchema.parse(value), row = this.session(id), found = foundIndicators(input);
+    if (!row || row.platform !== 'ios' || row.game === 'dota2' || (input.approved && row.status !== 'active')) throw new Error('Pair an active iPhone session before inspection.');
+    const review: IosClearance = { approved: input.approved, reviewedAt: this.now(), validUntil: input.approved ? Math.min(row.expires_at, this.now() + IOS_CLEARANCE_MS) : this.now(), actor, note: found.length ? `Found: ${found.join("; ")}. ${input.note}`.slice(0, 2600) : input.note, challenge: row.scan_challenge, policyVersion: this.policyVersion(), rosterVersion: row.roster_version, ...(found.length ? { indicatorsFound: found } : {}) };
+    this.db.prepare('INSERT INTO ios_clearances (session_id, value) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET value = excluded.value').run(id, JSON.stringify(review));
+    this.audit(actor, input.approved ? 'ios-inspection-approved' : 'ios-clearance-revoked', id, JSON.stringify(input));
+    return review;
+  }
   byToken(token: string) {
     this.expire();
     return this.db.prepare(`SELECT * FROM sessions WHERE token_hash = ? AND status = 'active'`).get(sha256(token)) as SessionRow | undefined;
   }
+  /** The token written into Dota's GSI config cannot control, upload to or stop a device session. */
+  byGsiToken(token: string) {
+    this.expire();
+    return this.db.prepare(`SELECT * FROM sessions WHERE gsi_token_hash = ? AND status = 'active' AND game = 'dota2' AND platform = 'pc'`).get(sha256(token)) as SessionRow | undefined;
+  }
   sessions(matchId?: string) {
     this.expire();
-    return (matchId ? this.db.prepare('SELECT * FROM sessions WHERE match_id = ? ORDER BY created_at DESC').all(matchId) : this.db.prepare('SELECT * FROM sessions ORDER BY created_at DESC LIMIT 200').all()) as unknown as SessionRow[];
+    return (matchId ? this.db.prepare('SELECT * FROM sessions WHERE match_id = ? ORDER BY created_at DESC, rowid DESC').all(matchId) : this.db.prepare('SELECT * FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 200').all()) as unknown as SessionRow[];
   }
   /** Match windows close on their own: past expiry, a session can no longer report. */
   private expire() {
     const now = this.now();
-    this.db.prepare(`UPDATE sessions SET status = 'ended', ended_at = expires_at, token_hash = NULL, code_hash = NULL WHERE status IN ('pending', 'active') AND expires_at < ?`).run(now);
+    this.db.prepare(`UPDATE sessions SET status = 'ended', ended_at = expires_at, token_hash = NULL, gsi_token_hash = NULL, code_hash = NULL WHERE status IN ('pending', 'active') AND expires_at < ?`).run(now);
   }
   end(id: string, actor: string, reason: string) {
-    const result = this.db.prepare(`UPDATE sessions SET status = 'ended', ended_at = ?, token_hash = NULL, code_hash = NULL WHERE id = ? AND status IN ('pending', 'active')`).run(this.now(), id);
+    const result = this.db.prepare(`UPDATE sessions SET status = 'ended', ended_at = ?, token_hash = NULL, gsi_token_hash = NULL, code_hash = NULL WHERE id = ? AND status IN ('pending', 'active')`).run(this.now(), id);
     if (result.changes) this.audit(actor, 'session-ended', id, reason);
     return result.changes > 0;
   }
@@ -141,7 +173,8 @@ export class IntegrityStore {
     for (const s of signals) upsert.run(sessionId, s.id, s.severity, s.evidence, now, now);
   }
   saveGsi(row: SessionRow, gsi: unknown, signals: Signal[]) {
-    this.db.prepare('UPDATE sessions SET gsi = ?, last_seen = ? WHERE id = ?').run(JSON.stringify(gsi), this.now(), row.id);
+    // Match telemetry is not proof that device checks are still running.
+    this.db.prepare('UPDATE sessions SET gsi = ? WHERE id = ?').run(JSON.stringify(gsi), row.id);
     this.recordSignals(row.id, signals);
   }
   signals(sessionId: string) {
@@ -173,7 +206,7 @@ export class IntegrityStore {
     const file = `${this.now()}-${randomBytes(3).toString('hex')}.${kind === 'video' ? 'mp4' : 'jpg'}`;
     writeFileSync(join(dir, file), data);
     const info = this.db.prepare('INSERT INTO media (session_id, kind, file, bytes, created_at) VALUES (?, ?, ?, ?, ?)').run(row.id, kind, file, data.length, this.now());
-    this.db.prepare('UPDATE sessions SET media_bytes = media_bytes + ?, last_seen = ? WHERE id = ?').run(data.length, this.now(), row.id);
+    this.db.prepare('UPDATE sessions SET media_bytes = media_bytes + ? WHERE id = ?').run(data.length, row.id);
     return Number(info.lastInsertRowid);
   }
   // Large uploads (an iPhone screen recording can be several GB) arrive in ordered chunks.
@@ -190,7 +223,7 @@ export class IntegrityStore {
     renameSync(`${path}.part`, path);
     const bytes = statSync(path).size;
     const info = this.db.prepare('INSERT INTO media (session_id, kind, file, bytes, created_at) VALUES (?, ?, ?, ?, ?)').run(row.id, 'video', file, bytes, this.now());
-    this.db.prepare('UPDATE sessions SET media_bytes = media_bytes + ?, last_seen = ? WHERE id = ?').run(bytes, this.now(), row.id);
+    this.db.prepare('UPDATE sessions SET media_bytes = media_bytes + ? WHERE id = ?').run(bytes, row.id);
     this.audit('device', 'recording-uploaded', row.id, `${(bytes / 1024 / 1024).toFixed(1)} MB`);
     return Number(info.lastInsertRowid);
   }
@@ -217,7 +250,7 @@ export class IntegrityStore {
     const old = this.db.prepare(`SELECT id FROM sessions WHERE hold = 0 AND created_at < ? AND status IN ('ended', 'declined')`).all(cutoff) as { id: string }[];
     for (const { id } of old) {
       removeTree(join(this.mediaRoot, id));
-      for (const table of ['media', 'signals']) this.db.prepare(`DELETE FROM ${table} WHERE session_id = ?`).run(id);
+      for (const table of ['media', 'signals', 'ios_clearances']) this.db.prepare(`DELETE FROM ${table} WHERE session_id = ?`).run(id);
       this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
       this.audit('system', 'retention-deleted', id, 'Recordings and signals deleted after 30 days');
     }

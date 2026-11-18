@@ -1,5 +1,6 @@
 // Pure helpers for the ArenaHub PC agent, kept separate so they can be unit-tested.
 import { findEntry, type BlockEntry } from '../../src/lib/integrityRisk.ts';
+import { monitorAddress } from '../../src/lib/monitorAddress';
 
 export interface ProcessInfo { name: string; pid: number }
 
@@ -32,9 +33,11 @@ export function steamLibraries(steamPath: string, vdf: string) {
 export const GSI_FILE = 'gamestate_integration_arenahub.cfg';
 /** Valve's Game State Integration config. Dota 2 reads it at launch and posts match state to `uri`. */
 export function gsiConfig(serverUrl: string, token: string) {
+  const origin = monitorAddress(serverUrl);
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(token)) throw new Error('Invalid GSI credential.');
   return `"ArenaHub Match Monitor"
 {
-  "uri"         "${serverUrl.replace(/\/$/, '')}/api/integrity/dota/gsi"
+  "uri"         "${origin}/api/integrity/dota/gsi"
   "timeout"     "5.0"
   "buffer"      "0.5"
   "throttle"    "5.0"

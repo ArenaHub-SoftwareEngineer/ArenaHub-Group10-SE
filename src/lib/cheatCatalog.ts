@@ -1,5 +1,5 @@
-// Known cheat types per game, written for referees. For each type it says which layer can catch it
-// and what to look for in a recording. It describes how cheats look from the outside only.
+// Referee review categories: reported cheat families and policy indicators, not detection guarantees.
+// Related evidence sources provide context; the category does not establish a current working exploit.
 import type { MonitorGame } from './integrityRisk';
 
 export type DetectionLayer = 'device' | 'recording' | 'stats' | 'referee';
@@ -13,7 +13,7 @@ export interface CheatType {
   id: string;
   name: string;
   what: string;
-  /** Layers that can catch it, strongest first. */
+  /** Related evidence sources; none independently establishes cheating. */
   layers: DetectionLayer[];
   /** What a referee should look for. */
   tells: string[];
@@ -22,7 +22,7 @@ export interface CheatType {
 const moddedClient = (game: string): CheatType => ({
   id: 'modded-client', name: 'Modified game app', what: `A repackaged ${game} app with cheats or unlocked content built in.`,
   layers: ['device'],
-  tells: ['The companion reports a game signature that is not on the trusted list.', 'The game version does not match the other players in the lobby.'],
+  tells: ['The reported signer differs from the independently verified regional trust list; check legitimate key rotation.', 'A version difference requires an official release/update check before considering modification.'],
 });
 const accountSharing: CheatType = {
   id: 'account-sharing', name: 'Account sharing or piloting', what: 'Someone other than the registered player plays on the account.',
@@ -76,8 +76,12 @@ export const CHEAT_CATALOG: Record<MonitorGame, CheatType[]> = {
       tells: ['Screenshots show heroes much smaller than normal, with more terrain visible.', 'A memory tool on the blocklist was running (the PC agent reports this as critical).'] },
     { id: 'macro', name: 'Macros and input automation', what: 'One key press plays a whole sequence, such as a full combo or rapid toggling.', layers: ['device', 'recording'],
       tells: ['The PC agent reports a macro tool from the blocklist.', 'Complex combos execute with identical timing every time.'] },
-    { id: 'memory-tools', name: 'Memory editors and injectors', what: 'Programs that read or change the game while it runs. Most private cheats load this way.', layers: ['device'],
-      tells: ['The PC agent reports a blocked program (memory editor, injector or debugger) during the match.', 'The agent was stopped or lost contact mid-match without a reason.'] },
+    { id: 'memory-tools', name: 'Memory editors and injectors', what: 'Tools that may read or change another program. Legitimate debugging tools can match these policies too.', layers: ['device'],
+      tells: ['Review the matched process or configured executable fingerprint and its legitimate uses.', 'The agent reports an unsigned library loaded into Dota 2 from a user folder, or an extra DLL beside dota2.exe (proxy loader).', 'An agent that stops reporting has a coverage gap; investigate connectivity and device state.'] },
+    { id: 'content-mod', name: 'Vision or particle mod (content pack)', what: 'A custom content pack loaded through -language, gameinfo.gi or a replaced game file that removes weather and effects or makes spells, wards and heroes easier to see.', layers: ['device', 'recording'],
+      tells: ['The PC agent reports a custom content folder, an added gameinfo.gi search path, a -language launch option or a file that differs from Valve\'s list.', 'Screenshots show particles, hero models or terrain in colours or sizes that differ from other players on the same patch.'] },
+    { id: 'vac-off', name: 'VAC turned off (-insecure)', what: 'Launching Dota 2 with -insecure disables Valve Anti-Cheat for the session, which some cheat loaders require.', layers: ['device'],
+      tells: ['The PC agent reports -insecure in the saved launch options or the running game\'s command line.'] },
     { ...accountSharing, tells: ['Dota 2 reports a different Steam account from the one registered (the agent flags this).', ...accountSharing.tells.slice(0, 2)] },
   ],
 };

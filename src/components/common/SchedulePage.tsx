@@ -81,9 +81,10 @@ export function SchedulePage({ brackets, onSelect }: { brackets: BracketDraft[];
   return <div className="module-page">
     <header className="dashboard-page-heading">
       <h1>Match schedule</h1>
-      <p>Select a game to open its calendar.</p>
+      <p>Choose a game to open its calendar of published match times (Manila time).</p>
     </header>
-    <GameArtworkTiles label="Game calendars" opensDialog onSelect={openCalendar}>
+    <GameArtworkTiles label="Game calendars" opensDialog onSelect={openCalendar}
+      meta={Object.fromEntries(games.map(game => [game.id, game.brackets.length ? `${game.brackets.length} ${game.brackets.length === 1 ? "bracket" : "brackets"}` : "No schedule yet"]))}>
       {otherBrackets.map(item => <button type="button" className="schedule-game-tile schedule-game-fallback" key={item.id}
         aria-haspopup="dialog" onClick={() => openCalendar(`bracket:${item.id}`)}>
         <CalendarDays size={28} /> <span>{item.gameName} · {item.title}</span>

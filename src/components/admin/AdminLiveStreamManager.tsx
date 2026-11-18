@@ -1,3 +1,4 @@
+import { errorMessage } from '../../lib/errors';
 /**
  * AdminLiveStreamManager.tsx
  *
@@ -270,16 +271,10 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
     }
 
     // Persist to firestore so spectators immediately see the embed
-    firestoreService.updateMatchStream(activeMatchId, embedUrl, selectedMatch.status !== 'completed', streamTitle.trim() || undefined);
+    try { await firestoreService.updateMatchStream(activeMatchId, embedUrl, selectedMatch.status !== 'completed', streamTitle.trim() || undefined); }
+    catch (error) { setUrlError(errorMessage(error, 'Complete every required player scan before going live.')); return; }
 
-    const official = firestoreService.getPublishedBrackets().some(bracket => bracket.matches.some(match => match.id === activeMatchId));
-    let shared = false;
-    try {
-      if (official) { await firestoreService.syncBracketsToCloud(); shared = true; }
-    } catch (error) {
-      console.error('[ArenaHub] Live stream sync failed:', error);
-      showToast('Stream connected on this device, but spectator sync failed. Sign in again as admin and retry.', 'error');
-    }
+    const shared = true;
 
     // Deactivate any previous stream for this match
     setStreams((prev) =>
@@ -309,12 +304,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
   // Handle Pause Live Broadcast (2-Step Confirmed)
   const handleConfirmPauseLive = async () => {
     if (!selectedMatch) return;
-    firestoreService.setMatchStatus(selectedMatch.id, 'pre-match');
-    try {
-      await firestoreService.syncBracketsToCloud();
-    } catch (e) {
-      console.warn('Sync warning:', e);
-    }
+    try { await firestoreService.setMatchStatus(selectedMatch.id, 'pre-match'); } catch (error) { showToast(errorMessage(error, 'The broadcast could not pause.'), 'error'); return; }
     setPauseConfirmStep(0);
     showToast(`Match ${selectedMatch.matchNumber} live broadcast paused (Pre-Match).`, 'info');
   };
@@ -322,12 +312,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
   // Handle End Live Broadcast (2-Step Confirmed)
   const handleConfirmEndLive = async () => {
     if (!selectedMatch) return;
-    firestoreService.setMatchStatus(selectedMatch.id, 'completed');
-    try {
-      await firestoreService.syncBracketsToCloud();
-    } catch (e) {
-      console.warn('Sync warning:', e);
-    }
+    try { await firestoreService.setMatchStatus(selectedMatch.id, 'completed'); } catch (error) { showToast(errorMessage(error, 'The broadcast could not end.'), 'error'); return; }
     setEndConfirmStep(0);
     showToast(`Match ${selectedMatch.matchNumber} live broadcast concluded (Completed).`, 'success');
   };
@@ -335,26 +320,16 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
   // Handle Resume Live Broadcast
   const handleResumeLive = async () => {
     if (!selectedMatch) return;
-    firestoreService.setMatchStatus(selectedMatch.id, 'live');
-    try {
-      await firestoreService.syncBracketsToCloud();
-    } catch (e) {
-      console.warn('Sync warning:', e);
-    }
+    try { await firestoreService.setMatchStatus(selectedMatch.id, 'live'); } catch (error) { showToast(errorMessage(error, 'Complete all player scans before going live.'), 'error'); return; }
     showToast(`Match ${selectedMatch.matchNumber} is now LIVE on air!`, 'success');
   };
 
   // Disconnect stream
   const handleConfirmDisconnect = async () => {
     if (!streamToDisconnect) return;
-    firestoreService.removeMatchStream(streamToDisconnect.matchId);
-    try {
-      await firestoreService.syncBracketsToCloud();
-    } catch (error) {
-      console.error('[ArenaHub] Stream disconnect sync failed:', error);
-      showToast('Stream was removed on this device, but spectator sync failed.', 'error');
-    }
-    setStreams((prev) => prev.map((s) => (s.matchId === streamToDisconnect.matchId ? { ...s, isActive: false } : s)));
+    try { await firestoreService.removeMatchStream(streamToDisconnect.matchId); }
+    catch (error) { showToast(errorMessage(error, 'The stream could not disconnect. It remains published.'), 'error'); return; }
+    setStreams(prev => prev.map(stream => stream.matchId === streamToDisconnect.matchId ? { ...stream, isActive: false } : stream));
     if (previewEntry?.matchId === streamToDisconnect.matchId) { setPreviewEntry(null); setShowPreviewModal(false); }
     setStreamToDisconnect(null);
     showToast('Stream disconnected. Viewers will see the arena stage placeholder.', 'info');
@@ -370,13 +345,7 @@ export const AdminLiveStreamManager: React.FC<AdminLiveStreamManagerProps> = ({ 
     setSelectedMatchId(match.id);
     if (markAsLive) {
       if (!match.team1 || !match.team2 || match.team1.isBye || match.team2.isBye || match.team1.name === 'TBD' || match.team2.name === 'TBD') { showToast('Both teams must be confirmed before a match can go live.', 'error'); return; }
-      firestoreService.setMatchStatus(match.id, 'live');
-      try {
-        await firestoreService.syncBracketsToCloud();
-      } catch (error) {
-        console.error('[ArenaHub] Live status sync failed:', error);
-        showToast('Match was marked live on this device, but spectator sync failed.', 'error');
-      }
+      try { await firestoreService.setMatchStatus(match.id, 'live'); } catch (error) { showToast(errorMessage(error, 'Complete all player scans before going live.'), 'error'); return; }
       showToast(`Match ${match.matchNumber} is now live and selected for broadcast.`, 'success');
     } else {
       showToast(`Selected ${match.matchNumber} (${match.team1?.collegeCode || 'TBD'} vs ${match.team2?.collegeCode || 'TBD'})`, 'info');

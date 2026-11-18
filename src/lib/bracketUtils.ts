@@ -1,5 +1,6 @@
 import { BracketDraft, Match, Team, MatchFormat, ExtractedTeam } from './types';
 import { doubleElimination, resolveTournamentGraph, roundRobin } from './tournamentFormats';
+import { advanceSwiss, swiss, SWISS_MAX_TEAMS } from './formats/swiss';
 
 export type { ExtractedTeam } from './types';
 
@@ -117,6 +118,8 @@ export function getAdvancementSlot(matches: Match[], sourceMatch: Match): 1 | 2 
  * an old winner can never remain in a later round.
  */
 export function updateMatchAndAdvance(matches: Match[], updatedMatch: Match): Match[] {
+  // Swiss pairs each round from the results of the last one, so a result can create the next round.
+  if (matches.some(match => match.tournamentFormat === 'swiss')) return advanceSwiss(matches, updatedMatch);
   if (matches.some(match => match.sources)) return resolveTournamentGraph(matches, updatedMatch);
   const previousMatch = matches.find((match) => match.id === updatedMatch.id);
   if (!previousMatch) return matches;
@@ -297,7 +300,8 @@ export function createBracketFromTeams({
   explicitBracketSize?: number;
 }): BracketDraft {
   const normalizedFormat = format.toLowerCase().replace(/[-_]/g, ' ');
-  if (!['single elimination', 'double elimination', 'round robin'].includes(normalizedFormat)) throw new Error('Choose single elimination, double elimination, or round robin.');
+  if (!['single elimination', 'double elimination', 'round robin', 'swiss'].includes(normalizedFormat)) throw new Error('Choose single elimination, double elimination, round robin, or Swiss.');
+  if (normalizedFormat === 'swiss' && (explicitBracketSize ?? teams.length) > SWISS_MAX_TEAMS) throw new Error(`Swiss supports up to ${SWISS_MAX_TEAMS} teams per bracket.`);
   // Determine actual team count (supports ANY arbitrary number >= 2)
   const teamCount = explicitBracketSize ?? (teams.length >= 2 ? teams.length : detectTournamentSizeFromPrompt(title, teams.length));
   if (!Number.isInteger(teamCount) || teamCount < 2 || teamCount > MAX_BRACKET_TEAMS) {
@@ -466,7 +470,7 @@ export function createBracketFromTeams({
     teamsCount: teamCount,
     matchFormat,
     seedingRule,
-    matches: normalizedFormat === 'double elimination' ? doubleElimination(matches, finalMatchFormat) : normalizedFormat === 'round robin' ? roundRobin(seededTeams, matches[0], matchFormat) : matches,
+    matches: normalizedFormat === 'double elimination' ? doubleElimination(matches, finalMatchFormat) : normalizedFormat === 'round robin' ? roundRobin(seededTeams, matches[0], matchFormat) : normalizedFormat === 'swiss' ? swiss(seededTeams, matches[0], matchFormat) : matches,
     teams: effectiveTeams,
     parsedParams: {
       game: gameName,

@@ -163,13 +163,17 @@ export function lobbyMatches(bracket: BracketDraft): Match[] {
   const event = bracket.placement;
   if (!event) return [];
   const names = new Map(event.teams.map(t => [t.id, t.name]));
+  const teams = event.teams.map((team, i) => bracket.rosterTeams?.find(roster => roster.id === team.id) || {
+    id: team.id, name: team.name, collegeCode: team.collegeCode, collegeId: '', gameId: 'game-codm-br',
+    seed: i + 1, winRate: 0, record: '', players: [],
+  });
   return event.games.map((game, i) => {
     const winner = game.status === 'completed' ? names.get(game.results.find(r => r.placement === 1)?.teamId || '') : undefined;
     const match: Match = {
       id: game.id, matchNumber: `#G${i + 1}`, tournamentId: bracket.id, gameId: 'game-codm-br', gameMode: 'br', round: i + 1,
       roundName: game.label, bracketType: 'upper', score: { team1Score: 0, team2Score: 0 }, status: game.status, matchFormat: 'Bo1',
       scheduledDate: game.scheduledDate || '', scheduledTime: game.scheduledTime || '', organizerName: '',
-      lobby: { eventId: bracket.id, squads: event.teams.length, ...(winner ? { winner } : {}) },
+      lobby: { eventId: bracket.id, squads: event.teams.length, teams, ...(winner ? { winner } : {}) },
     };
     return match;
   });

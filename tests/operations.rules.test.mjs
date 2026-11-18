@@ -62,6 +62,16 @@ test('a complete eight-player roster stays within database rule evaluation limit
   await assertSucceeds(updateDoc(doc(staff, 'tournamentRegistrations/full__a'), { status: 'approved', reviewNote: 'All eight student records and accounts checked.', updatedAt: serverTimestamp() }));
   await assertSucceeds(updateDoc(doc(staff, 'tournamentRegistrations/full__a'), { status: 'locked', reviewNote: 'Approved eight-player roster is now locked.', updatedAt: serverTimestamp() }));
 });
+
+test('lobby windows support 25 distinct squads and retain staff-only scheduling', async () => {
+  const staff = campus('staff', true), captain = campus('captain');
+  const window = { matchId: 'br-lobby', tournamentId: 'br', registrationIds: Array.from({ length: 25 }, (_, i) => `br__squad-${i}`), opensAt: Timestamp.fromMillis(Date.now() - 60000), closesAt: Timestamp.fromMillis(Date.now() + 600000), updatedAt: serverTimestamp() };
+  await assertFails(setDoc(doc(captain, 'matchWindows/br-lobby'), window));
+  await assertSucceeds(setDoc(doc(staff, 'matchWindows/br-lobby'), window));
+  await assertFails(setDoc(doc(staff, 'matchWindows/br-lobby'), { ...window, registrationIds: [...window.registrationIds, 'br__squad-26'] }));
+  await assertFails(setDoc(doc(staff, 'matchWindows/br-lobby'), { ...window, registrationIds: ['br__squad-0', 'br__squad-0'] }));
+  await assertFails(setDoc(doc(staff, 'matchWindows/br-lobby'), { ...window, registrationIds: ['br__squad-0'] }));
+});
 test('uploaded evidence paths are scoped to the reporter and cannot be replaced after submission', async () => {
   const owner = campus('captain'), staff = campus('staff', true);
   const file = { path: 'integrityEvidence/captain/clip-case/file-1', name: 'clip.mp4', mime: 'video/mp4', size: 1024 };

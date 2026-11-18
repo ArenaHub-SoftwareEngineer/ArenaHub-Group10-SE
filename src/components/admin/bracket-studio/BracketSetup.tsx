@@ -6,6 +6,7 @@ import { Req } from '../../ui/Req';
 import { MAX_BRACKET_TEAMS } from '../../../lib/bracketUtils';
 import { ChevronRight } from '../../ui/Icons';
 import { BracketFormat } from './shared';
+import { SWISS_MAX_TEAMS, swissRoundCount } from '../../../lib/formats/swiss';
 
 // ── Manual Bracket Setup Modal (Quick Pop-Up) ────────────────────────────────
 
@@ -30,7 +31,7 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
   const [matchFormat, setMatchFormat] = useState<MatchFormat>('Bo3');
   const [teamCount, setTeamCount] = useState('');
   const parsedTeamCount = Number(teamCount);
-  const formatTeamLimit = format === 'Round Robin' ? 32 : MAX_BRACKET_TEAMS;
+  const formatTeamLimit = format === 'Round Robin' ? 32 : format === 'Swiss' ? SWISS_MAX_TEAMS : MAX_BRACKET_TEAMS;
   const validTeamCount = Number.isInteger(parsedTeamCount) && parsedTeamCount >= 2 && parsedTeamCount <= formatTeamLimit;
 
 
@@ -40,10 +41,11 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
         <div className="p-6 space-y-5 text-xs">
           {/* Bracket Name */}
           <div>
-            <label className="block text-xs font-semibold text-(--text-muted) mb-1.5">
+            <label htmlFor="manual-bracket-name" className="block text-xs font-semibold text-(--text-muted) mb-1.5">
               Bracket Name
             </label>
             <input
+              id="manual-bracket-name"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -58,12 +60,13 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
               Bracket Format
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {(['Single Elimination', 'Double Elimination', 'Round Robin'] as BracketFormat[]).map((f) => {
+              {(['Single Elimination', 'Double Elimination', 'Round Robin', 'Swiss'] as BracketFormat[]).map((f) => {
                 const active = format === f;
                 return (
                   <button
                     key={f}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => setFormat(f)}
                     className={`py-2.5 px-3 rounded-[5px] border text-left transition-all cursor-pointer ${
                       active
@@ -72,8 +75,8 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
                     }`}
                   >
                     <span className="block font-bold text-xs">{f}</span>
-                    <span className="text-xs opacity-60">
-                      {f === 'Single Elimination' ? '1 loss and out' : f === 'Double Elimination' ? 'Upper, lower, and reset final' : 'Every team plays every opponent'}
+                    <span className="text-xs text-(--text-secondary)">
+                      {f === 'Single Elimination' ? '1 loss and out' : f === 'Double Elimination' ? 'Upper, lower, and reset final' : f === 'Round Robin' ? 'Every team plays every opponent' : 'Same-record pairings, no one is out'}
                     </span>
                   </button>
                 );
@@ -93,6 +96,7 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
                   <button
                     key={mf}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => setMatchFormat(mf)}
                     className={`py-2 px-3 rounded-[5px] border text-center transition-all cursor-pointer ${
                       active
@@ -101,7 +105,7 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
                     }`}
                   >
                     <span className="font-bold text-xs block">{mf}</span>
-                    <span className="text-xs opacity-60">
+                    <span className="text-xs text-(--text-secondary)">
                       {`First to ${seriesWinsNeeded(mf)}`}
                     </span>
                   </button>
@@ -113,11 +117,11 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
           {/* Number of Teams */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-semibold text-(--text-muted)">
+              <label htmlFor="manual-team-count" className="text-xs font-semibold text-(--text-muted)">
                 Number of Teams<Req />
               </label>
               <span className="text-xs text-(--success) font-semibold">
-                Choose any whole number from 2 to {MAX_BRACKET_TEAMS}
+                Choose any whole number from 2 to {formatTeamLimit}
               </span>
             </div>
 
@@ -136,10 +140,10 @@ export const ManualBracketSetupModal: React.FC<ManualBracketSetupModalProps> = (
               className="w-full bg-(--surface) border border-(--border-strong) focus:border-(--brand) rounded-[4px] px-3 py-2 text-sm font-semibold text-(--text-primary) outline-none"
             />
             <p id="manual-team-count-feedback" className={`mt-2 text-xs ${teamCount !== '' && !validTeamCount ? 'text-(--danger)' : 'text-(--text-muted)'}`} role="status">
-              {teamCount !== '' && !validTeamCount ? `Enter a whole number from 2 to ${formatTeamLimit}.` : format === 'Round Robin' ? 'Every team meets each opponent once, with one fixture per team per round.' : 'Your count determines the full bracket and any earned BYEs.'}
+              {teamCount !== '' && !validTeamCount ? `Enter a whole number from 2 to ${formatTeamLimit}.` : format === 'Round Robin' ? 'Every team meets each opponent once, with one fixture per team per round.' : format === 'Swiss' ? `${validTeamCount ? swissRoundCount(parsedTeamCount) : 'A few'} rounds. Each round pairs teams with the same record and avoids rematches; the next round is drawn when the last result of the current one is saved.${validTeamCount && parsedTeamCount % 2 ? ' One team rests (a bye, counted as a win) each round.' : ''}` : 'Your count determines the full bracket and any earned BYEs.'}
             </p>
 
-            {validTeamCount && format !== 'Round Robin' && <div className="p-2.5 rounded-[4px] bg-(--surface) border border-(--border) text-xs text-(--text-muted)">
+            {validTeamCount && format !== 'Round Robin' && format !== 'Swiss' && <div className="p-2.5 rounded-[4px] bg-(--surface) border border-(--border) text-xs text-(--text-muted)">
               {parsedTeamCount % 2 === 0 && (parsedTeamCount & (parsedTeamCount - 1)) === 0 ? (
                 <span>Perfect balanced bracket: <strong>{teamCount} teams</strong> play in a power-of-2 tournament with no byes needed.</span>
               ) : (

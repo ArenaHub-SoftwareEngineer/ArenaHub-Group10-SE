@@ -17,7 +17,11 @@ export function fakeProvider(): Provider {
     async *stream(request) {
       let reply: string;
       const chat = request.question.match(/^Match data: (.+)\n\nQuestion: /s);
-      if (chat) {
+      const digest = request.question.match(/^Case digest:\n([\s\S]+)$/);
+      if (digest) {
+        const field = (name: string) => digest[1].match(new RegExp(`^${name}: (.+)$`, 'm'))?.[1] || 'not recorded';
+        reply = `A ${field('Concern').toLowerCase()} report about ${field('Match')} is ${field('Status')}. Evidence: ${field('Evidence')}. ${field('Decision')}`;
+      } else if (chat) {
         const m = JSON.parse(chat[1]);
         reply = m.score ? `${m.team1?.name} ${m.score} ${m.team2?.name}${m.status === 'live' ? ', live and not final.' : '.'}` : `${m.team1?.name || 'This match'} vs ${m.team2?.name || 'opponent'}: no score is recorded yet.`;
       } else if (/score|live/i.test(request.question)) {

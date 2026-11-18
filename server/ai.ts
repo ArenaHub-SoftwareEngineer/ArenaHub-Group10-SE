@@ -5,7 +5,7 @@ import { AuthError, bearer, callerVerifier, type Caller, type VerifyCaller } fro
 import { publishedReader, type PublishedReader } from './data.ts';
 import { adminApp } from './firebaseAdmin.ts';
 import { aiConfig } from './ai/config.ts';
-import { askSchema, bracketSchema, chatAskSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
+import { askSchema, bracketSchema, caseSummarySchema, chatAskSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
 import { draftBracket } from './ai/bracketDraft.ts';
 import { ChatAskError, createChatResponder, firestoreChatSink } from './ai/chat.ts';
 import { firestoreMyTeams, type MyTeamsReader } from './ai/myTeam.ts';
@@ -15,6 +15,8 @@ import { geminiProvider } from './ai/gemini.ts';
 import { groqProvider } from './ai/groq.ts';
 import { fakeProvider } from './ai/fake.ts';
 import type { ToolContext } from './ai/tools.ts';
+import { firestoreCaseReader, summarizeCase, type CaseReader } from './ai/caseSummary.ts';
+import { matchLabel } from '../src/lib/integrityChecks.ts';
 
 type Env = Record<string, string | undefined>;
 export interface AiDeps {
@@ -27,6 +29,10 @@ export interface AiDeps {
   myTeams?: MyTeamsReader | null;
   /** Live-chat responder; null disables it. Defaults to Firestore when the server has admin access. */
   chat?: ReturnType<typeof createChatResponder> | null;
+  /** Fair play case reader for staff summaries; null disables. Defaults to Firestore with admin access. */
+  cases?: CaseReader | null;
+  /** The model for case summaries. Groq only (plan Q5); null means the digest without a model. */
+  caseProvider?: Provider | null;
 }
 
 /** Gemini first, Groq as the backup. The scripted provider replaces both on the test emulators only. */
@@ -37,6 +43,13 @@ export function configuredProviders(env: Env, fetcher: typeof fetch = fetch): Pr
     ...(config.gemini ? config.gemini.models.map(model => geminiProvider(config.gemini!.key, model)) : []),
     ...(config.groq ? [groqProvider(config.groq.key, config.groq.model, fetcher)] : []),
   ];
+}
+
+/** Case summaries may go to Groq only, never the free Gemini tier (plan Q5). The scripted provider stands in on the test emulators. */
+export function caseSummaryProvider(env: Env, fetcher: typeof fetch = fetch): Provider | undefined {
+  const config = aiConfig(env);
+  if (config.fake) return fakeProvider();
+  return config.groq ? groqProvider(config.groq.key, config.groq.model, fetcher) : undefined;
 }
 
 function openReportsReader(env: Env): ToolContext['openReports'] {
@@ -157,6 +170,35 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
     res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
     try { res.set('Cache-Control', 'no-store').json(await draftBracket(providers, body.data.prompt, controller.signal)); }
     catch { if (!controller.signal.aborted) fail(res, 503, 'The model could not read this prompt; the offline parser will.'); }
+  });
+
+  const cases = deps.cases !== undefined ? deps.cases : app ? firestoreCaseReader(app, async (matchId, token) => {
+    // The label comes from published brackets, the same public text staff see on the case.
+    const data = await published(token);
+    const match = data.brackets.flatMap(bracket => bracket.matches).find(item => item.id === matchId);
+    return match ? matchLabel(match) : '';
+  }) : null;
+  const caseProvider = deps.caseProvider !== undefined ? deps.caseProvider || undefined : caseSummaryProvider(env, deps.fetcher);
+
+  router.post('/case-summary', async (req, res) => {
+    const token = admit(req, res);
+    if (!token) return;
+    const body = caseSummarySchema.safeParse(req.body);
+    if (!body.success) { fail(res, 400, 'Choose a case to summarize.'); return; }
+    const caller = await identify(res, token);
+    if (!caller) return;
+    if (!caller.staff) { fail(res, 403, 'Only tournament staff can summarize cases.'); return; }
+    if (!cases) { fail(res, 503, 'Case summaries need the server’s database access. The case digest is shown instead.'); return; }
+    if (!await rate.hit(`case_${caller.uid}`, config.userPerMinute, 60)) { fail(res, 429, 'Too many summaries in a minute. Wait and try again.'); return; }
+    const controller = new AbortController();
+    res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
+    try {
+      const found = await cases(body.data.caseId, token);
+      if (!found) { fail(res, 404, 'That case was not found.'); return; }
+      try { res.set('Cache-Control', 'no-store').json(await summarizeCase(caseProvider, found, controller.signal)); }
+      // A model failure still gives staff the digest, labelled as such.
+      catch { if (!controller.signal.aborted) res.set('Cache-Control', 'no-store').json(await summarizeCase(undefined, found, controller.signal)); }
+    } catch { if (!controller.signal.aborted) fail(res, 503, 'The case could not be read. Try again.'); }
   });
 
   return router;

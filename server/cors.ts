@@ -37,7 +37,7 @@ export function corsPolicy(env: Record<string, string | undefined>): express.Req
     if (origin && list.has(origin)) {
       res.set({
         'Access-Control-Allow-Origin': origin,
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
         'Access-Control-Allow-Headers': 'Authorization, Content-Type',
         'Access-Control-Max-Age': '600',
       });

@@ -3,6 +3,7 @@ import { Bell, CalendarDays, Check, ClipboardList, ShieldCheck, X } from '../ui/
 import { setNotificationsRead, subscribeNotifications, subscribeNotificationSources, type ArenaNotification } from '../../lib/notificationService';
 import { useAuth } from '../../lib/authContext';
 import { Modal } from '../ui/Modal';
+import { useSystemAlerts } from '../../lib/systemAlerts';
 import './FeatureDialogs.css';
 
 function relativeTime(value: any) {
@@ -34,6 +35,8 @@ export function NotificationBell({ staff = false, onNavigate }: { staff?: boolea
     if (!item.readAt) await mark([item.id]);
     panel.current?.hidePopover(); trigger.current?.focus(); if (uid) setSelected({ uid, item });
   };
+  // A system notification for new items while this tab is in the background (opt-in in Settings).
+  useSystemAlerts(uid, items, loading, item => { if (uid) setSelected({ uid, item }); if (!item.readAt) void mark([item.id]); });
   const detail = selected && selected.uid === uid ? items.find(item => item.id === selected.item.id) || selected.item : null;
   return <div className="notification-root">
     <button ref={trigger} type="button" className={`notification-trigger ${unread.length ? 'has-unread' : ''}`} aria-label={`Notifications${unread.length ? `, ${unread.length} unread` : ''}`} popoverTarget={id} onClick={event => {

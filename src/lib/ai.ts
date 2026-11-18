@@ -133,6 +133,30 @@ class AIService {
     return { ...resolveBracketRequest(prompt, parseBracketPromptLocally(prompt)), source: OFFLINE_DRAFT_SOURCE };
   }
 
+  /**
+   * Staff only: a short written summary of a Fair play case, by the Groq model when the server has one
+   * (plan Q5: never the free Gemini tier), otherwise the server's case digest. The server reads the case
+   * itself; only its id is sent. Errors come back as a message so the caller can show the local digest.
+   */
+  public async summarizeCase(caseId: string, signal?: AbortSignal): Promise<{ ok: true; summary: string; source: 'model' | 'digest' } | { ok: false; message: string }> {
+    const token = await idToken();
+    if (!token) return { ok: false, message: 'Sign in again to summarize this case.' };
+    try {
+      const response = await fetch(apiUrl('/api/ai/case-summary'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ caseId }),
+        signal: withTimeout(45_000, signal),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.ok && typeof body?.summary === 'string') return { ok: true, summary: body.summary, source: body.source === 'model' ? 'model' : 'digest' };
+      return { ok: false, message: typeof body?.error === 'string' ? body.error : 'The summary service could not answer.' };
+    } catch {
+      if (signal?.aborted) return { ok: false, message: 'Stopped.' };
+      return { ok: false, message: 'The summary service could not be reached.' };
+    }
+  }
+
   /** Builds the confirmed request. Only called after the organizer has seen the parameters. */
   public buildBracket(request: BracketRequest, prompt = ''): BracketDraft {
     const draft = createBracketFromTeams({

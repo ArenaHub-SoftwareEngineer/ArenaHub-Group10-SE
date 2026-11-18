@@ -15,6 +15,8 @@ import { isRetiredGame, gameCatalog } from './gameRanks';
 import { updateBroadcastLinks, validateBroadcastLinks, matchBroadcasts, detectPlatform, streamWatchUrl, type BroadcastLink, type BroadcastPlatform } from './streamUtils';
 import type { MatchScheduleUpdate } from './streamSchedule';
 import { validateScore } from './integrityChecks';
+import { requireMatchScan } from './antiCheatApi';
+import { scheduleMatches } from './formats/placement';
 import { updateMatchAndAdvance } from './bracketUtils';
 import { watchCommunityReports, resolveCommunityReport } from './communityReports';
 import { collegeStandings } from './colleges';
@@ -41,13 +43,14 @@ const matchContentFingerprint = (bracket: BracketDraft) => contentFingerprint(to
 
 function tournamentFormat(format: string): TournamentFormat {
   const value = format.toLowerCase();
-  return value.includes('double') ? 'double-elimination' : value.includes('round') ? 'round-robin' : 'single-elimination';
+  return value.includes('double') ? 'double-elimination' : value.includes('round') ? 'round-robin' : value.includes('swiss') ? 'swiss' : 'single-elimination';
 }
 
 class FirestoreService {
   private published: BracketDraft[] = [];
   /** Last state confirmed by the server, per tournament id. */
   private cloud = new Map<string, { revision: number; fingerprint: string }>();
+  private confirmedMatchStates = new Map<string, Match['status']>();
   private featuredTournaments = new Set<string>();
   private previous: BracketDraft[] = [];
   private drafts: BracketDraft[] = [];
@@ -109,6 +112,7 @@ class FirestoreService {
     this.publishedLoaded = true;
     this.published = items.map(item => item.bracket);
     this.cloud = new Map(items.map(item => [item.bracket.id, { revision: item.revision, fingerprint: matchContentFingerprint(item.bracket) }]));
+    this.confirmedMatchStates = new Map(items.flatMap(item => scheduleMatches(item.bracket).map(match => [match.id, match.status] as const)));
     this.featuredTournaments = new Set(items.filter(item => item.featured).map(item => item.bracket.id));
     this.emit();
   }
@@ -232,8 +236,8 @@ class FirestoreService {
     this.emit();
   }
 
-  public updateMatchStream(matchId: string, streamUrl: string, setLive = true, streamTitle?: string): void {
-    const updated = this.updateMatch(matchId, match => {
+  public async updateMatchStream(matchId: string, streamUrl: string, setLive = true, streamTitle?: string): Promise<void> {
+    await this.persistMatchChange(matchId, match => {
       const next: Match = { ...match, streamUrl };
       const platform = detectPlatform(streamUrl), watch = streamWatchUrl(streamUrl);
       if (platform !== 'other' && watch) next.broadcastLinks = [...matchBroadcasts(match).filter(link => link.platform !== platform).map(({ platform, url }) => ({ platform, url })), { platform, url: watch }];
@@ -241,16 +245,12 @@ class FirestoreService {
       if (setLive) next.status = 'live';
       return next;
     });
-    if (!updated) return;
-    this.addAuditLog(`Live stream connected to match ${updated.matchNumber}`);
-    this.emit();
+    this.addAuditLog(`Live stream connected to match ${matchId}`);
   }
 
-  public removeMatchStream(matchId: string): void {
-    const updated = this.updateMatch(matchId, match => { const next = { ...match }; delete next.streamUrl; delete next.broadcastLinks; return next; });
-    if (!updated) return;
-    this.addAuditLog(`Live stream disconnected from match ${updated.matchNumber}`);
-    this.emit();
+  public async removeMatchStream(matchId: string): Promise<void> {
+    await this.persistMatchChange(matchId, match => { const next = { ...match }; delete next.streamUrl; delete next.broadcastLinks; return next; });
+    this.addAuditLog(`Live stream disconnected from match ${matchId}`);
   }
 
   /** Saves one match's public watch links straight to its tournament. */
@@ -277,10 +277,20 @@ class FirestoreService {
     this.emit();
   }
 
-  public setMatchStatus(matchId: string, status: Match['status']): void {
-    const updated = this.updateMatch(matchId, match => ({ ...match, status }));
-    if (!updated) return;
-    this.addAuditLog(`Match ${updated.matchNumber} status updated to ${status}`);
+  public async setMatchStatus(matchId: string, status: Match['status']): Promise<void> {
+    await this.persistMatchChange(matchId, match => ({ ...match, status }));
+    this.addAuditLog(`Match ${matchId} status updated to ${status}`);
+  }
+
+  /** Start/status changes become visible only after the scan gate and cloud write both succeed. */
+  private async persistMatchChange(matchId: string, change: (match: Match) => Match) {
+    this.requireSignedIn('update this match');
+    const bracket = this.published.find(bracket => bracket.matches.some(match => match.id === matchId));
+    const cloud = bracket && this.cloud.get(bracket.id);
+    if (!bracket || !cloud) throw new Error('Publish this match before changing its status.');
+    const next = { ...bracket, matches: bracket.matches.map(match => match.id === matchId ? change(match) : match) };
+    await this.writeTournament(next, cloud.revision);
+    this.published = this.published.map(bracket => bracket.id === next.id ? next : bracket);
     this.emit();
   }
 
@@ -308,23 +318,24 @@ class FirestoreService {
   public getSavedBracketDraft(): BracketDraft | null { return this.drafts[0] ?? null; }
   public getSavedBracketDrafts(): BracketDraft[] { return this.drafts; }
 
-  public saveBracketDraft(draft: BracketDraft): BracketDraft {
+  public async saveBracketDraft(draft: BracketDraft): Promise<BracketDraft> {
     const uid = auth.currentUser?.uid;
     if (!uid) throw new Error('Sign in as tournament staff to save drafts.');
     const saved: BracketDraft = { ...draft, status: 'saved', createdAt: draft.createdAt || new Date().toLocaleDateString() };
+    await saveDraft(uid, saved);
     this.drafts = [saved, ...this.drafts.filter(entry => entry.id !== saved.id)];
-    saveDraft(uid, saved).catch(error => this.fail(error instanceof Error ? error.message : 'The draft could not be saved to your account.'));
     this.addAuditLog(`Saved bracket draft: "${saved.title}" (${saved.teamsCount} teams)`);
     this.emit();
     return saved;
   }
 
-  public deleteSavedBracketDraft(id: string): void {
+  public async deleteSavedBracketDraft(id: string): Promise<void> {
     const uid = auth.currentUser?.uid;
     const deleted = this.drafts.find(draft => draft.id === id);
-    if (!uid || !deleted) return;
+    if (!uid) throw new Error('Sign in as tournament staff to delete drafts.');
+    if (!deleted) return;
+    await deleteDraft(uid, id);
     this.drafts = this.drafts.filter(draft => draft.id !== id);
-    deleteDraft(uid, id).catch(() => this.fail('The draft could not be deleted. Check your connection and try again.'));
     this.addAuditLog(`Deleted saved bracket draft: "${deleted.title}"`);
     this.emit();
   }
@@ -388,8 +399,12 @@ class FirestoreService {
 
   private async writeTournament(bracket: BracketDraft, revision: number, guard = true) {
     const write = async () => {
+      // Admission is recomputed on the API from the published roster and current device scans.
+      // The browser cannot clear a player by changing a checkbox or inventing a risk score.
+      for (const match of scheduleMatches(bracket)) if (match.status === 'live' && this.confirmedMatchStates.get(match.id) !== 'live') await requireMatchScan(match);
       const next = await saveTournament(bracket, revision);
       this.cloud.set(bracket.id, { revision: next, fingerprint: matchContentFingerprint(bracket) });
+      for (const match of scheduleMatches(bracket)) this.confirmedMatchStates.set(match.id, match.status);
     };
     if (guard) await this.guarded(write); else await write();
   }

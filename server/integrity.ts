@@ -13,6 +13,12 @@ import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFOR
 import { HEARTBEAT_SECONDS, IntegrityStore, type SessionRow } from './integrityStore.ts';
 import { AuthError, verifyStaffToken } from './staffAuth.ts';
 import { clientAddress } from './publicAccess.ts';
+import { inspectionCoverage } from '../src/lib/integrityRisk.ts';
+import { monitorAddress } from '../src/lib/monitorAddress.ts';
+import { originAllowed } from './cors.ts';
+import { publishedReader, type PublishedReader } from './data.ts';
+import { matchScanReadiness, scanMatch, ScanAdmissionError } from './scanAdmission.ts';
+import { iosReviewSchema } from '../src/lib/iosAntiCheat.ts';
 
 // Player downloads, served from dist-agent/ by exact name only.
 export const DOWNLOADS: Record<string, string> = { 'arenahub-companion.apk': 'application/vnd.android.package-archive', 'arenahub-agent.exe': 'application/octet-stream' };
@@ -24,6 +30,7 @@ const pairingInput = z.object({
   game: z.enum(MONITOR_GAMES),
   playerName: z.string().trim().min(1).max(80),
   team: z.string().trim().max(80).default(''),
+  playerKey: z.string().max(400).default(''),
   platform: z.enum(['android', 'ios', 'pc']).optional(),
   expectedSteamId: z.string().trim().regex(/^(\d{17})?$/, 'Steam ID must be the 17-digit SteamID64.').default(''),
   hours: z.number().min(0.5).max(12).default(4),
@@ -31,7 +38,7 @@ const pairingInput = z.object({
 });
 const claimInput = z.object({ code: z.string().trim().min(6).max(12), device: z.object({ model: z.string().max(80).default(''), os: z.string().max(80).default(''), agent: z.string().max(40).default('') }).default({ model: '', os: '', agent: '' }) });
 
-type Deps = { store?: IntegrityStore; dataDir?: string; verifyStaff?: (token: string | undefined) => Promise<string>; fetcher?: typeof fetch };
+type Deps = { store?: IntegrityStore; dataDir?: string; verifyStaff?: (token: string | undefined) => Promise<string>; fetcher?: typeof fetch; published?: PublishedReader };
 type StaffRequest = express.Request & { staffUid?: string };
 
 function lanUrls(port: number) {
@@ -47,29 +54,49 @@ function lanUrls(port: number) {
 }
 
 export function createIntegrityRouter(env: Record<string, string | undefined>, deps: Deps = {}) {
+  const hostedUrl = env.INTEGRITY_HOSTED_URL ? monitorAddress(env.INTEGRITY_HOSTED_URL) : '';
+  if (hostedUrl && !hostedUrl.startsWith('https://')) throw new Error('INTEGRITY_HOSTED_URL must be an HTTPS origin.');
+  if (hostedUrl && env.INTEGRITY_PUBLIC_URL) throw new Error('Choose hosted service mode or player-only tunnel mode, not both.');
   const store = deps.store || new IntegrityStore(env.INTEGRITY_DATA_DIR || deps.dataDir || 'data');
   const fetcher = deps.fetcher || fetch;
   const verifyStaff = deps.verifyStaff || ((token: string | undefined) => verifyStaffToken(env, token, fetcher));
+  const published = deps.published || publishedReader(env, { fetcher });
+  const freshPublished = deps.published || publishedReader(env, { fetcher, ttlMs: 0 });
   if (!deps.store) { store.cleanup(); setInterval(() => store.cleanup(), 3600_000).unref(); }
   const router = express.Router();
+  router.use((_req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' }); next(); });
   const lastCall = new Map<string, number>();
   // Code lookups allow short bursts (a page reload, Chrome's app fallback) but still stop guessing: 10 per 10 seconds per address.
   const lookups = new Map<string, number[]>();
-  const tooManyLookups = (ip: string) => { const now = Date.now(), recent = (lookups.get(ip) || []).filter(t => now - t < 10_000); recent.push(now); lookups.set(ip, recent); if (lookups.size > 5000) lookups.clear(); return recent.length > 10; };
-  const tooFast = (key: string, gapMs: number) => { const now = Date.now(), last = lastCall.get(key) || 0; if (now - last < gapMs) return true; lastCall.set(key, now); return false; };
+  const tooManyLookups = (ip: string) => {
+    const now = Date.now();
+    if (lookups.size >= 5000) for (const [key, times] of lookups) if (times[times.length - 1] < now - 10_000) lookups.delete(key);
+    if (!lookups.has(ip) && lookups.size >= 5000) return true;
+    const recent = (lookups.get(ip) || []).filter(t => now - t < 10_000);
+    if (recent.length >= 10) { lookups.set(ip, recent); return true; }
+    recent.push(now); lookups.set(ip, recent); return false;
+  };
+  const tooFast = (key: string, gapMs: number) => {
+    const now = Date.now(), last = lastCall.get(key) || 0;
+    if (now - last < gapMs) return true;
+    if (lastCall.size >= 5000) for (const [entry, at] of lastCall) if (at < now - 60_000) lastCall.delete(entry);
+    if (!lastCall.has(key) && lastCall.size >= 5000) return true;
+    lastCall.set(key, now); return false;
+  };
 
   const deviceConfig = (row: SessionRow) => {
     const config = store.config();
     if (row.platform === 'ios') return {};
     return row.platform === 'android'
-      ? { gamePackages: row.game === 'mlbb' ? config.android.games.mlbb.packages : config.android.games.codm.packages, blockedPackages: config.android.blockedPackages.map(e => e.match) }
-      : { blockedProcesses: config.pc.blockedProcesses.map(e => e.match) };
+      ? { gamePackages: row.game === 'mlbb' ? config.android.games.mlbb.packages : config.android.games.codm.packages, blockedPackages: config.android.blockedPackages.map(e => e.match), blockedCertificates: (config.android.blockedCertificates || []).map(e => e.sha256), scan: { challenge: row.scan_challenge, policyVersion: store.policyVersion() } }
+      : { blockedProcesses: config.pc.blockedProcesses.map(e => e.match), blockedApplications: (config.pc.blockedApplications || []).map(e => e.match), blockedFileHashes: (config.pc.blockedFileHashes || []).map(e => e.sha256), blockedModules: (config.pc.blockedModules || []).map(e => e.match), fileSweep: config.pc.fileSweep === true, scan: { challenge: row.scan_challenge, policyVersion: store.policyVersion() } };
   };
   const sessionView = (row: SessionRow) => ({
     id: row.id, matchId: row.match_id, matchLabel: row.match_label, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, team: row.team, record: row.record === 1,
     expectedSteamId: row.expected_steam_id, status: row.status, connection: store.connection(row), createdAt: row.created_at, expiresAt: row.expires_at, claimedAt: row.claimed_at,
     endedAt: row.ended_at, lastSeen: row.last_seen, device: row.device ? JSON.parse(row.device) : null, gsi: row.gsi ? JSON.parse(row.gsi) : null,
     reviewNote: row.review_note, hold: row.hold === 1, mediaBytes: row.media_bytes, risk: store.risk(row),
+    inspection: inspectionCoverage(row.platform, row.last_facts ? JSON.parse(row.last_facts) : null), scan: store.scan(row), playerKey: row.player_key, iosClearance: row.platform === 'ios' ? store.iosClearance(row.id) : null,
   });
 
   // Players fetch the Android app and the PC agent from the event laptop, so no store or sign-in is needed.
@@ -95,7 +122,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const claimed = store.claim(input.data.code, input.data.device);
     if (!claimed) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
     const row = claimed.session;
-    res.json({ token: claimed.token, sessionId: row.id, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, matchLabel: row.match_label, expiresAt: row.expires_at, heartbeatSeconds: HEARTBEAT_SECONDS, record: row.record === 1, monitor: deviceConfig(row) });
+    res.json({ token: claimed.token, ...(claimed.gsiToken ? { gsiToken: claimed.gsiToken } : {}), sessionId: row.id, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, matchLabel: row.match_label, expiresAt: row.expires_at, heartbeatSeconds: HEARTBEAT_SECONDS, record: row.record === 1, monitor: deviceConfig(row) });
   });
   // The join page reads what a code is for (device type, game, player) before the player decides. The code stays unused.
   router.get('/device/pairing/:code', (req, res) => {
@@ -119,9 +146,18 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const facts = deviceFactsSchema.safeParse(req.body);
     if (!facts.success || facts.data.platform !== row.platform) { res.status(400).json({ error: 'The device report was not in the expected format. Update the companion.' }); return; }
     store.heartbeat(row, facts.data, evaluateFacts(facts.data, store.config(), row.game, { recordingRequired: row.record === 1 }));
-    res.json({ active: true, heartbeatSeconds: HEARTBEAT_SECONDS, expiresAt: row.expires_at, monitor: deviceConfig(row) });
+    res.json({ active: true, heartbeatSeconds: HEARTBEAT_SECONDS, expiresAt: row.expires_at, monitor: deviceConfig(row), scan: store.scan(store.session(row.id)!) });
   });
-  router.post('/device/media', device, express.raw({ type: ['video/mp4', 'image/jpeg'], limit: MAX_VIDEO_BYTES }), (req, res) => {
+  // Reading clearance never refreshes a device scan or grants referee approval.
+  router.get('/device/status', device, (_req, res) => {
+    const row = res.locals.session as SessionRow;
+    res.json({ active: true, expiresAt: row.expires_at, record: row.record === 1, scan: store.scan(row) });
+  });
+  const recordingAllowed: express.RequestHandler = (_req, res, next) => {
+    if ((res.locals.session as SessionRow).record !== 1) { res.status(403).json({ error: 'Recording is disabled for this match.' }); return; }
+    next();
+  };
+  router.post('/device/media', device, recordingAllowed, express.raw({ type: ['video/mp4', 'image/jpeg'], limit: MAX_VIDEO_BYTES }), (req, res) => {
     const row = res.locals.session as SessionRow;
     const data = req.body as Buffer;
     const kind = req.get('content-type') === 'video/mp4' ? 'video' : 'image';
@@ -133,7 +169,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   });
   // Chunked upload for full-match recordings (iPhone). Chunks must arrive in order; the first one must look like MP4/MOV.
   const uploads = new Map<string, { sessionId: string; file: string; next: number; total: number; bytes: number; touched: number }>();
-  router.post('/device/upload', device, express.raw({ type: 'application/octet-stream', limit: CHUNK_BYTES }), (req, res) => {
+  router.post('/device/upload', device, recordingAllowed, express.raw({ type: 'application/octet-stream', limit: CHUNK_BYTES }), (req, res) => {
     const row = res.locals.session as SessionRow;
     const data = req.body as Buffer;
     const id = String(req.get('x-upload-id') || ''), index = Number(req.get('x-chunk-index')), total = Number(req.get('x-chunk-total'));
@@ -161,10 +197,11 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     store.end(row.id, 'player', 'The player stopped monitoring on the device');
     res.json({ active: false });
   });
-  // Dota 2 posts here directly; the PC agent writes the session token into the GSI config "auth" block.
+  // Dota receives a separate, telemetry-only token. Never accept a device-control token here.
   router.post('/dota/gsi', express.json({ limit: '256kb', type: () => true }), (req, res) => {
-    const row = typeof req.body?.auth?.token === 'string' ? store.byToken(req.body.auth.token) : undefined;
+    const row = typeof req.body?.auth?.token === 'string' && req.body.auth.token.length <= 128 ? store.byGsiToken(req.body.auth.token) : undefined;
     if (!row || row.game !== 'dota2') { res.status(410).end(); return; }
+    if (tooFast(`gsi:${row.id}`, 250)) { res.status(429).end(); return; }
     const summary = parseGsi(req.body);
     if (summary) store.saveGsi(row, summary, evaluateGsi(summary, row.expected_steam_id));
     res.status(200).end();
@@ -184,20 +221,34 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   // ---------- Staff routes ----------
   const staff = express.Router();
   staff.use((req, res, next) => {
-    const origin = req.get('origin');
-    if (origin) { try { if (new URL(origin).host !== req.get('host')) { res.status(403).json({ error: 'Open the match monitor from your ArenaHub website.' }); return; } } catch { res.status(403).json({ error: 'Invalid request origin.' }); return; } }
+    if (!originAllowed(req, env)) { res.status(403).json({ error: 'Open the match monitor from your ArenaHub website.' }); return; }
     verifyStaff(req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1]).then(uid => { (req as StaffRequest).staffUid = uid; next(); })
       .catch(error => res.status(error instanceof AuthError ? error.status : 401).json({ error: error instanceof AuthError ? error.message : 'Sign in as tournament staff.' }));
   });
   staff.use(express.json({ limit: '128kb' }));
   const uidOf = (req: express.Request) => (req as StaffRequest).staffUid || 'staff';
   const sessionOr404 = (req: express.Request, res: express.Response) => { const row = store.session(String(req.params.id)); if (!row) res.status(404).json({ error: 'Session not found.' }); return row; };
+  const staffBearer = (req: express.Request) => req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1] || '';
+  const scanError = (res: express.Response, error: unknown) => res.status(error instanceof ScanAdmissionError ? error.status : 503).json({ error: error instanceof ScanAdmissionError ? error.message : 'Published rosters could not be checked. Try again before starting the match.' });
+  staff.get('/matches/:id/readiness', async (req, res) => {
+    try { res.json(matchScanReadiness(await published(staffBearer(req)), String(req.params.id), store)); }
+    catch (error) { scanError(res, error); }
+  });
+  staff.post('/matches/:id/admit', async (req, res) => {
+    try {
+      const readiness = matchScanReadiness(await freshPublished(staffBearer(req)), String(req.params.id), store);
+      if (!readiness.canStart) { res.status(409).json({ error: `Anti-cheat scan required: ${readiness.ready} of ${readiness.total} players are ready. Open Anti-cheat and resolve the remaining scans.`, readiness }); return; }
+      const validUntil = Math.min(...readiness.players.map(player => player.scan.validUntil!));
+      store.audit(uidOf(req), 'match-scan-admission', readiness.matchId, `${readiness.ready} roster players met the current scan requirements`);
+      res.json({ admitted: true, matchId: readiness.matchId, validUntil });
+    } catch (error) { scanError(res, error); }
+  });
 
   staff.get('/server-info', (req, res) => {
     const port = req.socket.localPort || Number(env.PORT || 3210);
     // The online address comes first: it works on any Wi-Fi or mobile data. Wi-Fi addresses stay as a fallback.
     // Wi-Fi addresses are listed only when the server listens beyond this laptop (LAN mode, HOST=0.0.0.0).
-    const publicUrl = env.INTEGRITY_PUBLIC_URL || '', lan = !!env.HOST && !/^(127\.|localhost$|::1$)/.test(env.HOST);
+    const publicUrl = hostedUrl || env.INTEGRITY_PUBLIC_URL || '', lan = !!env.HOST && !/^(127\.|localhost$|::1$)/.test(env.HOST);
     res.json({ urls: [...(publicUrl ? [publicUrl] : []), ...(lan ? lanUrls(port) : [])], publicUrl, signals: SIGNAL_CATALOG, downloads: available() });
   });
   staff.get('/config', (_req, res) => { res.json(store.config()); });
@@ -207,12 +258,22 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   });
   staff.post('/pairings', async (req, res) => {
     const input = pairingInput.safeParse(req.body);
-    const server = typeof req.body?.serverUrl === 'string' && /^https?:\/\/[^\s/]+(:\d+)?$/.test(req.body.serverUrl) ? req.body.serverUrl : '';
+    let server = '';
+    try { if (typeof req.body?.serverUrl === 'string') server = monitorAddress(req.body.serverUrl); } catch { /* Invalid destinations never enter a player command or game config. */ }
     if (!input.success || !server) { res.status(400).json({ error: input.success ? 'Choose the laptop address that devices can reach.' : input.error.issues[0].message }); return; }
+    let rosterVersion = '';
+    if (input.data.playerKey) {
+      try {
+        const source = scanMatch(await freshPublished(staffBearer(req)), input.data.matchId);
+        const player = source.players.find(player => player.playerKey === input.data.playerKey);
+        if (!player || source.game !== input.data.game) { res.status(400).json({ error: 'Choose a player and game from the current published match roster.' }); return; }
+        input.data.playerName = player.playerName; input.data.team = player.team; rosterVersion = source.rosterVersion;
+      } catch (error) { scanError(res, error); return; }
+    }
     const allowed = GAME_PLATFORMS[input.data.game as MonitorGame];
     const platform = input.data.platform || allowed[0];
     if (!allowed.includes(platform)) { res.status(400).json({ error: 'That game is not played on that kind of device.' }); return; }
-    const pairing = store.createPairing({ ...input.data, platform }, uidOf(req));
+    const pairing = store.createPairing({ ...input.data, platform, rosterVersion }, uidOf(req));
     const link = pairingLink(server, pairing.code);
     res.status(201).json({ ...pairing, platform, link, qr: await QRCode.toDataURL(link, { margin: 1, width: 280 }), agentCommand: `arenahub-agent.exe --server ${server} --code ${pairing.code}` });
   });
@@ -233,6 +294,27 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
     if (note.length < 5 || note.length > 2000) { res.status(400).json({ error: 'Write a review note of 5 to 2,000 characters.' }); return; }
     store.review(row.id, uidOf(req), note, req.body?.hold === true); res.json(sessionView(store.session(row.id)!));
+  });
+  staff.post('/sessions/:id/ios-review', async (req, res) => {
+    const row = sessionOr404(req, res); if (!row) return;
+    const input = iosReviewSchema.safeParse(req.body);
+    if (!input.success) {
+      const foundOne = req.body?.approved === true && req.body?.indicators && typeof req.body.indicators === 'object' && Object.values(req.body.indicators).includes('found');
+      res.status(400).json({ error: foundOne ? 'Approval is not possible while a sideload or jailbreak indicator is marked found. Revoke with a note, or have the player remove it and inspect again.' : 'Complete every iPhone inspection check, mark every sideload indicator, and write a note of 10 to 2,000 characters. Revocation also requires a note.' });
+      return;
+    }
+    if (row.platform !== 'ios' || row.game === 'dota2' || (input.data.approved && row.status !== 'active')) { res.status(409).json({ error: 'The player must agree to an active iPhone session before inspection.' }); return; }
+    if (input.data.approved && row.player_key) {
+      try {
+        const source = scanMatch(await freshPublished(staffBearer(req)), row.match_id);
+        if (source.rosterVersion !== row.roster_version || source.game !== row.game || !source.players.some(player => player.playerKey === row.player_key)) { res.status(409).json({ error: 'The published roster changed. Create a new code for the current player before inspection.' }); return; }
+      } catch (error) { scanError(res, error); return; }
+    }
+    // Re-read after the published roster lookup in case the session ended while waiting.
+    const current = store.session(row.id)!;
+    if (input.data.approved && current.status !== 'active') { res.status(409).json({ error: 'This iPhone session ended. Create a new code before inspection.' }); return; }
+    store.reviewIos(row.id, uidOf(req), input.data);
+    res.json(sessionView(store.session(row.id)!));
   });
   // A referee watched the evidence and saw something from the cheat catalogue. This is the behaviour layer.
   staff.post('/sessions/:id/observations', (req, res) => {

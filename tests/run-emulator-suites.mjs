@@ -12,6 +12,8 @@ const suites = [
   ['operations', 'node --test tests/operations.integration.test.mjs'],
   // The rules suites clear the emulator; the kick test signs in as the seeded organizer, so seed again first.
   ['seed QA accounts', 'node tests/seed-emulators.mjs'],
+  ['Battle Royale scan rosters', 'node --test tests/br-roster.integration.test.mjs'],
+  ['draft persistence', 'node --test tests/drafts.integration.test.mjs'],
   ['chat kick', 'node --test tests/chat-kick.integration.test.mjs'],
   ['migration', 'npx tsx --test tests/migration.integration.test.ts'],
   ['roles', 'npx tsx --test tests/set-role.integration.test.ts'],

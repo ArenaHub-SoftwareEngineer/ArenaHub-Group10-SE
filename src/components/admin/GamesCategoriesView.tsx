@@ -1,3 +1,4 @@
+import { PageHeading } from '../ui/PageHeading';
 import React, { useState, useRef } from 'react';
 import { GameTitle } from '../../lib/types';
 import { firestoreService } from '../../lib/firestore';
@@ -148,38 +149,15 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
 
   return (
     <div className="space-y-6">
-      {/* Top Section Header with Prominent + Add Game Button */}
-      <div className="bg-(--surface-soft) border border-(--border) rounded-[6px] p-6 shadow-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="text-xl font-heading font-bold text-(--text-primary) tracking-tight">
-              Games Management
-            </h2>
-            <span className="px-2 py-0.5 rounded-[4px] bg-(--brand)/15 border border-(--brand)/30 text-xs tabular-nums font-bold text-(--brand-ink)">
-              {games.length} Titles
-            </span>
-          </div>
-          <p className="text-xs text-(--text-muted) mt-1">
-            Titles available when creating tournaments, brackets, and team registrations.
-          </p>
-        </div>
-
-        {/* Primary + Add Game Button */}
-        <button
-          onClick={openAddModal}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black font-semibold text-xs transition-all shadow-md shadow-(color:--brand)/10 cursor-pointer self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          <span>Add Game</span>
-        </button>
-      </div>
+      <PageHeading title="Game catalog" description="Manage the titles available for tournaments, brackets, and team registration."
+        actions={<button type="button" className="arena-primary" onClick={openAddModal}><Plus size={16} />Add game</button>} />
 
       {/* Games Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {games.map((g) => (
           <div
             key={g.id}
-            className="p-4 rounded-[6px] bg-(--surface-soft) border border-(--border) hover:border-(--border-strong) transition-all flex items-center justify-between gap-4 shadow-md group"
+            className="page-panel p-4 flex flex-wrap items-center justify-between gap-3 group"
           >
             {/* Game Thumbnail & Details */}
             <div className="flex items-center gap-3.5 min-w-0">
@@ -215,17 +193,17 @@ export const GamesCategoriesView: React.FC<GamesCategoriesViewProps> = ({ games 
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => openEditModal(g)}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-[4px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--border) text-xs font-medium text-(--text-secondary) hover:text-(--text-primary) transition-colors cursor-pointer"
-                title={`Edit ${g.name}`}
+                type="button" className="arena-outline arena-sm"
+                aria-label={`Edit ${g.name}`}
               >
                 <Edit2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Edit</span>
+                <span aria-hidden="true">Edit</span>
               </button>
 
               <button
                 onClick={() => setGameToDelete(g)}
-                className="p-1.5 rounded-[4px] bg-(--surface-soft) hover:bg-(--danger)/15 border border-(--border) hover:border-(--danger)/40 text-(--text-muted) hover:text-(--danger) transition-colors cursor-pointer"
-                title={`Remove ${g.name}`}
+                type="button" className="arena-outline arena-sm arena-icon-only arena-danger-text"
+                aria-label={`Remove ${g.name}`} data-tip="Remove"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

@@ -20,7 +20,7 @@
 .monitor-risk.clear { color: var(--success); }
 .monitor-risk.watch { color: var(--info); }
 .monitor-risk.review { color: var(--warning); }
-.monitor-risk.urgent { color:var(--text-primary); background: var(--danger); }
+.monitor-risk.urgent { color: var(--on-brand); background: var(--danger); }
 .monitor-risk.urgent small { color: inherit; }
 .monitor-conn { font-size: 12px; font-weight: 650; text-transform: none; letter-spacing: .04em; padding: 4px 8px; border-radius: 20px; background: var(--surface-soft); color: var(--text-secondary); white-space: nowrap; }
 .monitor-conn.online { color: var(--success); }
@@ -76,8 +76,8 @@
 .monitor3d-label span { font-size: 12px; color: var(--text-secondary); max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 .monitor3d-pillar.watch .monitor3d-label strong { color: var(--info); }
 .monitor3d-pillar.review .monitor3d-label strong { color: var(--warning); }
-.monitor3d-pillar.urgent .monitor3d-label button { background: var(--danger); border-color: var(--danger); color:var(--text-primary); }
-.monitor3d-pillar.urgent .monitor3d-label span { color:var(--text-primary); }
+.monitor3d-pillar.urgent .monitor3d-label button { background: var(--danger); border-color: var(--danger); color: var(--on-brand); }
+.monitor3d-pillar.urgent .monitor3d-label span { color: inherit; }
 .monitor3d-label button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 .monitor3d-controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; margin: 12px 0 6px; }
 .monitor3d-controls label { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
@@ -119,3 +119,17 @@
 .monitor-conn.declined { color: var(--danger); }
 
 .monitor-online { color:var(--success, var(--success)); font-weight: 600; }
+.scan-progress { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin:20px 0; }
+.scan-progress strong { font-size:20px; }
+.scan-roster { list-style:none; margin:16px 0; padding:0; }
+.scan-roster > li { display:grid; grid-template-columns:minmax(100px,.8fr) minmax(180px,2fr) auto; gap:16px; align-items:start; padding:18px 0; border-top:1px solid var(--border-color, #3f3f46); }
+.scan-roster > li > * { min-width:0; overflow-wrap:anywhere; }
+.scan-roster .arena-outline { min-height:44px; }
+.scan-status { display:inline-block; font-weight:700; padding:4px 9px; border:1px solid currentColor; border-radius:6px; margin-bottom:6px; }
+.scan-ready { border-width:2px; }
+.scan-steps { padding-left:24px; }
+.scan-steps li { margin:12px 0; line-height:1.6; }
+@media (max-width:720px) { .scan-roster > li { grid-template-columns:1fr; gap:8px; } .scan-roster .arena-outline { width:100%; } .scan-progress { align-items:flex-start; flex-direction:column; gap:5px; } }
+
+/* Collector 3.2: long Dota file-list fingerprints wrap instead of widening the dialog. */
+.monitor-hash { overflow-wrap: anywhere; word-break: break-all; font-size: 0.8em; }

@@ -1,3 +1,4 @@
+import { PageHeading } from '../ui/PageHeading';
 /**
  * AdminMatchDataEntry.tsx
  *
@@ -24,7 +25,6 @@ import {
   Zap,
   Trophy,
   RefreshCw,
-  ClipboardList,
 } from '../ui/Icons';
 
 interface PlayerStatRow {
@@ -76,11 +76,12 @@ const makeBlankRows = (team?: Team): PlayerStatRow[] => {
   }));
 };
 
-export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matches }) => {
+export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matches: allMatches }) => {
   const { showToast } = useToast();
+  const matches = allMatches.filter(match => !match.team1?.isBye && !match.team2?.isBye);
   const liveMatches = matches.filter((m) => m.status === 'live' || m.status === 'pre-match' || m.status === 'upcoming');
   const [selectedMatchId, setSelectedMatchId] = useState<string>(liveMatches[0]?.id || matches[0]?.id || '');
-  const selectedMatch = matches.find((m) => m.id === selectedMatchId) || matches[0];
+  const selectedMatch = matches.find((m) => m.id === selectedMatchId) || liveMatches[0] || matches[0];
 
   const [team1Rows, setTeam1Rows] = useState<PlayerStatRow[]>(() => makeBlankRows(selectedMatch?.team1));
   const [team2Rows, setTeam2Rows] = useState<PlayerStatRow[]>(() => makeBlankRows(selectedMatch?.team2));
@@ -125,7 +126,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
     });
     setTeam1Rows(hydrate(selectedMatch?.team1)); setTeam2Rows(hydrate(selectedMatch?.team2));
     setMatchNotes(saved?.notes || ''); setIsSaved(Boolean(saved)); setAiAnalysis(null);
-  }, [selectedMatchId, gameNumber]);
+  }, [selectedMatch?.id, gameNumber]);
   const handleSave = async () => {
     if (!selectedMatch || !selectedMatch.team1 || !selectedMatch.team2 || selectedMatch.team1.isBye || selectedMatch.team2.isBye || selectedMatch.team1.name === 'TBD' || selectedMatch.team2.name === 'TBD') { showToast('Choose a match with two confirmed teams before entering stats.', 'error'); return; }
     const maxGames = Number(selectedMatch.matchFormat.replace('Bo', ''));
@@ -170,7 +171,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
     const setCollapsed = team === 'team1' ? setCollapseTeam1 : setCollapseTeam2;
 
     return (
-      <div className="rounded-[4px] border border-(--border) bg-(--surface-soft) overflow-hidden">
+      <div className="page-panel overflow-hidden">
         {/* Team Header */}
         <button
           aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}
@@ -198,7 +199,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
         </button>
 
         {!collapsed && (
-          <div className="overflow-x-auto border-t border-(--border)">
+          <div className="overflow-x-auto border-t border-(--border)" tabIndex={0} role="region" aria-label={`${teamCode} player stats`}>
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-(--border) bg-(--surface)">
@@ -334,29 +335,23 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
     );
   };
 
+  if (!selectedMatch) return <div className="space-y-6">
+    <PageHeading title="Match stats" description="Record each player’s stats by game and review the KDA summary." />
+    <div className="page-panel ah-empty"><h2>No matches available</h2><p>Publish a bracket with a playable match to start recording stats.</p></div>
+  </div>;
+
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-heading font-bold text-(--text-primary) flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-(--brand-ink)" />
-            Match Player Data Entry
-          </h2>
-          <p className="text-xs text-(--text-muted) mt-1">
-            Save per-game player stats and compare KDA using the data you enter.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <PageHeading title="Match stats" description="Record each player’s stats by game and review the KDA summary."
+        actions={<>
           <button
             onClick={handleSave}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-[4px] bg-(--surface-soft) hover:bg-(--surface-elevated) border border-(--border) text-xs font-semibold text-(--text-primary) transition-colors cursor-pointer"
+            className="arena-primary" disabled={!selectedMatch}
           >
             {isSaved ? (
               <>
-                <CheckCircle2 className="w-3.5 h-3.5 text-(--brand-ink)" />
-                <span className="text-(--brand-ink)">Saved</span>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span role="status">Saved</span>
               </>
             ) : (
               <>
@@ -368,8 +363,8 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
 
           <button
             onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) disabled:opacity-60 text-black text-xs font-bold transition-all shadow-lg shadow-(color:--brand)/20 hover:shadow-(color:--brand)/30 cursor-pointer"
+            disabled={isAnalyzing || !selectedMatch}
+            className="arena-outline"
           >
             {isAnalyzing ? (
               <>
@@ -383,21 +378,20 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
               </>
             )}
           </button>
-        </div>
-      </div>
+        </>} />
 
       {/* Match Selector + Game Number */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 space-y-2">
+        <div className="page-panel p-4 space-y-2">
           <label className="text-xs font-bold text-(--text-muted) block">
             Select Match
           </label>
           <select aria-label="Select match"
-            value={selectedMatchId}
+            value={selectedMatch.id}
             onChange={(e) => handleMatchChange(e.target.value)}
             className="w-full bg-(--surface) border border-(--border) rounded-[4px] px-3 py-2 text-sm text-(--text-primary) outline-none focus:border-(--brand)/60 transition-colors cursor-pointer"
           >
-            {matches.filter(m => !m.team1?.isBye && !m.team2?.isBye).map((m) => (
+            {matches.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.matchNumber} — {m.team1?.collegeCode || 'TBD'} vs {m.team2?.collegeCode || 'TBD'} · {m.status.toUpperCase()}
               </option>
@@ -413,7 +407,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
           </div>
         </div>
 
-        <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 space-y-2">
+        <div className="page-panel p-4 space-y-2">
           <label className="text-xs font-bold text-(--text-muted) block">
             Game Number (within series)
           </label>
@@ -462,7 +456,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
       )}
 
       {/* Match-level Notes */}
-      <div className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 space-y-2">
+      <div className="page-panel p-4 space-y-2">
         <label className="text-xs font-bold text-(--text-muted) block flex items-center gap-1.5">
           <Swords className="w-3.5 h-3.5" />
           Organizer observations

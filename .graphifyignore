@@ -1,0 +1,11 @@
+# Graphify code graph: only app source, server, scripts, tests and docs.
+dist/
+dist-demo/
+dist-agent/
+output/
+test-results/
+.test-data/
+data/
+companion/android/build/
+public/
+*.log

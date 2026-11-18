@@ -1,3 +1,4 @@
+import { PageHeading } from '../ui/PageHeading';
 import React, { useState } from 'react';
 import { ContentReport } from '../../lib/types';
 import { firestoreService } from '../../lib/firestore';
@@ -37,44 +38,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
   };
 
   return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-heading font-bold text-(--text-primary) tracking-tight">
-            Reports
-          </h2>
-          <span className="text-xs text-(--text-muted)">
-            Community-flagged content awaiting review
-          </span>
-        </div>
-
-        {/* Segmented Filter */}
-        <div className="flex items-center bg-(--surface-soft) p-1 rounded-[4px] border border-(--border)">
-          <button
-            onClick={() => setActiveTab('open')}
-            className={`px-3 py-1 rounded-[3px] text-xs font-semibold flex items-center gap-1.5 transition-colors ${
-              activeTab === 'open'
-                ? 'bg-(--surface) text-(--brand-ink) shadow-xs'
-                : 'text-(--text-muted) hover:text-(--text-primary)'
-            }`}
-          >
-            <span>Open</span>
-            <span className="w-4 h-4 rounded-full bg-(--danger) text-white text-xs font-bold flex items-center justify-center tabular-nums">
-              {reports.filter((r) => r.status === 'open').length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('resolved')}
-            className={`px-3 py-1 rounded-[3px] text-xs font-semibold transition-colors ${
-              activeTab === 'resolved'
-                ? 'bg-(--surface) text-(--text-primary) shadow-xs'
-                : 'text-(--text-muted) hover:text-(--text-primary)'
-            }`}
-          >
-            Resolved
-          </button>
-        </div>
+    <div className="space-y-6">
+      <PageHeading title="Community reports" description="Review flagged chat and keep track of moderation decisions." />
+      <div className="ah-chips" role="group" aria-label="Filter community reports">
+        <button type="button" className="ah-chip" aria-pressed={activeTab === 'open'} onClick={() => setActiveTab('open')}>
+          Open <span className="shell-badge-count">{reports.filter(report => report.status === 'open').length}</span>
+        </button>
+        <button type="button" className="ah-chip" aria-pressed={activeTab === 'resolved'} onClick={() => setActiveTab('resolved')}>Resolved</button>
       </div>
 
       {/* Reports List */}
@@ -88,12 +58,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
           filteredReports.map((report) => (
             <div
               key={report.id}
-              className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-5 space-y-4 shadow-xl hover:border-(--border-strong) transition-colors"
+              className="page-panel p-4 sm:p-5 space-y-4"
             >
               {/* Header row: ID, Tag, Content Type, Timestamp */}
-              <div className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3">
-                  <span className="tabular-nums font-medium text-(--text-muted)">
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                <div className="flex items-center flex-wrap gap-2 min-w-0">
+                  <span className="tabular-nums font-medium text-(--text-muted) break-all">
                     {report.id}
                   </span>
                   <span
@@ -133,7 +103,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
                 </div>
 
                 {report.status === 'open' && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => {
                         setSelectedReport(report);

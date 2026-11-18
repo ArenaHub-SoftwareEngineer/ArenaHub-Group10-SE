@@ -22,7 +22,7 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
   onSelectMatch: (match: Match, game: string) => void;
 }) {
   const games = useMemo(() => watchGames(brackets), [brackets]);
-  const [filter, setFilter] = useState<Filter>(initialGame && games.some(g => g.id === initialGame) ? initialGame : 'all');
+  const [filter, setFilter] = useState<Filter>(initialGame || 'all');
   const [pending, setPending] = useState<WatchCard | null>(null);
   const [multiOpen, setMultiOpen] = useState(false);
 
@@ -41,6 +41,7 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
     <div className="watch-grid">{cards.map(card => <WatchCardView key={card.match.id} card={card} onOpen={open} />)}</div>
   </section>;
   const showLive = filter !== 'upcoming', showUpcoming = filter !== 'live';
+  const scopedFilter = games.some(game => game.id === filter) || ['all', 'live', 'upcoming'].includes(filter);
   const nothing = !(showLive && (live.length || waiting.length)) && !(showUpcoming && upcoming.length);
 
   return <div className="match-center watch-home">
@@ -54,7 +55,7 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
 
     {filter === 'all' && <FeaturedCarousel cards={featured} onOpen={open} />}
 
-    <div className="ah-chips" role="toolbar" aria-label="Filter matches">
+    <div className="ah-chips" role="group" aria-label="Filter matches">
       {[{ id: 'all', label: 'All' }, { id: 'live', label: 'Live now' }, { id: 'upcoming', label: 'Upcoming' }].map(chip =>
         <button key={chip.id} type="button" className="ah-chip" aria-pressed={filter === chip.id} onClick={() => setFilter(chip.id)}>{chip.id === 'live' && <i className="watch-chip-dot" aria-hidden="true" />}{chip.label}</button>)}
       <span className="ah-chips-divider" aria-hidden="true" />
@@ -69,7 +70,7 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
     {showUpcoming && shelf('Upcoming', <CalendarDays size={18} />, upcoming, 'shelf-upcoming')}
     {nothing && <div className="ah-empty">
       {filter === 'upcoming' ? <CalendarIllustration /> : <BroadcastIllustration />}
-      <h3>{filter === 'upcoming' ? 'Nothing scheduled here yet' : 'Nothing live right now'}</h3>
+      <h3>{!scopedFilter ? 'Game unavailable' : filter === 'all' ? 'No matches to show' : filter === 'live' ? 'No live matches' : 'No matches for this filter'}</h3>
       <p>{filter === 'live' || filter === 'all' ? 'Live broadcasts appear here the moment an organizer starts a match.' : 'Published matches for this choice will appear here.'}</p>
       {filter !== 'all' && <button type="button" className="arena-outline" onClick={() => setFilter('all')}>Show all matches</button>}
     </div>}

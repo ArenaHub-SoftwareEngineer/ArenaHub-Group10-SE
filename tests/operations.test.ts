@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBracketFromTeams, updateMatchAndAdvance } from '../src/lib/bracketUtils';
 import { seriesWinsNeeded, type Match } from '../src/lib/types';
-import { inspectCheckIn, parseLineup, parseRoster, type Registration, type CheckIn } from '../src/lib/tournamentOperations';
+import { inspectCheckIn, matchTeamIds, parseLineup, parseRoster, type Registration, type CheckIn } from '../src/lib/tournamentOperations';
 import { reviewSampleTimes, validateFrameFindings } from '../src/lib/videoReview';
 const make = (n: number, format: string) => createBracketFromTeams({ title: 'Test event', teams: Array.from({ length: n }, (_, i) => ({ name: `Team ${i + 1}` })), format });
 const finish = (matches: Match[], match: Match, side: 1 | 2 = 1) => updateMatchAndAdvance(matches, { ...match, score: { team1Score: side === 1 ? seriesWinsNeeded(match.matchFormat) : 0, team2Score: side === 2 ? seriesWinsNeeded(match.matchFormat) : 0 }, status: 'completed', winnerId: (side === 1 ? match.team1 : match.team2)?.id });
@@ -51,6 +51,19 @@ test('roster checks explain unapproved players, account mismatches, duplicates a
   const codes = inspectCheckIn(registration, checkIn, { tournamentId: 't', gameId: 'g', playersRequired: 1, maxSubstitutes: 1, registrationOpen: true }).map(f => f.code);
   for (const code of ['STALE_ROSTER', 'LINEUP_SIZE', 'ACCOUNT_MISMATCH', 'UNAPPROVED_PLAYER', 'DUPLICATE_PLAYER']) assert.ok(codes.includes(code));
   assert.throws(() => parseRoster('A | IGN | same | account | starter\nB | IGN2 | SAME | other | sub'));
+});
+
+test('referee roster validation recognizes every lobby squad and rejects outside teams', async () => {
+  const { createPlacementEvent, scheduleMatches } = await import('../src/lib/formats/placement');
+  const draft = createPlacementEvent({ title: 'Squad readiness', teams: [{ name: 'Alpha' }, { name: 'Bravo' }, { name: 'Charlie' }], games: 1, config: { pointsTable: [10, 6, 3], killPoints: 1 } });
+  const match = scheduleMatches(draft)[0];
+  const players = parseRoster('Player One | IGN | S-001 | account001 | starter');
+  const registration = { status: 'locked', sanction: 'none', revision: 1, players, teamId: draft.placement!.teams[2].id } as Registration;
+  const checkIn = { rosterRevision: 1, lineup: parseLineup('s-001 | account001') } as CheckIn;
+  const policy = { tournamentId: draft.id, gameId: 'game-codm-br', playersRequired: 1, maxSubstitutes: 0, registrationOpen: true };
+  assert.equal(matchTeamIds(match).length, 3);
+  assert.deepEqual(inspectCheckIn(registration, checkIn, policy, match), []);
+  assert.deepEqual(inspectCheckIn({ ...registration, teamId: 'other-event-team' }, checkIn, policy, match).map(flag => flag.code), ['WRONG_MATCH']);
 });
 test('video sampling respects the selected segment and rejects invented or missing model frames', () => {
   assert.deepEqual(reviewSampleTimes(1.2), [0, .5, 1]);

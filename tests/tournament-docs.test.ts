@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBracketFromTeams, updateMatchAndAdvance } from '../src/lib/bracketUtils';
-import { announcementChanges, assertDocSize, bracketTeams, fingerprint, fromDocs, toRosterDoc, toTournamentDoc } from '../src/lib/data/tournamentDocs';
+import { announcementChanges, placementAnnouncementChanges, assertDocSize, bracketTeams, fingerprint, fromDocs, toRosterDoc, toTournamentDoc } from '../src/lib/data/tournamentDocs';
 import type { BracketDraft, Player } from '../src/lib/types';
 
 function sampleBracket(): BracketDraft {
@@ -69,6 +69,19 @@ test('scoring a match changes only that tournament fingerprint and yields a resu
   assert.notEqual(fingerprint(before.matches), fingerprint(after.matches));
   const changes = announcementChanges(before.matches, after.matches);
   assert.deepEqual(changes.map(c => [c.match.id, c.kind]), [[target.id, 'result']]);
+});
+
+test('lobby announcements cover schedules, live starts, results and corrections without repeating unchanged scores', async () => {
+  const { createPlacementEvent } = await import('../src/lib/formats/placement');
+  const event = createPlacementEvent({ title: 'Lobby updates', teams: [{ name: 'Alpha' }, { name: 'Bravo' }], games: 1, config: { pointsTable: [10, 6], killPoints: 1 } }).placement!;
+  const live = { ...event, games: event.games.map(game => ({ ...game, status: 'live' as const, scheduledDate: '2026-12-01', scheduledTime: '15:00' })) };
+  assert.deepEqual(placementAnnouncementChanges(event, live).map(change => change.kind), ['schedule', 'live']);
+  const completed = { ...live, games: live.games.map(game => ({ ...game, status: 'completed' as const, results: event.teams.map((team, i) => ({ teamId: team.id, placement: i + 1, kills: 0 })) })) };
+  assert.deepEqual(placementAnnouncementChanges(live, completed).map(change => change.kind), ['result']);
+  assert.deepEqual(placementAnnouncementChanges(completed, { ...completed, games: completed.games.map(game => ({ ...game, results: [...game.results].reverse() })) }), []);
+  const corrected = { ...completed, games: completed.games.map(game => ({ ...game, results: game.results.map(result => ({ ...result, kills: result.kills + 1 })) })) };
+  assert.deepEqual(placementAnnouncementChanges(completed, corrected).map(change => change.kind), ['result']);
+  assert.deepEqual(placementAnnouncementChanges(undefined, event), []);
 });
 
 test('bracketTeams skips byes and keeps the fullest roster', () => {

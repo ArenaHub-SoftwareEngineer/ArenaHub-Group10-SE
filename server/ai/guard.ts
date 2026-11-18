@@ -16,6 +16,7 @@ export const chatAskSchema = z.object({
   question: text(500),
 }).strict();
 export const bracketSchema = z.object({ prompt: text(6000) }).strict();
+export const caseSummarySchema = z.object({ caseId: z.string().regex(/^[A-Za-z0-9_-]{1,160}$/) }).strict();
 
 export { screenQuestion, type Screen } from '../../src/lib/aiGuard.ts';
 

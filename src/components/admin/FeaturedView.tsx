@@ -1,3 +1,4 @@
+import { PageHeading } from '../ui/PageHeading';
 import React, { useState } from 'react';
 import { Tournament } from '../../lib/types';
 import { firestoreService } from '../../lib/firestore';
@@ -12,7 +13,8 @@ interface FeaturedViewProps {
 
 type Kind = 'highlight' | 'post';
 const card = 'rounded-[4px] bg-(--surface) border p-4 space-y-3 transition-colors';
-const toggleClass = (on: boolean) => `flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-colors cursor-pointer ${on ? 'bg-(--brand) text-black shadow-sm' : 'bg-(--surface-soft) hover:bg-(--surface-elevated) text-white border border-(--border-strong)'}`;
+// One button language across the console: compact pills, filled when the item is on Home.
+const toggleClass = (on: boolean) => `${on ? 'arena-primary' : 'arena-outline'} arena-sm`;
 
 export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
   const { showToast } = useToast();
@@ -40,10 +42,11 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
   };
 
   return (
-    <div className="space-y-8 max-w-6xl">
-      <section className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-heading font-bold text-(--text-primary) tracking-tight">Tournaments</h3>
+    <div className="space-y-6">
+      <PageHeading title="Spotlight" description="Choose which tournaments, clips, and posts appear on the viewer home page." />
+      <section className="page-panel p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h2>Tournaments</h2>
           <span className="text-xs text-(--text-muted)">{tournaments.filter(t => t.isFeatured).length} featured on Home</span>
         </div>
         {!tournaments.length ? <p className="text-sm text-(--text-secondary)">No published tournaments yet. Publish a bracket in Bracket Studio, then feature it here.</p> :
@@ -55,7 +58,7 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
                   <span className="text-sm font-semibold text-(--text-primary) block">{t.title} · {t.gameName}</span>
                   <span className="text-xs text-(--text-muted)">{t.collegesCount} colleges · {t.format.replace('-', ' ')}</span>
                 </div>
-                <button onClick={() => run(() => firestoreService.toggleFeatureTournament(t.id), `${t.isFeatured ? 'Removed' : 'Featured'} "${t.title}" on Home.`)} className={toggleClass(t.isFeatured)}>
+                <button aria-pressed={t.isFeatured} onClick={() => run(() => firestoreService.toggleFeatureTournament(t.id), `${t.isFeatured ? 'Removed' : 'Featured'} "${t.title}" on Home.`)} className={toggleClass(t.isFeatured)}>
                   <Star className={`w-3.5 h-3.5 ${t.isFeatured ? 'fill-black' : ''}`} /><span>{t.isFeatured ? 'Featured' : 'Feature'}</span>
                 </button>
               </div>
@@ -63,12 +66,12 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
           </div>}
       </section>
 
-      <section className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-heading font-bold text-(--text-primary) tracking-tight">Highlights and posts</h3>
+      <section className="page-panel p-4 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h2>Highlights and posts</h2>
           <span className="text-xs text-(--text-muted)">{items.filter(i => i.isFeatured).length} featured on Home</span>
         </div>
-        <form onSubmit={add} className="grid grid-cols-1 md:grid-cols-[140px_1fr_1fr_1fr_auto] gap-3 mb-6 items-end">
+        <form onSubmit={add} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[120px_repeat(3,minmax(0,1fr))_auto] gap-3 mb-6 items-end">
           <label className="text-xs text-(--text-secondary) flex flex-col gap-1">Type
             <select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value as Kind })} className="bg-(--surface) border border-(--border-strong) rounded-[4px] px-2 py-2 text-(--text-primary) text-sm">
               <option value="highlight">Clip</option><option value="post">Post</option>
@@ -83,7 +86,7 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
           <label className="text-xs text-(--text-secondary) flex flex-col gap-1"><Req>Made or posted by</Req>
             <input required minLength={2} maxLength={80} value={form.author} onChange={e => setForm({ ...form, author: e.target.value })} className="bg-(--surface) border border-(--border-strong) rounded-[4px] px-2 py-2 text-(--text-primary) text-sm" />
           </label>
-          <button type="submit" disabled={busy} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[4px] text-xs font-semibold bg-(--text-primary) text-(--surface) disabled:opacity-60">
+          <button type="submit" disabled={busy} className="arena-primary">
             <Plus className="w-3.5 h-3.5" />Add
           </button>
         </form>
@@ -101,9 +104,9 @@ export const FeaturedView: React.FC<FeaturedViewProps> = ({ tournaments }) => {
                     <Star className={`w-3.5 h-3.5 ${item.isFeatured ? 'fill-black' : ''}`} /><span>{item.isFeatured ? 'Featured' : 'Feature'}</span>
                   </button>
                   {confirmRemove === item.id
-                    ? <><button onClick={() => { setConfirmRemove(null); void run(() => firestoreService.removeFeaturedItem(item.id), 'Spotlight item removed.'); }} className="px-3 py-1.5 rounded-[4px] text-xs font-semibold bg-(--danger) text-white">Confirm remove</button>
-                      <button onClick={() => setConfirmRemove(null)} className="px-3 py-1.5 rounded-[4px] text-xs text-(--text-secondary) border border-(--border-strong)">Cancel</button></>
-                    : <button onClick={() => setConfirmRemove(item.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] text-xs text-(--text-secondary) border border-(--border-strong)"><Trash className="w-3.5 h-3.5" />Remove</button>}
+                    ? <><button onClick={() => { setConfirmRemove(null); void run(() => firestoreService.removeFeaturedItem(item.id), 'Spotlight item removed.'); }} className="arena-primary arena-sm arena-danger">Confirm remove</button>
+                      <button onClick={() => setConfirmRemove(null)} className="arena-outline arena-sm">Cancel</button></>
+                    : <button onClick={() => setConfirmRemove(item.id)} className="arena-outline arena-sm"><Trash className="w-3.5 h-3.5" />Remove</button>}
                 </div>
               </div>
             ))}

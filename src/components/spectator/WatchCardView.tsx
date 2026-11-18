@@ -19,8 +19,7 @@ export function WatchCardView({ card, layout = 'grid', onOpen }: { card: WatchCa
   const { match } = card;
   const live = card.state === 'live';
   const title = cardTitle(match);
-  return <button type="button" className={`watch-card watch-card-${layout}${live ? ' is-live' : ''}`} onClick={() => onOpen(card)}
-    aria-label={`${title}. ${cardStatus(card)}. ${card.gameLabel}`}>
+  return <button type="button" className={`watch-card watch-card-${layout}${live ? ' is-live' : ''}`} onClick={() => onOpen(card)}>
     <span className="watch-thumb">
       {card.image ? <img src={card.image} alt="" loading="lazy" /> : <span className="watch-thumb-fallback" />}
       <span className="watch-thumb-shade" />
@@ -28,8 +27,8 @@ export function WatchCardView({ card, layout = 'grid', onOpen }: { card: WatchCa
         : <span className="watch-thumb-versus" aria-hidden="true">
           <CollegeLogo code={code(match.team1)} size={layout === 'row' ? 'sm' : 'md'} /><b>VS</b><CollegeLogo code={code(match.team2)} size={layout === 'row' ? 'sm' : 'md'} />
         </span>}
-      {live ? <span className="watch-badge watch-badge-live"><i />LIVE</span>
-        : card.state === 'waiting' ? <span className="watch-badge watch-badge-soon">Starting soon</span> : null}
+      {live ? <span className="watch-badge watch-badge-live" aria-hidden="true"><i />LIVE</span>
+        : card.state === 'waiting' ? <span className="watch-badge watch-badge-soon" aria-hidden="true">Starting soon</span> : null}
       <span className="watch-badge watch-badge-corner">{match.lobby ? 'Lobby' : match.status === 'live' || match.status === 'completed' ? `${match.score.team1Score}–${match.score.team2Score}` : match.matchFormat || 'Bo3'}</span>
       <span className="watch-play" aria-hidden="true"><Play size={layout === 'row' ? 16 : 22} /></span>
     </span>

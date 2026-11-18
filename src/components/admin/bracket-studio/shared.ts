@@ -2,7 +2,7 @@
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type BracketFormat = 'Single Elimination' | 'Double Elimination' | 'Round Robin';
+export type BracketFormat = 'Single Elimination' | 'Double Elimination' | 'Round Robin' | 'Swiss';
 
 export function getBracketSyncErrorMessage(error: unknown, action: 'Saved' | 'Published' | 'Unpublished'): string {
   const details = error && typeof error === 'object'

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { BracketDraft } from '../../lib/types';
 import { publicationGameKey } from '../../lib/bracketPublication';
-import { GAME_ARTWORK, GameArtworkTiles } from '../common/GameArtworkTiles';
+import { GAME_ARTWORK } from '../common/GameArtworkTiles';
 import { ArrowRight, GitBranch, Radio } from '../ui/Icons';
 
 export function ChooseTournamentView({ brackets, onSelectBracket }: {
@@ -16,8 +16,16 @@ export function ChooseTournamentView({ brackets, onSelectBracket }: {
       <h1>Brackets</h1>
       <p>Choose a game to view its published bracket, scores, and live matches.</p>
     </header>
-    <GameArtworkTiles label="Filter brackets by game" selected={game} onSelect={setGame} />
-    <div><button className="arena-outline" type="button" aria-pressed={game === 'all'} onClick={() => setGame('all')}>All games</button></div>
+    {/* One filter row, the same chips Match center uses; each count says whether a game has a bracket before you click. */}
+    <div className="ah-chips" role="group" aria-label="Filter brackets by game">
+      <button type="button" className="ah-chip" aria-pressed={game === 'all'} onClick={() => setGame('all')}>All games <span className="ah-chip-count">{brackets.length}</span></button>
+      {GAME_ARTWORK.map(item => {
+        const count = brackets.filter(bracket => publicationGameKey(bracket) === `game-${item.id}`).length;
+        return <button key={item.id} type="button" className="ah-chip" aria-pressed={game === item.id} onClick={() => setGame(item.id)}>
+          <img className="ah-chip-img" src={item.image} alt="" />{item.name}<span className="ah-chip-count">{count}</span>
+        </button>;
+      })}
+    </div>
     {visible.length ? <div className="viewer-bracket-grid">
       {visible.map(bracket => {
         const artwork = GAME_ARTWORK.find(item => `game-${item.id}` === publicationGameKey(bracket));
@@ -33,6 +41,6 @@ export function ChooseTournamentView({ brackets, onSelectBracket }: {
           </span>
         </button>;
       })}
-    </div> : <p className="arena-panel studio-muted">No bracket has been published for this selection yet.</p>}
+    </div> : <div className="ah-empty-panel"><GitBranch size={22} aria-hidden="true" /><strong>No bracket for this game yet</strong><p>Organizers publish brackets here once teams are confirmed.</p>{game !== 'all' && <button type="button" className="arena-outline" onClick={() => setGame('all')}>Show all games</button>}</div>}
   </div>;
 }

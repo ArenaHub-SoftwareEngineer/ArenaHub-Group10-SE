@@ -40,7 +40,7 @@ export const BRACKET_PROMPT = [
   'You read an organizer\'s request for a tournament bracket and return its parameters as JSON.',
   'Only include what the organizer wrote. Do not invent teams, a game, or a title.',
   'game is one of: "Mobile Legends: Bang Bang", "Dota 2", "Call of Duty: Mobile Multiplayer", "Call of Duty: Mobile Battle Royale", or null when the request does not say.',
-  'format is one of: "Single elimination", "Double elimination", "Round robin", or null.',
+  'format is one of: "Single elimination", "Double elimination", "Round robin", "Swiss", or null.',
   'matchFormat and finalMatchFormat are "Bo1", "Bo3", "Bo5" or "Bo7", or null.',
   'teams lists each team the organizer named, with its college code if given.',
   'seeding is "Win rate", "Skill rating", "Random draw" or null. constraints are short phrases such as "same-college squads apart in round 1".',

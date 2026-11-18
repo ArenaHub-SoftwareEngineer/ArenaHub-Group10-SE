@@ -3,7 +3,8 @@
 .desk-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .desk-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .desk-filters { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.desk-filters .ah-chips { flex: 1; min-width: 0; }
+.desk-filters .ah-chips { flex: 1; min-width: 0; max-width: 100%; }
+.desk-bracket-picker { min-width: 0; max-width: 100%; }
 .desk-chip-live { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--live); color: #fff; font-size: 12px; font-weight: 700; display: inline-grid; place-items: center; }
 .desk-bracket-picker select { height: 36px; max-width: 320px; padding: 0 32px 0 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-primary); font-size: 14px; }
 
@@ -98,7 +99,7 @@
 }
 @media (max-width: 640px) {
   .desk-filters { flex-direction: column; align-items: stretch; }
-  .desk-bracket-picker select { max-width: none; width: 100%; }
+  .desk-bracket-picker select { max-width: 100%; width: 100%; min-height: 44px; font-size: 16px; }
   .desk-url-row { flex-direction: column; }
   .desk-titlebar { align-items: flex-start; }
   .desk-score { font-size: 24px; }

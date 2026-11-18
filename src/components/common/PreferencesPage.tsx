@@ -1,5 +1,23 @@
 import React, { useState } from 'react';
-import { Settings2, Pencil, ArrowUpRight, UserRound, ShieldCheck, Palette, Loader2, QrCode } from '../ui/Icons';
+import { Pencil, ArrowUpRight, UserRound, ShieldCheck, Palette, Loader2, QrCode, Bell } from '../ui/Icons';
+import { alertState, setSystemAlerts, type AlertState } from '../../lib/systemAlerts';
+
+/** On/off for system notifications in this browser, with the reason when the browser will not show them. */
+function SystemAlertsRow() {
+  const [state, setState] = useState<AlertState>(alertState), [busy, setBusy] = useState(false);
+  const detail = {
+    unsupported: 'This browser cannot show system notifications. Updates still arrive in the bell.',
+    denied: 'Notifications are blocked for ArenaHub in this browser. Allow them in the browser’s site settings (the icon left of the address), then turn this on.',
+    off: 'Get a system notification for new updates while ArenaHub is open in another tab. Only on this browser; nothing is sent when ArenaHub is closed.',
+    on: 'On for this browser. New updates pop up while ArenaHub is open in a tab you are not looking at.',
+  }[state];
+  return <div className="preference-row"><div><strong>System notifications</strong><p role="status">{detail}</p></div>
+    {(state === 'on' || state === 'off') && <button type="button" className={`${state === 'on' ? 'arena-outline' : 'arena-primary'} arena-sm`} disabled={busy}
+      onClick={async () => { setBusy(true); try { setState(await setSystemAlerts(state !== 'on')); } finally { setBusy(false); } }}>
+      {busy ? 'Asking the browser…' : state === 'on' ? 'Turn off' : 'Turn on'}
+    </button>}
+  </div>;
+}
 import { doc, updateDoc } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential, sendPasswordResetEmail, verifyBeforeUpdateEmail } from 'firebase/auth';
 import { User } from '../../lib/types';
@@ -87,6 +105,7 @@ export function PreferencesPage({ user, onSignIn, inDialog = false }: { user: Us
     { id: 'profile', label: 'Profile', icon: UserRound },
     ...(!guest ? [{ id: 'security', label: 'Sign-in & security', icon: ShieldCheck }] : []),
     { id: 'appearance', label: 'Appearance', icon: Palette },
+    { id: 'alerts', label: 'Notifications', icon: Bell },
     ...(canInvite ? [{ id: 'invite', label: 'Spectator invite', icon: QrCode }] : []),
   ];
   return <div className={inDialog ? 'settings-workspace' : 'module-page settings-page'}>
@@ -96,7 +115,7 @@ export function PreferencesPage({ user, onSignIn, inDialog = false }: { user: Us
       </button>)}
     </nav>}
     <div key={inDialog ? section : undefined} className="module-page settings-page settings-content">
-    {!inDialog && <header className="module-header"><span className="cute-icon"><Settings2 /></span><div><h1>Your arena, your way.</h1><p>Manage your profile, sign-in details, and the little things that make it yours.</p></div></header>}
+    {!inDialog && <header className="dashboard-page-heading"><h1>Settings</h1><p>Manage your profile, sign-in details, and display preferences.</p></header>}
     {notice && <p className="settings-notice" role="status">{notice}</p>}
     {(!inDialog || section === 'profile') && <section className="arena-panel"><h2 className="settings-section-title"><UserRound size={16} /> Profile</h2>
       {guest ? <div className="preference-row"><div><strong>You’re exploring as a visitor</strong><p>Sign in to save a name, campus, and account details.</p></div><button className="settings-edit" onClick={onSignIn}>Sign in <ArrowUpRight size={14} /></button></div> : <>
@@ -110,9 +129,13 @@ export function PreferencesPage({ user, onSignIn, inDialog = false }: { user: Us
       {passwordAccount ? row('Password', 'Send a secure reset link to your current email address.', 'password', 'Reset') : <div className="preference-row"><div><strong>Connected sign-in</strong><p>Your sign-in provider manages your password.</p></div><span className="settings-badge">Connected</span></div>}
     </section>}
     {(!inDialog || section === 'appearance') && <section className="arena-panel"><h2 className="settings-section-title"><Palette size={16} /> Appearance</h2>
-      {row('Display preferences', 'Adjust motion and spacing for this browser.', 'appearance', 'Customize')}
-      {row('Motion & spacing', `${read('arenahub_reduced_motion') ? 'Reduced motion' : 'Standard motion'} · ${read('arenahub_compact_layout') ? 'Compact' : 'Comfortable'} spacing`, 'appearance')}
-      <div className="preference-row"><div><strong>Stream quality</strong><p>Choose quality and playback inside the embedded stream player.</p></div><span className="settings-badge">Player controls</span></div>
+      {/* One row per setting: the current values are the description, the button opens the editor. */}
+      {row('Motion & spacing', `${read('arenahub_reduced_motion') ? 'Reduced motion' : 'Standard motion'} · ${read('arenahub_compact_layout') ? 'Compact' : 'Comfortable'} spacing · saved in this browser`, 'appearance', 'Customize')}
+      <div className="preference-row"><div><strong>Stream quality</strong><p>Change quality and captions from the settings button inside the stream player while you watch.</p></div></div>
+    </section>}
+    {(!inDialog || section === 'alerts') && <section className="arena-panel"><h2 className="settings-section-title"><Bell size={16} /> Notifications</h2>
+      <SystemAlertsRow />
+      <div className="preference-row"><div><strong>Inbox</strong><p>Match updates, roster decisions and Fair play reviews always arrive in the bell at the top of the page.</p></div></div>
     </section>}
     </div>
     <Modal open={editor !== null} busy={busy} onClose={close}

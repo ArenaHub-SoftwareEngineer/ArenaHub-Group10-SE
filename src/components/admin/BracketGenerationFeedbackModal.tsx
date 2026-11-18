@@ -76,7 +76,7 @@ export const BracketGenerationFeedbackModal: React.FC<BracketGenerationFeedbackM
 
           <dl className="studio-details-metrics">
             <div data-tone="orange"><dt><Users size={17} aria-hidden="true" /> Teams</dt><dd>{data.teamCount}</dd></div>
-            <div data-tone="blue"><dt><GitBranch size={17} aria-hidden="true" /> Bracket slots</dt><dd>{data.treeSize}</dd></div>
+            <div data-tone="blue"><dt><GitBranch size={17} aria-hidden="true" /> {/swiss|round robin/i.test(data.format) ? 'Teams in field' : 'Bracket slots'}</dt><dd>{/swiss|round robin/i.test(data.format) ? data.teamCount : data.treeSize}</dd></div>
             <div data-tone="green"><dt><Zap size={17} aria-hidden="true" /> Opening-round BYEs</dt><dd>{byeTeams.size}</dd></div>
             <div data-tone="orange"><dt><Layers size={17} aria-hidden="true" /> Series formats</dt><dd>{seriesFormats || data.matchFormat}</dd></div>
           </dl>
@@ -86,7 +86,7 @@ export const BracketGenerationFeedbackModal: React.FC<BracketGenerationFeedbackM
           <section>
             <h3 className="studio-label studio-details-heading"><Users size={17} aria-hidden="true" /> Team seeding</h3>
             <p className="studio-muted">
-              {byeTeams.size ? 'Teams marked BYE advance automatically. You can change a BYE in Match details.' : 'No opening-round BYEs.'}
+              {byeTeams.size ? data.format === 'Swiss' ? 'An automatic bye counts as a series win. Swiss assigns one bye per round in an odd field.' : 'Teams marked BYE advance automatically. You can change a BYE in Match details.' : 'No opening-round BYEs.'}
             </p>
             <ol className="studio-details-roster">
               {data.teams.map((team, index) => (

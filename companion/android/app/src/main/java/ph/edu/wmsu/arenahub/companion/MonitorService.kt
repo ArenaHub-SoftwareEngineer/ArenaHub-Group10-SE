@@ -15,6 +15,8 @@ import android.graphics.drawable.Icon
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -43,10 +45,14 @@ class MonitorService : Service() {
     private lateinit var server: String
     private lateinit var token: String
     private var gamePackages = listOf<String>()
+    private var blockedCertificates = listOf<String>()
+    private var scanStamp: JSONObject? = null
     private var blocked = listOf<String>()
     private var recordingRefused = false
     private lateinit var checks: DeviceChecks
     @Volatile private var stopping = false
+    private val deadlineHandler = Handler(Looper.getMainLooper())
+    private val expireWindow = Runnable { shutdown("The match window closed.", notifyServer = false) }
     // Rescan installed apps as soon as something is installed, updated or removed.
     private val appsChanged = object : BroadcastReceiver() { override fun onReceive(context: Context, intent: Intent) { checks.invalidate() } }
 
@@ -59,6 +65,12 @@ class MonitorService : Service() {
         token = intent.getStringExtra(EXTRA_TOKEN) ?: return START_NOT_STICKY
         gamePackages = intent.getStringArrayListExtra(EXTRA_GAMES) ?: arrayListOf()
         blocked = intent.getStringArrayListExtra(EXTRA_BLOCKED) ?: arrayListOf()
+        blockedCertificates = intent.getStringArrayListExtra(EXTRA_CERTIFICATES) ?: arrayListOf()
+        scanStamp = intent.getStringExtra(EXTRA_SCAN)?.let { JSONObject(it) }
+        val remaining = intent.getLongExtra(EXTRA_EXPIRES, 0) - System.currentTimeMillis()
+        if (remaining <= 0 || remaining > 12 * 3600_000L) { stopSelf(); return START_NOT_STICKY }
+        // Do not keep capturing past the consent window if the API is unreachable.
+        deadlineHandler.postDelayed(expireWindow, remaining)
         val heartbeat = intent.getIntExtra(EXTRA_HEARTBEAT, 15).coerceIn(5, 120).toLong()
         val wantsRecording = intent.getBooleanExtra(EXTRA_RECORD, true)
         checks = DeviceChecks(this)
@@ -73,6 +85,7 @@ class MonitorService : Service() {
             Build.VERSION.SDK_INT >= 34 -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
             else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
         }
+        MonitorState.status = "Starting anti-cheat scan"
         startForeground(NOTIFICATION_ID, notification(), type)
         MonitorState.running = true
         MonitorState.status = "Monitoring on"
@@ -93,7 +106,7 @@ class MonitorService : Service() {
     private fun report() {
         if (stopping) return
         try {
-            val facts = checks.collect(gamePackages, blocked, recorder?.isRecording == true, recordingRefused)
+            val facts = checks.collect(gamePackages, blocked, recorder?.isRecording == true, recordingRefused, blockedCertificates, scanStamp)
             val result = Api.postJson(server, "/device/heartbeat", facts, token)
             when {
                 result.code == 410 -> shutdown("The match window closed.", notifyServer = false)
@@ -101,17 +114,25 @@ class MonitorService : Service() {
                     val monitor = result.json().optJSONObject("monitor")
                     monitor?.optJSONArray("gamePackages")?.let { gamePackages = it.strings() }
                     monitor?.optJSONArray("blockedPackages")?.let { blocked = it.strings() }
+                    monitor?.optJSONArray("blockedCertificates")?.let { blockedCertificates = it.strings() }
+                    scanStamp = monitor?.optJSONObject("scan")
                     MonitorState.lastReport = System.currentTimeMillis()
-                    if (recorder?.isRecording == true || recorder == null && !recordingRefused) MonitorState.status = "Monitoring on"
+                    val scan = result.json().optJSONObject("scan")
+                    MonitorState.status = scan?.let { "${it.optString("label")}: ${it.optString("detail")}" } ?: "Scan running"
                 }
-                else -> MonitorState.status = result.error("The referee laptop rejected a report (${result.code}).")
+                else -> MonitorState.status = result.error("The tournament server rejected a scan (${result.code}).")
             }
         } catch (_: Exception) {
-            MonitorState.status = "Cannot reach the referee laptop. Check your Wi-Fi or mobile data. Retrying..."
+            MonitorState.status = "Cannot reach the tournament server. Check your Wi-Fi or mobile data. Retrying..."
         }
+        try {
+            if (!stopping) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
+        } catch (_: SecurityException) { /* Keep scanning if the player disabled notifications. */ }
     }
 
-    private fun enqueue(file: File) {
+    @Synchronized private fun enqueue(file: File) {
+        // The recorder finishes asynchronously; never retain a late segment after consent ends.
+        if (stopping) { file.delete(); return }
         queue.add(file)
         // Keep at most about 20 minutes of unsent video on the phone if the connection drops.
         while (queue.size > 40) queue.pollFirst()?.delete()
@@ -132,7 +153,7 @@ class MonitorService : Service() {
         }
     }
 
-    private fun shutdown(reason: String, notifyServer: Boolean) {
+    @Synchronized private fun shutdown(reason: String, notifyServer: Boolean) {
         if (stopping) return
         stopping = true
         MonitorState.status = reason
@@ -150,6 +171,13 @@ class MonitorService : Service() {
     }
 
     override fun onDestroy() {
+        stopping = true
+        deadlineHandler.removeCallbacks(expireWindow)
+        recorder?.stop()
+        scheduler.shutdownNow()
+        uploader.shutdownNow()
+        queue.forEach { it.delete() }
+        queue.clear()
         try { unregisterReceiver(appsChanged) } catch (_: Exception) {}
         MonitorState.running = false
         super.onDestroy()
@@ -162,7 +190,9 @@ class MonitorService : Service() {
         val stop = PendingIntent.getService(this, 1, Intent(this, MonitorService::class.java).setAction(ACTION_STOP), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL)
             .setContentTitle(getString(R.string.notification_title))
-            .setContentText("Screen recording and device checks for your match.")
+            .setContentText(MonitorState.status)
+            .setStyle(Notification.BigTextStyle().bigText(MonitorState.status))
+            .setOnlyAlertOnce(true)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setOngoing(true)
             .setContentIntent(open)
@@ -180,6 +210,9 @@ class MonitorService : Service() {
         const val EXTRA_TOKEN = "token"
         const val EXTRA_GAMES = "games"
         const val EXTRA_BLOCKED = "blocked"
+        const val EXTRA_CERTIFICATES = "certificates"
+        const val EXTRA_EXPIRES = "expiresAt"
+        const val EXTRA_SCAN = "scan"
         const val EXTRA_HEARTBEAT = "heartbeat"
         const val EXTRA_RECORD = "record"
         const val EXTRA_PROJECTION_CODE = "projectionCode"

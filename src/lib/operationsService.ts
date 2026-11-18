@@ -1,11 +1,11 @@
 import { collection, doc, onSnapshot, query, where, runTransaction, serverTimestamp, Timestamp, writeBatch } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { duplicateRosterKeys, inspectCheckIn, validateRoster, type Registration, type RosterPlayer, type TournamentPolicy, type CheckIn, type MatchWindow } from './tournamentOperations';
+import { duplicateRosterKeys, inspectCheckIn, matchTeamIds, validateRoster, type Registration, type RosterPlayer, type TournamentPolicy, type CheckIn, type MatchWindow } from './tournamentOperations';
 import { notificationRecord, notificationRef } from './notificationService';
 import { validateEvidenceUrl } from './integrityChecks';
 import { readTournamentInTx, rosterRef, privateRosterRef } from './data/tournamentStore';
-import type { RosterDoc } from './data/tournamentDocs';
-import type { Match } from './types';
+import { fromDocs, type RosterDoc } from './data/tournamentDocs';
+import { MAX_LOBBY_TEAMS, scheduleMatches } from './formats/placement';
 
 function account() { const user = auth.currentUser; if (!user?.emailVerified || user.isAnonymous) throw new Error('Sign in with a verified campus account.'); return user; }
 export function subscribeOperations(staff: boolean, receive: (items: Registration[]) => void, fail: (message: string) => void) {
@@ -53,7 +53,7 @@ export async function reviewRegistration(id: string, status: 'approved' | 'rejec
     const registryRef = doc(db, 'rosterRegistries', registration.tournamentId), registry = (await tx.get(registryRef)).data()?.keys || {};
     const tournament = await readTournamentInTx(tx, registration.tournamentId);
     const publicRoster = await tx.get(rosterRef(registration.tournamentId));
-    if (tournament?.status !== 'published' || !tournament.matches.some(m => [m.team1?.id, m.team2?.id].includes(registration.teamId))) throw new Error('This team is no longer in the published tournament.');
+    if (tournament?.status !== 'published' || !(tournament.matches.some(m => [m.team1?.id, m.team2?.id].includes(registration.teamId)) || tournament.placement?.teams.some(team => team.id === registration.teamId))) throw new Error('This team is no longer in the published tournament.');
     if (status === 'locked' ? registration.status !== 'approved' : !['submitted', 'rejected'].includes(registration.status)) throw new Error('The roster changed. Refresh before reviewing.');
     if (status === 'approved' || status === 'locked') {
       validateRoster(registration.players, policy);
@@ -65,7 +65,8 @@ export async function reviewRegistration(id: string, status: 'approved' | 'rejec
     tx.update(ref, { status, reviewNote: note.trim(), updatedAt: serverTimestamp() });
     if (status === 'approved' || status === 'locked') {
       // Public roster: IGN and role only. Names, student IDs and game-account IDs go to the staff-only roster.
-      const team = tournament.matches.flatMap(m => [m.team1, m.team2]).find(t => t?.id === registration.teamId)!;
+      const squad = tournament.placement?.teams.find(team => team.id === registration.teamId);
+      const team = tournament.matches.flatMap(m => [m.team1, m.team2]).find(t => t?.id === registration.teamId) || (squad ? { id: squad.id, name: squad.name, collegeId: '', collegeCode: squad.collegeCode, gameId: registration.gameId } : undefined)!;
       const players = registration.players.map((p, i) => ({ id: `${id}-player-${i}`, ign: p.ign, role: p.substitute ? 'Substitute' : 'Player', isVerified: true }));
       const teams = ((publicRoster.data() as RosterDoc | undefined)?.teams || []).filter(t => t.id !== registration.teamId);
       tx.set(rosterRef(registration.tournamentId), { teams: [...teams, { id: team.id, name: team.name, collegeId: team.collegeId, collegeCode: team.collegeCode, gameId: team.gameId, players }] });
@@ -79,13 +80,16 @@ export async function saveMatchWindow(matchId: string, tournamentId: string, reg
   account();
   const opensAt = Timestamp.fromDate(new Date(opens)), closesAt = Timestamp.fromDate(new Date(closes));
   if (opensAt.toMillis() >= closesAt.toMillis()) throw new Error('Check-in must open before its deadline.');
-  if (registrationIds.length !== 2 || new Set(registrationIds).size !== 2) throw new Error('Assign the two locked rosters playing this match.');
+  if (registrationIds.length < 2 || registrationIds.length > MAX_LOBBY_TEAMS || new Set(registrationIds).size !== registrationIds.length) throw new Error('Assign one locked roster for every participating team.');
   await runTransaction(db, async tx => {
     const registrations = [];
     for (const id of registrationIds) registrations.push((await tx.get(doc(db, 'tournamentRegistrations', id))).data());
     const tournament = await readTournamentInTx(tx, tournamentId);
-    const match = tournament?.status === 'published' ? tournament.matches.find(m => m.id === matchId) : undefined;
-    if (!match || !['upcoming', 'pre-match'].includes(match.status) || registrations.some(r => !r || r.status !== 'locked' || r.tournamentId !== tournamentId || r.sanction === 'disqualified' || ![match.team1?.id, match.team2?.id].includes(r.teamId)) || registrations[0]?.teamId === registrations[1]?.teamId) throw new Error('Choose an upcoming match and its two eligible locked rosters.');
+    const match = tournament?.status === 'published' ? scheduleMatches(fromDocs(tournament, null)).find(m => m.id === matchId) : undefined;
+    const teams = matchTeamIds(match);
+    if (!match || !['upcoming', 'pre-match'].includes(match.status) || teams.length !== registrations.length
+      || new Set(registrations.map(r => r?.teamId)).size !== teams.length
+      || registrations.some(r => !r || r.status !== 'locked' || r.tournamentId !== tournamentId || r.sanction === 'disqualified' || !teams.includes(r.teamId))) throw new Error('Choose an upcoming match and an eligible locked roster for every participating team.');
     tx.set(doc(db, 'matchWindows', matchId), { matchId, tournamentId, registrationIds, opensAt, closesAt, updatedAt: serverTimestamp() });
     registrations.forEach((r, i) => tx.set(notificationRef(r!.ownerId, `checkin-window-${matchId}-${i}-${Date.now()}`), notificationRecord('check-in', 'Match check-in scheduled', `${r!.teamName}: check the readiness window and confirm your lineup.`, 'operations', matchId)));
   });
@@ -120,7 +124,8 @@ export async function reviewCheckIn(id: string, status: 'confirmed' | 'disputed'
     if (status === 'confirmed') {
       const registration = (await tx.get(doc(db, 'tournamentRegistrations', data.registrationId))).data() as Registration;
       const policy = (await tx.get(doc(db, 'tournamentPolicies', data.tournamentId))).data() as TournamentPolicy;
-      const match = (await readTournamentInTx(tx, data.tournamentId))?.matches.find(m => m.id === data.matchId) as unknown as Match | undefined;
+      const tournament = await readTournamentInTx(tx, data.tournamentId);
+      const match = tournament?.status === 'published' ? scheduleMatches(fromDocs(tournament, null)).find(m => m.id === data.matchId) : undefined;
       if (!registration || !policy || !match || inspectCheckIn(registration, data as CheckIn, policy, match).length) throw new Error('Resolve the recorded roster discrepancies before confirming the players.');
     }
     tx.update(ref, { status, refereeNote: note.trim(), updatedAt: serverTimestamp() });
@@ -143,8 +148,9 @@ export async function recordSanction(registration: Registration, sanction: Regis
   const user = account(); if (note.trim().length < 10 || note.length > 1000 || !caseId.trim()) throw new Error('Provide a resolved case reference and a 10–1,000 character decision note.');
   await runTransaction(db, async tx => {
     const report = (await tx.get(doc(db, 'integrityCases', caseId.trim()))).data();
-    const match = (await readTournamentInTx(tx, registration.tournamentId))?.matches.find(m => m.id === report?.matchId);
-    if (!report || report.status !== 'resolved' || !match || ![match.team1?.id, match.team2?.id].includes(registration.teamId)) throw new Error('Use a resolved case involving this team in this tournament.');
+    const tournament = await readTournamentInTx(tx, registration.tournamentId);
+    const match = tournament ? scheduleMatches(fromDocs(tournament, null)).find(m => m.id === report?.matchId) : undefined;
+    if (!report || report.status !== 'resolved' || !match || !matchTeamIds(match).includes(registration.teamId)) throw new Error('Use a resolved case involving this team in this tournament.');
     tx.update(doc(db, 'tournamentRegistrations', registration.id), { sanction, updatedAt: serverTimestamp() });
     tx.set(doc(collection(db, 'tournamentSanctions')), { registrationId: registration.id, tournamentId: registration.tournamentId, ownerId: registration.ownerId, caseId: caseId.trim(), sanction, note: note.trim(), actorId: user.uid, createdAt: serverTimestamp() });
     tx.set(notificationRef(registration.ownerId, `sanction-${registration.id}-${Date.now()}`), notificationRecord('fair-play', 'Tournament eligibility updated', `${registration.teamName}: ${sanction}. ${note.trim()}`, 'operations', registration.id));

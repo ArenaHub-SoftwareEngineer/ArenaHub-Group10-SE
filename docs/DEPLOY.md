@@ -1,6 +1,6 @@
 # Deploying ArenaHub
 
-**Nothing in this guide has been run against a real project.** Production deploys need Kerr's typed approval (plan Rule 5). The API host choice (plan question Q3) is still open; this guide uses the plan's recommendation.
+**No production deployment was performed in this review.** Updated 17 November 2026: the intended deployment is a publicly hosted website and API. For the full Match monitor, use the persistent Node deployment below; the older serverless layout is suitable only for AI/video endpoints.
 
 ## What runs where
 
@@ -9,9 +9,15 @@
 | Website | Firebase Hosting (`firebase.json`, site `arenahub-platform`) | Free Spark plan, and Google sign-in keeps working on its own auth domain |
 | Database and file rules | Firebase (`firestore.rules`, `storage.rules`) | |
 | API: Arena AI and video review (`/api/ai`, `/api/fair-play`, `/api/health`) | A Node host on a separate origin | Firebase Hosting rewrites can reach only Cloud Functions and Cloud Run, which need the Blaze plan (plan C4) |
-| Match monitor (`/api/integrity`, `join.html`) | The event laptop (`npm start`, `npm run online`) | Recordings and sessions stay on local disk by design |
+| Match monitor (`/api/integrity`, `join.html`) | Persistent Node host (`npm start`) or an event laptop | Requires private persistent disk and one active monitor process; ephemeral serverless instances do not provide this module |
 
 Without an API host, the website still works. Arena AI answers from the live records on the viewer's device, `@Arena` in live chat is unavailable, and so is video review.
+
+## Full public deployment with the match monitor
+
+Follow [INTEGRITY_SETUP.md](INTEGRITY_SETUP.md). A persistent Node 24 host runs `npm start`, serves `dist/` and keeps `INTEGRITY_DATA_DIR` on a private mounted volume. Use `INTEGRITY_HOSTED_URL=https://<api-host>` for public staff/player access, including behind Cloudflare. Do not set the player-only tunnel variable `INTEGRITY_PUBLIC_URL` on that host. Use one active monitor process until its SQLite, pending-upload and ticket state is migrated for replicas.
+
+If the website stays on Firebase Hosting, set its `VITE_API_BASE_URL` to that persistent API and list the exact website origins in the API's `CORS_ORIGINS`. The monitor now honors that base for settings, sessions and media playback. Build/copy the complete site and reviewed `dist-agent/` artifacts to the API host so its player pairing URLs work. HTTPS, host secret management, private disk permissions, storage quotas, backups and ingress limits need verification on the chosen host. No hosting account or domain has been selected or provisioned by these local changes.
 
 ## 1. Check before deploying
 
@@ -44,7 +50,7 @@ Why the service account matters: with it, the API checks sign-in tokens with `ve
 
 Add a Firestore TTL policy on the `aiRate` collection group, field `expiresAt` (Firebase Console, Firestore, TTL), so old counters are deleted automatically. Each counter expires an hour after its minute ends.
 
-Still open: plan question Q5 (staff AI tools on the free Gemini tier). Until it is answered, `summarizeCase` does not exist and `listOpenReports` returns case ids, status, match and evidence count only.
+The case-summary route now uses a scrubbed case digest with its configured provider/fallback. Validate provider configuration and data handling on the selected host; automated tests do not establish a live account's availability.
 
 ## 4. Website
 

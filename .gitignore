@@ -13,6 +13,13 @@ playwright-report/
 *.local
 service-account*.json
 *-service-account.json
+# Native release signing material belongs outside the repository.
+*.jks
+*.keystore
+*.p12
+*.pfx
+**/keystore.properties
+**/signing.properties
 # Match monitor database and recordings stay on the event laptop
 /data/
 dist-agent/
@@ -21,3 +28,6 @@ dist-demo/
 .emulator-data/
 # Match monitor data written by browser tests (vite --mode test)
 .test-data/
+
+# Local Graphify code graph (rebuild with: graphify update .)
+graphify-out/

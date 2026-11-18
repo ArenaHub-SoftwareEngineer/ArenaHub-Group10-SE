@@ -23,6 +23,9 @@ export function playerPathAllowed(path: string) {
 
 export function publicAccessGuard(env: Record<string, string | undefined>): express.RequestHandler {
   return (req, res, next) => {
+    // A fully hosted service exposes the authenticated staff UI/API too, including behind Cloudflare.
+    // The player-only guard belongs to the separate event-laptop tunnel mode.
+    if (env.INTEGRITY_HOSTED_URL) { next(); return; }
     if (!viaTunnel(req, env.INTEGRITY_PUBLIC_URL)) { next(); return; }
     if (req.path === '/') { res.redirect(302, '/join.html'); return; }
     if (playerPathAllowed(req.path)) { next(); return; }

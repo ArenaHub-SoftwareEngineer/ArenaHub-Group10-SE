@@ -7,22 +7,36 @@
 <meta name="referrer" content="no-referrer">
 <title>ArenaHub Match Check-in</title>
 <style>
-  :root { --bg: #faf8f5; --card: #fff; --text: #1d1b19; --muted: #6b655f; --line: #e2dcd5; --brand: #f97316; --brand-ink: #c2410c; --ok: #15803d; --bad: #b91c1c; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #151312; --card: #1f1c1a; --text: #f3efea; --muted: #a8a099; --line: #38322e; --brand-ink: #fb923c; --ok: #4ade80; --bad: #f87171; } }
+  @font-face {
+    font-family: "Google Sans Flex"; src: url("/fonts/google-sans-flex-latin.woff2") format("woff2");
+    font-weight: 400 800; font-display: swap;
+  }
+  :root {
+    color-scheme: dark;
+    --bg: #0e0e10; --card: #18181b; --text: #efeff1; --muted: #a1a1aa; --line: #3f3f46;
+    --brand: #ff6600; --brand-hover: #ff7a1f; --brand-ink: #ff8a3d; --on-brand: #1a0b00;
+    --ok: #4ade80; --bad: #f87171;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; }
-  h1 { font-size: 24px; line-height: 1.2; margin: 6px 0 4px; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Google Sans Flex", system-ui, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px calc(32px + env(safe-area-inset-bottom)); overflow-wrap: anywhere; }
+  h1 { font-size: clamp(24px, 5vw, 32px); line-height: 1.2; margin: 6px 0 4px; }
   h2 { font-size: 17px; margin: 0 0 8px; }
   p { margin: 0 0 10px; }
   .muted { color: var(--muted); font-size: 14px; }
   section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 16px; }
   ul, ol { margin: 0 0 10px; padding-left: 20px; }
   li { margin-bottom: 4px; }
-  .button, button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; border: 0; border-radius: 24px; background: var(--brand); color: #fff; font: 600 16px system-ui, sans-serif; margin-top: 10px; text-decoration: none; cursor: pointer; }
+  .button, button { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; border: 0; border-radius: 12px; background: var(--brand); color: var(--on-brand); font: inherit; font-weight: 650; text-align: center; padding: 10px 14px; margin-top: 10px; text-decoration: none; cursor: pointer; }
   .secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
   .decline { background: transparent; color: var(--bad); border: 1px solid var(--line); }
-  button:disabled { opacity: .5; }
+  @media (hover: hover) {
+    :is(.button, button):hover:not(:disabled) { background: var(--brand-hover); }
+    :is(.secondary, .decline):hover:not(:disabled) { background: var(--card); border-color: currentColor; }
+  }
+  :is(.button, button, summary, input):focus-visible { outline: 2px solid var(--brand-ink); outline-offset: 3px; }
+  button:disabled { opacity: .55; cursor: wait; }
+  .checkin-brand { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
   code { display: block; padding: 10px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font: 14px ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
   details { margin-top: 12px; }
   summary { cursor: pointer; color: var(--brand-ink); font-weight: 600; }
@@ -35,16 +49,17 @@
 </head>
 <body>
 <main>
-  <p class="muted">ARENAHUB MATCH CHECK-IN</p>
+  <p class="checkin-brand"><img src="/arenahub-logo.svg" alt="" width="27" height="32"> ArenaHub match check-in</p>
   <h1 id="title">Loading your match...</h1>
   <p id="subtitle" class="muted"></p>
 
   <section id="consent" hidden>
     <h2>Before you play</h2>
+    <p><strong>Complete anti-cheat requirements before match admission.</strong> Android and Windows players need a current companion scan. iPhone players need a referee inspection, recording and continuous supervision.</p>
     <p class="muted">This tournament asks players to agree to match monitoring. Here is exactly what that means for your device:</p>
     <ul id="collects" class="muted"></ul>
-    <p class="muted">It never reads your messages, photos, contacts, location, passwords or what other apps contain. Data stays on the referee laptop at the venue and is deleted after 30 days unless it is part of a fair-play case. A referee, not software, decides any outcome.</p>
-    <p class="muted"><strong>You can decline.</strong> Declining is not a penalty. The referee is told, and will give you an organizer device or watch your match in person.</p>
+    <p class="muted">It never reads your messages, photos, contacts, location, passwords or what other apps contain. Reports and any recordings go to the tournament API server shown in this page's address and are deleted after 30 days unless staff place an evidence hold. Screen captures can include private notifications; close personal apps before playing. A referee, not software, decides any outcome.</p>
+    <p class="muted"><strong>You can decline.</strong> Declining is not a penalty. Staff are told. Ask them for a supported device to play on and complete the required scan.</p>
   </section>
 
   <section id="android" hidden>
@@ -61,32 +76,47 @@
   <section id="pc" hidden>
     <h2>PC: run the ArenaHub agent</h2>
     <ol>
-      <li>Download the agent. Windows may say it is unsigned: choose "More info", then "Run anyway".
+      <li>Download the agent. Verify this download and its fingerprint with tournament staff. This test build is unsigned; use only a trusted event device until staff validate and sign the release.
         <a class="button secondary" href="/api/integrity/downloads/arenahub-agent.exe" download>Download the agent (90 MB)</a></li>
-      <li>Open Command Prompt in your Downloads folder and run this, then type YES to agree:
+      <li>Double-click the downloaded app. Enter the tournament server address and your match scan code, then type YES to agree. You can also run this command from its folder:
         <code id="command"></code>
         <button id="copy" type="button" class="secondary">Copy the command</button></li>
-      <li>For Dota 2, restart the game after the agent starts.</li>
+      <li>Wait for <strong>Scan passed</strong> before joining. If restricted software is listed, close it and let the agent scan again. Keep the agent open. For Dota 2 live data, restart the game after the agent starts.</li>
     </ol>
   </section>
 
   <section id="ios" hidden>
-    <h2>iPhone: check in</h2>
-    <p class="muted">Nothing is installed and nothing on your iPhone is checked. A referee records the match from the observer slot in the custom room. Checking in tells the referee you agreed and are ready.</p>
+    <h2>iPhone anti-cheat</h2>
+    <p>Agree here, then bring your playing iPhone to the referee. They will inspect the device and game account, review the official game listing and device settings, verify recording and arrange continuous supervision.</p>
+    <p class="muted">Safari shows your clearance status and accepts recording uploads when enabled by staff. Installed-app and game-memory inspection are unavailable.</p>
     <button id="agree" type="button">Agree and check in</button>
   </section>
 
   <section id="iosDone" hidden>
     <h2 class="ok">You are checked in</h2>
-    <p>Play your match normally. The referee is recording from the observer slot.</p>
+    <p id="iosClearance" role="status" aria-live="polite">Waiting for the referee to inspect your iPhone.</p>
+    <p id="iosValidity" class="muted"></p>
+    <p>Bring this playing device to the referee before joining. Supervised clearance lasts 15 minutes for admission. Maintain referee supervision and recording throughout play. Tell staff if you change devices or supervision stops.</p>
     <p class="muted">Tip: turn on Do Not Disturb so private notifications do not pop up during the match.</p>
+    <details>
+      <summary>What the referee will check on your iPhone</summary>
+      <p class="muted">Any of these blocks clearance until it is removed and the referee checks again:</p>
+      <ul class="muted">
+        <li>Developer Mode is on (Settings &gt; Privacy &amp; Security).</li>
+        <li>An enterprise or developer app is trusted (Settings &gt; General &gt; VPN &amp; Device Management).</li>
+        <li>A sideloading or jailbreak app is installed, for example TrollStore, AltStore, ESign or Sileo.</li>
+        <li>The game's App Store page shows Get instead of Open, or there are two copies of the game.</li>
+        <li>A VPN or profile the venue did not give you is turned on.</li>
+      </ul>
+    </details>
     <details id="uploadBox">
       <summary>The referee asked for my own screen recording</summary>
-      <p class="muted" style="margin-top:8px">Only if the referee asks. Record with Control Center, then choose the video here. Keep this page open until it finishes. On mobile data a full match can use several hundred MB.</p>
-      <input id="file" type="file" accept="video/mp4,video/quicktime,video/*">
+      <p class="muted" style="margin-top:8px">Record with Control Center, then choose the video here when the referee asks. Keep this page open until the upload finishes. On mobile data a full match can use several hundred MB.</p>
+      <label for="file">Match screen recording</label><input id="file" type="file" accept="video/mp4,video/quicktime,video/*">
       <button id="upload" type="button" disabled>Upload recording</button>
       <progress id="progress" max="100" value="0" hidden></progress>
     </details>
+    <button id="stop" type="button" class="decline">Stop iPhone monitoring</button>
   </section>
 
   <section id="declineBox" hidden>
@@ -104,7 +134,7 @@
   var code = (params.get('c') || '').toUpperCase();
   var ua = navigator.userAgent;
   var isAndroid = /Android/i.test(ua), isApple = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
-  var session = null;
+  var session = null, statusTimer = null;
   try { session = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { session = null; }
   if (session && session.expiresAt < Date.now()) { session = null; forget(); }
 
@@ -115,14 +145,14 @@
   function bullet(text) { var li = document.createElement('li'); li.textContent = text; $('collects').appendChild(li); }
 
   var WHAT = {
-    android: ['Checks whether Mobile Legends or CODM is the official app, and where it was installed from.', 'Checks for apps on the tournament cheat-tool list, root access, screen-control apps, apps that draw over games, and debugging settings. Only matches are sent, never your app list.', 'Records your screen during the match if the referee turned recording on (no microphone, no camera).', 'Runs lightly in the background and stops when the match window closes.'],
-    pc: ['Checks running program names against the tournament blocklist. Only matches are sent.', 'Takes a screenshot every 20 seconds if the referee turned recording on.', 'Connects Dota 2\'s official live match data (hero, match ID, Steam ID).'],
-    ios: ['Tells the referee you agreed and are checked in.', 'Nothing else. iPhones do not allow apps to check other apps, so no checks run on your phone.']
+    android: ['Reports the game signing certificate and install source for staff comparison.', 'Checks installed apps and configured signing-certificate fingerprints against the tournament lists. It also reports root indicators, enabled screen-control services, overlay apps and debugging settings. Your full installed-app inventory stays on your phone.', 'Records your screen during the match if the referee turned recording on (no microphone, no camera).', 'Reports during the match window and marks incomplete inspections for the referee.'],
+    pc: ['Checks running programs and registered installed-software names against the tournament lists. It also checks configured restricted libraries loaded into Dota 2. When staff configure SHA-256 fingerprints, it hashes accessible executables and game libraries, which can identify a listed file after renaming. Only matching entries and inspection status are sent.', 'Takes a screenshot every 20 seconds if the referee turned recording on.', 'Connects Dota 2\'s official live match data (hero, match ID, Steam ID).'],
+    ios: ['Links your consent and referee inspection to this match and player roster.', 'Requires a referee to check your playing device, game account, official game listing and device settings, then arrange continuous supervision and recording.', 'Shows your current supervised clearance. Installed-app and game-memory inspection are unavailable.', 'Accepts a screen recording you choose to upload when staff enable uploads.']
   };
 
   // Returning iPhone player who already checked in.
-  if (session && !code) return iosCheckedIn();
-  if (!/^[A-Z0-9]{8}$/.test(code)) { $('title').textContent = 'Scan the code again'; return say('This page needs the pairing code from the referee screen. Scan the QR code again.', 'error'); }
+  var returning = session && !code;
+  if (!returning && !/^[A-Z0-9]{8}$/.test(code)) { $('title').textContent = 'Scan the code again'; return say('This page needs the pairing code from the referee screen. Scan the QR code again.', 'error'); }
 
   function lookup(tries) {
     return fetch('/api/integrity/device/pairing/' + code).then(json).then(function (result) {
@@ -130,7 +160,8 @@
       return result;
     });
   }
-  lookup(0).then(function (result) {
+  if (returning) iosCheckedIn();
+  else lookup(0).then(function (result) {
     if (!result.ok) { $('title').textContent = 'This code cannot be used'; return say(result.body.error || 'Ask the referee for a new code.', 'error'); }
     var info = result.body;
     $('title').textContent = 'Hi ' + info.playerName;
@@ -152,7 +183,7 @@
       show('ios', true);
       if (!isApple) say('This code is for an iPhone. Open it on the player\'s iPhone.', 'error');
     }
-  }).catch(function () { say('Cannot reach the referee laptop. Check your internet connection and scan again. If it still fails, ask the referee for a new code.', 'error'); });
+  }).catch(function () { say('Cannot reach the tournament server. Check your internet connection and scan again. If it still fails, ask the referee for a new code.', 'error'); });
 
   $('copy').addEventListener('click', function () {
     navigator.clipboard.writeText($('command').textContent).then(function () { say('Command copied.', 'ok'); }, function () { say('Copy failed. Select the command and copy it.', 'error'); });
@@ -166,7 +197,7 @@
       ['consent', 'android', 'pc', 'ios', 'declineBox'].forEach(function (id) { show(id, false); });
       $('title').textContent = 'You declined';
       say('The referee has been told. Please go to the referee desk before your match.', 'ok');
-    }).catch(function () { $('decline').disabled = false; say('Cannot reach the referee laptop. Try again.', 'error'); });
+    }).catch(function () { $('decline').disabled = false; say('Cannot reach the tournament server. Try again.', 'error'); });
   });
 
   $('agree').addEventListener('click', function () {
@@ -175,11 +206,11 @@
     fetch('/api/integrity/device/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code, device: { model: /iPad/.test(ua) ? 'iPad' : 'iPhone', os: os ? 'iOS ' + os : '', agent: 'web 2.0.0' } }) }).then(json).then(function (result) {
       $('agree').disabled = false;
       if (!result.ok) return say(result.body.error || 'Check-in failed.', 'error');
-      session = { token: result.body.token, playerName: result.body.playerName, matchLabel: result.body.matchLabel, gameLabel: result.body.gameLabel, expiresAt: result.body.expiresAt };
+      session = { token: result.body.token, playerName: result.body.playerName, matchLabel: result.body.matchLabel, gameLabel: result.body.gameLabel, expiresAt: result.body.expiresAt, record: result.body.record };
       try { localStorage.setItem(KEY, JSON.stringify(session)); } catch (e) {}
       history.replaceState(null, '', location.pathname);
       iosCheckedIn();
-    }).catch(function () { $('agree').disabled = false; say('Cannot reach the referee laptop. Check your internet connection and try again.', 'error'); });
+    }).catch(function () { $('agree').disabled = false; say('Cannot reach the tournament server. Check your internet connection and try again.', 'error'); });
   });
 
   function iosCheckedIn() {
@@ -187,7 +218,46 @@
     $('title').textContent = 'Hi ' + session.playerName;
     $('subtitle').textContent = session.matchLabel + (session.gameLabel ? ' · ' + session.gameLabel : '');
     show('iosDone', true); say('');
+    show('uploadBox', session.record === true);
+    refreshIosStatus();
+    if (statusTimer) clearInterval(statusTimer);
+    statusTimer = setInterval(refreshIosStatus, 10000);
   }
+
+  function refreshIosStatus() {
+    if (!session) return;
+    var token = session.token;
+    fetch('/api/integrity/device/status', { headers: { Authorization: 'Bearer ' + token } }).then(json).then(function (result) {
+      if (!session || session.token !== token) return;
+      if (result.status === 410) return iosEnded();
+      if (!result.ok) throw new Error('Status unavailable');
+      var scan = result.body.scan;
+      $('iosClearance').textContent = scan.label + '. ' + scan.detail;
+      $('iosClearance').className = scan.status === 'ready' ? 'ok' : '';
+      $('iosValidity').textContent = scan.validUntil ? 'Admission clearance expires at ' + new Date(scan.validUntil).toLocaleTimeString() + '.' : '';
+      show('uploadBox', result.body.record === true);
+    }).catch(function () {
+      if (!session || session.token !== token) return;
+      $('iosClearance').textContent = 'Clearance could not be verified. Reconnect and ask the referee before joining.';
+      $('iosClearance').className = 'error';
+      $('iosValidity').textContent = '';
+    });
+  }
+  function iosEnded() {
+    if (statusTimer) clearInterval(statusTimer);
+    session = null; forget(); show('uploadBox', false); $('stop').disabled = true;
+    $('iosClearance').textContent = 'iPhone monitoring ended. Ask the referee for a new code before joining.';
+    $('iosClearance').className = 'error'; $('iosValidity').textContent = '';
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && session) refreshIosStatus(); });
+  $('stop').addEventListener('click', function () {
+    if (!session || !confirm('Stop monitoring? Your iPhone clearance will end and staff will be told.')) return;
+    $('stop').disabled = true;
+    fetch('/api/integrity/device/stop', { method: 'POST', headers: { Authorization: 'Bearer ' + session.token } }).then(json).then(function (result) {
+      if (result.ok || result.status === 410) return iosEnded();
+      $('stop').disabled = false; say(result.body.error || 'Could not stop monitoring. Try again.', 'error');
+    }).catch(function () { $('stop').disabled = false; say('Reconnect to stop monitoring and notify staff.', 'error'); });
+  });
 
   $('file').addEventListener('change', function () { $('upload').disabled = !$('file').files.length; });
   $('upload').addEventListener('click', function () {

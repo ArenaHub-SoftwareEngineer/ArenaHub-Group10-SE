@@ -26,8 +26,9 @@ ArenaHub runs in three places, and each reads its own settings. "Public" values 
 | `GEMINI_VIDEO_MODEL` | | optional | optional | no | Vision model for video review. Defaults to `gemini-3.6-flash` (image analysis on it not yet verified) |
 | `CORS_ORIGINS` | | required with a separate API host | | no | The website origins, comma-separated, https only |
 | `HOST`, `PORT` | | | optional | no | `HOST=0.0.0.0` opens the laptop to the event Wi-Fi; port defaults to 3210 |
-| `INTEGRITY_PUBLIC_URL` | | | online mode only | no | Set by `npm run online` |
-| `INTEGRITY_DATA_DIR`, `INTEGRITY_DOWNLOAD_DIR` | | | optional | no | Match monitor storage on the laptop |
+| `INTEGRITY_PUBLIC_URL` | | | player-only tunnel mode | no | Set by `npm run online`; do not combine with hosted mode |
+| `INTEGRITY_HOSTED_URL` | | hosted monitor | | no | HTTPS API origin for public staff/player access. Requires persistent `npm start`, not the serverless AI entry |
+| `INTEGRITY_DATA_DIR`, `INTEGRITY_DOWNLOAD_DIR` | | required for hosted monitor | optional | no | Private persistent report/recording volume and reviewed companion downloads; never expose the data directory as static files |
 | `SITE_DIR` | | | demo only | no | Set by `npm run demo` |
 | `VITE_FIREBASE_EMULATORS` | test builds only | | demo only | no | Only in `.env.test`; production builds refuse it |
 | `ARENA_AI_PROVIDER` | | | | no | Test only: `fake` selects the scripted provider, honoured only on the `demo-arenahub` emulators. Test mode sets it automatically |
@@ -42,3 +43,7 @@ ArenaHub runs in three places, and each reads its own settings. "Public" values 
 - [ ] The API host's `VITE_FIREBASE_PROJECT_ID` and `VITE_FIREBASE_API_KEY` match the website's project.
 - [ ] No service-account key is in the project folder (`git status` shows none; `.gitignore` also blocks `service-account*.json`).
 - [ ] `/api/health` on the API host reports `firebaseAccess: "service-account"`. With `"rest"`, rate limits are per instance and Arena AI cannot reply in live chat.
+
+## Public match-monitor host
+
+The confirmed target is a public website and API. Use a persistent Node 24 process and private persistent disk for the monitor; its current SQLite/uploads/tickets support one active instance. Set `INTEGRITY_HOSTED_URL`, exact `CORS_ORIGINS`, TLS ingress and Firebase authorized sign-in domains. Verify ingress rate limits, body/concurrency limits, disk quotas, backups, service-account scope and staff revocation. Rebuild/re-pair v2 clients and distribute signed artifacts through a trusted channel. See INTEGRITY_SETUP.md for supported layouts and device verification. Local tests do not verify these external settings.

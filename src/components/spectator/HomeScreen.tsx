@@ -3,7 +3,7 @@ import { Match, BracketDraft } from '../../lib/types';
 import { ArrowRight, ArrowUpRight, CalendarDays, GitBranch, Radio, ShieldCheck, Sparkles } from '../ui/Icons';
 import { publicationGameKey } from '../../lib/bracketPublication';
 import { GAME_ARTWORK } from '../common/GameArtworkTiles';
-import { bracketScheduleLabel } from '../../lib/calendar';
+import { bracketScheduleLabel, scheduleDate, timeOrder } from '../../lib/calendar';
 import { isWatchableLiveMatch } from '../../lib/streamUtils';
 import { ArenaScene } from './ArenaScene';
 interface HomeScreenProps {
@@ -15,12 +15,28 @@ interface HomeScreenProps {
 export const HomeScreen: React.FC<HomeScreenProps> = ({ spotlights = [], liveMatch, matches, publishedBrackets, onViewLiveMatch, onNavigateTab, onSelectPublishedBracket }) => {
   const live = liveMatch?.status === 'live' ? liveMatch : undefined;
   const otherLive = matches.filter(match => isWatchableLiveMatch(match) && match.id !== live?.id);
-  const upcoming = matches.filter(m => ['upcoming', 'pre-match'].includes(m.status) && m.team1 && m.team2 && !m.team2.isBye).slice(0, 3);
+  const upcoming = matches.filter(m => ['upcoming', 'pre-match'].includes(m.status) && m.team1 && m.team2 && !m.team1.isBye && !m.team2.isBye)
+    .sort((a, b) => (scheduleDate(a.scheduledDate || '') ?? '9999').localeCompare(scheduleDate(b.scheduledDate || '') ?? '9999')
+      || timeOrder(a.scheduledTime || '') - timeOrder(b.scheduledTime || ''))
+    .slice(0, 3);
   return <div className="arena-home">
-    <div className="home-eyebrow"><span>Campus esports</span><span className="season-tag">Season 2026 <span className="status-dot" /></span></div>
-    <section className="arena-hero"><div className="hero-copy"><h1>Your campus.<br />Your squad.<br /><span>Your arena.</span></h1><p>Follow your teams, see what’s live, and find the next match.</p><div className="hero-actions"><button className="arena-primary" onClick={() => onNavigateTab('choose-tournament')}>Explore tournaments <ArrowUpRight size={17} /></button><button className="arena-outline hero-match-button" onClick={() => onNavigateTab('current-live')}><Radio size={16} /> Match center</button></div><div className="hero-footnote"><ShieldCheck size={14} /><span>Rosters. Results. Fair play. All in one place.</span></div></div><ArenaScene /></section>
+    <section className="arena-hero">
+      <div className="hero-copy">
+        <h1>Your campus.<br />Your squad.<br /><span>Your arena.</span></h1>
+        <p>Follow your teams, see what’s live, and find the next match.</p>
+        <div className="hero-actions">
+          <button type="button" className="arena-primary" onClick={() => live ? onViewLiveMatch(live) : onNavigateTab('current-live')}>
+            <Radio size={16} aria-hidden="true" />{live ? 'Watch live' : 'Match center'}
+          </button>
+          <button type="button" className="arena-outline hero-match-button" onClick={() => onNavigateTab('choose-tournament')}>
+            Explore tournaments <ArrowUpRight size={17} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <ArenaScene />
+    </section>
     <section className="home-match-grid"><div className="live-feature arena-panel"><div className="section-inline-title"><span><Radio size={15} /> {live ? 'In the arena' : 'Match center'}</span>{live && <span className="live-pill"><span className="status-dot" /> LIVE</span>}</div>{live ? <><div className="live-match-meta">{publishedBrackets.find(bracket => bracket.matches.some(match => match.id === live.id))?.title || live.gameId} <span>· {live.roundName}</span></div><div className="home-scoreboard"><div><span className="team-emblem emblem-blue">{live.team1?.collegeCode || 'TBD'}</span><strong>{live.team1?.name || 'To be decided'}</strong></div><div className="home-score"><b>{live.score.team1Score} <span>:</span> {live.score.team2Score}</b><small>{live.matchFormat} SERIES</small></div><div><span className="team-emblem emblem-coral">{live.team2?.collegeCode || 'TBD'}</span><strong>{live.team2?.name || 'To be decided'}</strong></div></div><button className="arena-outline w-full" onClick={() => onViewLiveMatch(live)}>Open match <ArrowRight size={15} /></button></> : <div className="arena-empty"><Radio /><h3>No live matches right now.</h3><p>Live matches appear here when an organizer starts a series.</p><button className="arena-outline" onClick={() => onNavigateTab('schedule')}>See the schedule <ArrowRight size={14} /></button></div>}</div>
-      <button className="copilot-feature arena-panel" onClick={() => onNavigateTab('ai-assistant')}><div className="copilot-label"><Sparkles size={14} /> Arena AI <ArrowUpRight size={16} /></div><img className="arena-character" src="/arenahub-logo.svg" alt="" width="90" height="106"/><div><h2>Ask about the tournament</h2><p>Brackets, rosters, and tournament questions. Just ask Arena.</p><span className="copilot-cta">Open Arena AI <ArrowRight size={15} /></span></div></button></section>
+      <button className="copilot-feature arena-panel" onClick={() => onNavigateTab('ai-assistant')}><div className="copilot-label"><Sparkles size={14} /> Arena AI <ArrowUpRight size={16} /></div><img className="arena-character" src="/arenahub-logo.svg" alt="" width="90" height="106"/><div><h2>Ask about the tournament</h2><p>Get answers about published brackets, schedules, and rosters.</p><span className="copilot-cta">Open Arena AI <ArrowRight size={15} /></span></div></button></section>
     {otherLive.length > 0 && <section className="arena-panel">
       <div className="section-inline-title"><span><Radio size={16} /> Also live now</span></div>
       {otherLive.map(match => <button key={match.id} type="button" className="schedule-row" onClick={() => onViewLiveMatch(match)}>
@@ -48,7 +64,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ spotlights = [], liveMat
       </div>
     </section>
     <section className="home-bottom-grid"><div className="arena-panel"><div className="section-inline-title"><span><CalendarDays size={16} /> Upcoming matches</span><button className="arena-text-button" onClick={() => onNavigateTab('schedule')}>Schedule <ArrowUpRight size={14} /></button></div>{upcoming.length ? upcoming.map(m => <button className="schedule-row" key={m.id} onClick={() => onViewLiveMatch(m)}><span className="schedule-time">{bracketScheduleLabel(m)}</span><span><strong>{m.team1?.name} <em>vs</em> {m.team2?.name}</strong><small>{m.roundName} · {m.matchFormat}</small></span><ArrowUpRight size={16} /></button>) : <p className="text-sm text-[var(--text-muted)] py-6">No upcoming matches have been scheduled.</p>}</div><div className="arena-panel fairplay-feature"><span className="cute-icon mint"><ShieldCheck size={24} /></span><h2>Fair play</h2><p>Check roster eligibility and submit match evidence. Keep competition fair with organizer review.</p><button className="arena-text-button" onClick={() => onNavigateTab('integrity')}>Explore fair play <ArrowRight size={15} /></button></div></section>
-    {spotlights.length > 0 && <section><div className="home-section-heading"><div><span className="section-overline">COMMUNITY PICKS</span><h2>From the community.</h2></div></div><div className="published-grid">{spotlights.map(item => <article key={item.id} className="arena-panel"><span className="section-overline">FEATURED</span><h3 className="text-sm">{item.link ? <a href={item.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{item.title}</a> : item.title}</h3><p className="mt-2 text-xs text-[var(--text-muted)]">{item.meta}</p></article>)}</div></section>}
+    {spotlights.length > 0 && <section><div className="home-section-heading"><h2>Community spotlight</h2></div><div className="published-grid">{spotlights.map(item => <article key={item.id} className="arena-panel"><h3 className="text-sm">{item.link ? <a href={item.link} target="_blank" rel="noopener noreferrer" className="hover:underline">{item.title}</a> : item.title}</h3><p className="mt-2 text-xs text-[var(--text-muted)]">{item.meta}</p></article>)}</div></section>}
     <footer className="home-footer"><span>ArenaHub <span>© 2026</span></span><button onClick={() => onNavigateTab('support')}>Need a hand? <ArrowUpRight size={13} /></button></footer>
   </div>;
 };

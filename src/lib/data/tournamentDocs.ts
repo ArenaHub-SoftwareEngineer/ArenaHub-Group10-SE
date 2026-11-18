@@ -80,6 +80,7 @@ function publicMatch(match: Match): PublicMatch {
 /** Every distinct non-bye team in the bracket, with the most complete roster seen. */
 export function bracketTeams(bracket: BracketDraft): Team[] {
   const teams = new Map<string, Team>();
+  for (const team of bracket.rosterTeams || []) if (!team.isBye) teams.set(team.id, team);
   for (const match of bracket.matches) for (const team of [match.team1, match.team2]) {
     if (!team || team.isBye) continue;
     const prior = teams.get(team.id);
@@ -151,7 +152,7 @@ export function fromDocs(tournament: TournamentDoc, roster?: RosterDoc | null): 
     parsedParams: { game: tournament.gameName, format: tournament.format, seeding: tournament.seedingRule, constraint: 'None', teamsCount: tournament.teamsCount, matchFormat: (tournament.matchFormat as any) || 'Bo3' },
     rawPrompt: '', createdAt: tournament.createdAt, status: 'published',
     ...(tournament.demo ? { demo: true } : {}),
-    ...(tournament.placement ? { placement: tournament.placement, teams: tournament.placement.teams.map((t, i) => ({ id: t.id, name: t.name, college: t.collegeCode, seed: i + 1 })) } : {}),
+    ...(tournament.placement ? { placement: tournament.placement, rosterTeams: tournament.placement.teams.map((t, i) => hydrateTeam({ id: t.id, name: t.name, collegeId: '', collegeCode: t.collegeCode, gameId: 'game-codm-br', gameMode: 'br', seed: i + 1 }, rosters)!), teams: tournament.placement.teams.map((t, i) => ({ id: t.id, name: t.name, college: t.collegeCode, seed: i + 1 })) } : {}),
   };
 }
 
@@ -183,5 +184,22 @@ export function announcementChanges(before: PublicMatch[], after: PublicMatch[])
     const started = match.status === 'live' && old.status !== 'live';
     if (!scheduleChanged && !resultChanged && !started) return [];
     return [{ match, kind: scheduleChanged ? 'schedule' as const : resultChanged ? 'result' as const : 'live' as const }];
+  });
+}
+
+export function placementAnnouncementChanges(before?: PlacementEvent, after?: PlacementEvent) {
+  const prior = new Map(before?.games.map(game => [game.id, game]));
+  return (after?.games || []).flatMap(game => {
+    const old = prior.get(game.id);
+    if (!old) return [];
+    const scheduleChanged = old.scheduledDate !== game.scheduledDate || old.scheduledTime !== game.scheduledTime;
+    const results = (rows: typeof game.results) => fingerprint([...rows].sort((a, b) => a.teamId.localeCompare(b.teamId)));
+    const resultChanged = game.status === 'completed' && (old.status !== game.status || results(old.results) !== results(game.results));
+    const started = game.status === 'live' && old.status !== 'live';
+    return [
+      ...(scheduleChanged ? [{ game, kind: 'schedule' as const }] : []),
+      ...(resultChanged ? [{ game, kind: 'result' as const }] : []),
+      ...(started ? [{ game, kind: 'live' as const }] : []),
+    ];
   });
 }

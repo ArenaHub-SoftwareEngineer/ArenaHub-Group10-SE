@@ -29,7 +29,7 @@ test('organizer runs a Battle Royale lobby and viewers see placement standings',
   const title = `E2E BR ${Date.now().toString(36)}`;
   const { page: admin, errors: adminErrors } = await open(browser, ORGANIZER);
   await admin.evaluate(() => { window.location.hash = '#/admin/battle-royale'; });
-  await expect(admin.getByRole('heading', { name: /lobby events/i })).toBeVisible({ timeout: 20_000 });
+  await expect(admin.getByRole('heading', { name: /^battle royale$/i })).toBeVisible({ timeout: 20_000 });
   // Wait until published events have loaded: then either the create form is open (no events) or New event is offered.
   await expect(admin.getByText('Loading published events…')).toHaveCount(0, { timeout: 20_000 });
   const newEvent = admin.getByRole('button', { name: 'New event' });
@@ -41,12 +41,15 @@ test('organizer runs a Battle Royale lobby and viewers see placement standings',
   await admin.getByRole('dialog').getByRole('button', { name: 'Publish event' }).click();
   // The page behind a modal dialog is inert until publishing finishes and the dialog closes.
   await expect(admin.getByText('Battle Royale event published.').first()).toBeVisible({ timeout: 20_000 });
+  await expect(admin.getByRole('heading', { name: `${title}: results`, exact: true })).toBeVisible({ timeout: 20_000 });
   await expect(admin.getByRole('heading', { name: `${title}: results` })).toBeVisible();
 
   const enter = async (rows: Array<[string, number, number]>) => {
     for (const [team, place, kills] of rows) {
       await admin.getByLabel(`${team} placement`).fill(String(place));
       await admin.getByLabel(`${team} eliminations`).fill(String(kills));
+      await expect(admin.getByLabel(`${team} placement`)).toHaveValue(String(place));
+      await expect(admin.getByLabel(`${team} eliminations`)).toHaveValue(String(kills));
     }
     await admin.locator('label', { hasText: /^Status/ }).locator('select').selectOption('completed');
   };
@@ -98,6 +101,14 @@ test('organizer runs a Battle Royale lobby and viewers see placement standings',
   await expect(calendar).toContainText('Game 3 · 4-squad lobby');
   await expect(calendar).toContainText('Battle Royale lobby');
   await calendar.getByRole('button', { name: 'Close dialog' }).click();
+
+  // The main Standings page uses lobby points for Battle Royale and keeps the chosen event on refresh.
+  await viewer.goto('/#/arena/standings');
+  const eventOption = viewer.getByLabel('Published bracket').locator('option').filter({ hasText: title });
+  await viewer.getByLabel('Published bracket').selectOption(await eventOption.getAttribute('value') as string);
+  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible();
+  await viewer.reload();
+  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible();
 
   // Unpublish from Bracket Studio: the event leaves the published list only after the cloud write succeeds.
   await admin.evaluate(() => { window.location.hash = '#/admin/bracket-studio'; });

@@ -15,12 +15,14 @@ const facts = (over: Record<string, unknown> = {}) => ({ platform: 'android', ga
 const pause = (ms = 1600) => new Promise(r => setTimeout(r, ms));
 const mp4 = () => Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(32)]);
 
-async function setup(t: any, fetcher?: typeof fetch) {
+async function setup(t: any, fetcher?: typeof fetch, env: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'arenahub-integrity-'));
   let clock = 1_800_000_000_000;
   const store = new IntegrityStore(dir, () => clock);
   const verifyStaff = async (token?: string) => { if (token === 'staff') return 'staff-uid'; throw new AuthError(token ? 403 : 401, 'no'); };
-  const app = express(); app.use('/api/integrity', createIntegrityRouter({}, { store, verifyStaff, fetcher }));
+  const { corsPolicy } = await import('../server/cors');
+  const { publicAccessGuard } = await import('../server/publicAccess');
+  const app = express(); app.use(publicAccessGuard(env)); app.use('/api/integrity', corsPolicy(env), createIntegrityRouter(env, { store, verifyStaff, fetcher }));
   const server = app.listen(0, '127.0.0.1'); await new Promise<void>(r => server.on('listening', r));
   t.after(async () => { await new Promise<void>(r => server.close(() => r())); store.close(); removeTree(dir); });
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/integrity`;
@@ -39,6 +41,23 @@ test('staff routes require staff and same origin', async t => {
   assert.equal((await call('/sessions', { token: 'player' })).status, 403);
   assert.equal((await call('/sessions', { token: 'staff', origin: 'https://evil.test' })).status, 403);
   assert.equal((await call('/sessions', { token: 'staff' })).status, 200);
+});
+
+test('hosted monitor allows the configured website origin while preserving staff authorization', async t => {
+  const site = 'https://arenahub.example.test', host = 'https://api.example.test';
+  const { call } = await setup(t, undefined, { CORS_ORIGINS: site, INTEGRITY_HOSTED_URL: host });
+  const preflight = await call('/config', { method: 'OPTIONS', origin: site });
+  assert.equal(preflight.status, 204);
+  assert.match(preflight.headers.get('access-control-allow-methods')!, /PUT/);
+  assert.equal((await call('/sessions', { origin: site })).status, 401);
+  const info = await call('/server-info', { token: 'staff', origin: site });
+  assert.equal(info.status, 200);
+  assert.equal(info.headers.get('access-control-allow-origin'), site);
+  assert.equal((await info.json() as any).urls[0], host);
+  const config = await (await call('/config', { token: 'staff', origin: site })).json();
+  assert.equal((await call('/config', { method: 'PUT', token: 'staff', origin: site, body: config })).status, 200);
+  assert.equal((await call('/sessions', { token: 'staff', origin: 'https://evil.test' })).status, 403);
+  assert.equal((await call('/sessions', { token: 'staff', origin: site, headers: { 'CF-Ray': 'hosted-proxy' } })).status, 200, 'a public hosted API remains available behind Cloudflare');
 });
 
 test('pair, report, score, record, review and end an Android session', async t => {
@@ -130,7 +149,7 @@ test('Dota 2 GSI and OpenDota checks on a PC session', async t => {
   assert.deepEqual(claimed.monitor.blockedProcesses.slice(0, 1), ['cheatengine*']);
 
   assert.equal((await call('/dota/gsi', { body: { provider: { appid: 570 }, auth: { token: 'forged' } } })).status, 410);
-  const gsi = { provider: { appid: 570 }, map: { matchid: '7412345678', game_state: 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS', clock_time: 60 }, player: { steamid: '76561198000000009' }, hero: { name: 'npc_dota_hero_lina' }, auth: { token: claimed.token } };
+  const gsi = { provider: { appid: 570 }, map: { matchid: '7412345678', game_state: 'DOTA_GAMERULES_STATE_GAME_IN_PROGRESS', clock_time: 60 }, player: { steamid: '76561198000000009' }, hero: { name: 'npc_dota_hero_lina' }, auth: { token: claimed.gsiToken } };
   assert.equal((await call('/dota/gsi', { body: gsi, type: 'text/plain' })).status, 200);
   const result = await (await call(`/sessions/${claimed.sessionId}/opendota`, { token: 'staff', body: {} })).json() as any;
   assert.equal(result.compared, 10); assert.equal(result.outliers[0].id, 'stat-outlier');
@@ -212,6 +231,9 @@ test('join page info, decline, and the per-match recording switch', async t => {
   // Recording off: a phone with no recording raises nothing about recording.
   const claimed = await (await call('/device/claim', { body: { code: pair.code } })).json() as any;
   assert.equal(claimed.record, false);
+  assert.equal((await call('/device/media', { token: claimed.token, raw: mp4(), type: 'video/mp4' })).status, 403, 'the API enforces the recording-off policy');
+  assert.equal((await fetchChunk(call, claimed.token, 'abcdefabcdef', 0, 1, mp4())).status, 403, 'chunk uploads cannot bypass recording being off');
+  assert.equal(store.media(claimed.sessionId).length, 0);
   const facts = { platform: 'android', games: [{ packageName: 'com.mobile.legends', certSha256: ['a'.repeat(64)], installer: 'com.android.vending' }], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [], developerOptions: false, usbDebugging: false, recording: false };
   assert.equal((await call('/device/heartbeat', { token: claimed.token, body: facts })).status, 200);
   let view = (await (await call('/sessions', { token: 'staff' })).json() as any[])[0];
@@ -238,6 +260,37 @@ test('join page info, decline, and the per-match recording switch', async t => {
 function fetchChunk(call: any, token: string, id: string, index: number, total: number, raw: Buffer) {
   return call('/device/upload', { token, raw, type: 'application/octet-stream', headers: { 'X-Upload-Id': id, 'X-Chunk-Index': String(index), 'X-Chunk-Total': String(total) } }) as Promise<Response>;
 }
+
+test('GSI credentials are isolated and telemetry cannot conceal a stopped scanner', async t => {
+  const { call, store, tick } = await setup(t);
+  const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2' } })).json() as any;
+  const response = await call('/device/claim', { body: { code: pair.code } });
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  const claimed = await response.json() as any;
+  assert.ok(claimed.gsiToken && claimed.gsiToken !== claimed.token);
+  assert.equal(store.session(pair.id)!.token_hash?.includes(claimed.token), false);
+  assert.equal(store.session(pair.id)!.gsi_token_hash?.includes(claimed.gsiToken), false);
+  assert.equal((await call('/device/heartbeat', { token: claimed.gsiToken, body: { platform: 'pc', processes: [], gameRunning: true, screenshotOk: true } })).status, 410);
+  assert.equal((await call('/device/stop', { token: claimed.gsiToken, body: {} })).status, 410);
+  const payload = { provider: { appid: 570 }, map: { matchid: '7412345678' }, hero: { name: 'npc_dota_hero_lina' }, auth: { token: claimed.token } };
+  assert.equal((await call('/dota/gsi', { body: payload })).status, 410, 'a device token has no GSI capability');
+  tick(60_000);
+  payload.auth.token = claimed.gsiToken;
+  assert.equal((await call('/dota/gsi', { body: payload })).status, 200);
+  assert.equal(store.connection(store.session(pair.id)!), 'lost', 'game telemetry does not refresh device-check liveness');
+  assert.equal((await call('/device/media', { token: claimed.token, raw: Buffer.concat([Buffer.from([255, 216, 255]), Buffer.alloc(20)]), type: 'image/jpeg' })).status, 200);
+  assert.equal(store.connection(store.session(pair.id)!), 'lost', 'recordings do not refresh device-check liveness either');
+  await call(`/sessions/${pair.id}/end`, { token: 'staff', body: {} });
+  assert.equal((await call('/dota/gsi', { body: payload })).status, 410, 'ending revokes the scoped credential');
+  assert.equal((await call('/device/stop', { token: claimed.token, method: 'POST' })).status, 410);
+});
+
+test('pairing rejects credentials and injected game-config destinations', async t => {
+  const { call } = await setup(t);
+  for (const serverUrl of ['https://user:password@example.test', 'https://example.test/path', 'https://example.test?redirect=evil', 'http://host"auth"token"evil', 'https://example.test/#fragment', 'https://safe&calc.test', 'https://safe%26calc.test', 'https://safe%25PATH%25.test', 'https://' + 'a'.repeat(600)]) {
+    assert.equal((await call('/pairings', { token: 'staff', body: { ...pairing, serverUrl } })).status, 400);
+  }
+});
 
 test('online mode: the public tunnel reaches only player routes, and rate limits use the player address', async t => {
   const { publicAccessGuard, playerPathAllowed } = await import('../server/publicAccess');

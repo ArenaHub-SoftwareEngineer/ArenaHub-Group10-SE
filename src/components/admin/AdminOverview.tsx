@@ -117,7 +117,7 @@ export function AdminOverview({ brackets, auditLogs, accountCount, reportCount, 
               <span className="organizer-row-label"><strong>{bracket.title}</strong><small>{bracket.gameName} · {playable.filter(match => match.status === 'completed').length} of {playable.length} played</small></span>
               <ChevronRight size={16} aria-hidden="true" />
             </button>
-            <button type="button" className="arena-text-button" onClick={() => onOpenLiveStreamManager(bracket.id)}>Stream Manager</button>
+            <button type="button" className="arena-text-button" onClick={() => onOpenLiveStreamManager(bracket.id)}>Broadcast desk</button>
           </div>;
         }) : <p className="organizer-empty">Published brackets will appear here.</p>}
       </section>
@@ -125,7 +125,10 @@ export function AdminOverview({ brackets, auditLogs, accountCount, reportCount, 
       <section className="arena-panel organizer-panel">
         <header><div><h2><CalendarDays size={18} /> Scheduled next</h2><p>Published dates and times in Manila time.</p></div>
           <button type="button" className="arena-outline" onClick={() => setPanel('schedule')}>Open schedule</button></header>
-        {scheduled.filter(({ match }) => ['upcoming', 'pre-match'].includes(match.status)).slice(0, 4).map(entry => matchRow(entry))}
+        {scheduled.filter(({ match }) => ['upcoming', 'pre-match'].includes(match.status))
+          // Decided matchups first; "Awaiting team vs Awaiting team" slots only fill the list when nothing else is scheduled.
+          .sort((a, b) => Number(!(a.match.team1 && a.match.team2)) - Number(!(b.match.team1 && b.match.team2)))
+          .slice(0, 4).map(entry => matchRow(entry))}
         {!scheduled.some(({ match }) => ['upcoming', 'pre-match'].includes(match.status)) && <p className="organizer-empty">No upcoming match times have been published.</p>}
       </section>
     </div>
@@ -166,7 +169,7 @@ export function AdminOverview({ brackets, auditLogs, accountCount, reportCount, 
           <button type="button" className="arena-outline" disabled={scoring} onClick={() => void addWin('team1')}>+1 {selected.match.team1.name}</button>
           <button type="button" className="arena-outline" disabled={scoring} onClick={() => void addWin('team2')}>+1 {selected.match.team2.name}</button>
         </div>}
-        <button type="button" className="arena-outline" onClick={() => onOpenLiveStreamManager(selected.bracket.id, selected.match.id)}>Open in Stream Manager</button>
+        <button type="button" className="arena-outline" onClick={() => onOpenLiveStreamManager(selected.bracket.id, selected.match.id)}>Open in Broadcast desk</button>
       </div>}
     </Modal>
     <Modal open={sharing} title="Share a viewer QR" description="Choose where the QR should take spectators." onClose={() => setSharing(false)}>

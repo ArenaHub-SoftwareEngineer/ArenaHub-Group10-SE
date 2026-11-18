@@ -117,7 +117,7 @@ test('placement survives the tournament document round trip and changes the cont
   assert.equal(contentFingerprint({ matches: [] }), '[]');
 });
 
-test('lobby games become schedule entries without teams, with the winner once final', async () => {
+test('lobby games become schedule entries with squad membership and the winner once final', async () => {
   const { lobbyMatches, scheduleMatches } = await import('../src/lib/formats/placement');
   const { matchLabel } = await import('../src/lib/integrityChecks');
   const draft = make(2);
@@ -130,6 +130,7 @@ test('lobby games become schedule entries without teams, with the winner once fi
   assert.equal(g2.lobby?.winner, undefined);
   assert.equal(g2.scheduledTime, '14:00');
   assert.equal(g1.team1, undefined);
+  assert.deepEqual(g1.lobby?.teams?.map(team => team.id), draft.placement.teams.map(team => team.id));
   assert.equal(matchLabel(g2), 'Game 2 · 4-squad lobby');
   assert.deepEqual(scheduleMatches({ ...draft, placement: undefined }), draft.matches);
 });

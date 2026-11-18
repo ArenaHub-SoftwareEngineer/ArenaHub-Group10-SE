@@ -17,6 +17,8 @@ import { MatchInfoModal } from './bracket-studio/MatchInfoModal';
 import { ManualBracketSetupModal } from './bracket-studio/BracketSetup';
 import { PublishBracketModal } from './bracket-studio/BracketPublishPanel';
 import { canEditRoundFormat, HorizontalBracketTree } from './bracket-studio/BracketCanvasEditor';
+import { changeRoundFormat } from '../../lib/tournamentFormats';
+import { swissRoundCount } from '../../lib/formats/swiss';
 import { BracketAIDraft } from './bracket-studio/BracketAIDraft';
 
 // ── Main Component ────────────────────────────────────────────────────────────
@@ -169,6 +171,10 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     const oldTeam = teamSlot === 1 ? targetMatch.team1 : targetMatch.team2;
     const otherTeam = teamSlot === 1 ? targetMatch.team2 : targetMatch.team1;
     const isBye = newName.trim().toUpperCase() === 'BYE';
+    if (targetMatch.tournamentFormat === 'swiss' && (isBye || oldTeam?.isBye)) {
+      showToast('Swiss assigns byes automatically each round. Rename an active team instead.', 'info');
+      return;
+    }
 
     if (isBye && (!otherTeam?.name.trim() || otherTeam.isBye || otherTeam.name === 'BYE')) {
       showToast('A BYE needs one active team in the match to advance.', 'error');
@@ -288,7 +294,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       return {
         ...draft,
         matchFormat: round === 1 ? format : draft.matchFormat,
-        matches: draft.matches.map(match => match.round === round ? { ...match, matchFormat: format } : match),
+        matches: changeRoundFormat(draft.matches, round, format),
       };
     });
   };
@@ -369,13 +375,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     return () => window.removeEventListener('keydown', handleRestoreShortcut);
   }, [currentDraft, previousVersions]);
 
-  const performSaveBracket = () => {
+  const performSaveBracket = async () => {
     if (!currentDraft) return;
+    const saved = await firestoreService.saveBracketDraft(currentDraft);
     setShowConfirmSave(false);
-    const saved = firestoreService.saveBracketDraft(currentDraft);
     loadedBracket.current = saved;
     setCurrentDraft(saved);
-    showToast(`Bracket "${saved.title}" saved as a draft on this device.`, 'success');
+    showToast(`Bracket "${saved.title}" saved to your account.`, 'success');
   };
 
   const handleDownloadBracket = async () => {
@@ -393,7 +399,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
 
   const handleConfirmPublishToGame = async (gameName: string, gameId: string) => {
     if (!currentDraft) throw new Error('Load a bracket before publishing.');
-    const saved = firestoreService.saveBracketDraft(currentDraft);
+    const saved = await firestoreService.saveBracketDraft(currentDraft);
     const published = await firestoreService.publishBracket(saved, gameName, gameId);
     loadedBracket.current = published;
     setCurrentDraft(published);
@@ -435,9 +441,9 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
   const deletingOpenDraft = draftToDelete !== null && loadedBracket.current?.status === 'saved'
     && loadedBracket.current.id === draftToDelete.id && currentDraft?.id === draftToDelete.id;
 
-  function deleteDraft() {
+  async function deleteDraft() {
     if (!draftToDelete) return;
-    firestoreService.deleteSavedBracketDraft(draftToDelete.id);
+    await firestoreService.deleteSavedBracketDraft(draftToDelete.id);
     if (deletingOpenDraft) {
       loadedBracket.current = null;
       setCurrentDraft(null);
@@ -520,7 +526,8 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
           <button
             onClick={() => {
               if (!currentDraft) return;
-              const treeSize = Math.max(2, Math.pow(2, Math.ceil(Math.log2(currentDraft.teamsCount))));
+              const staged = /swiss|round robin/i.test(currentDraft.format);
+              const treeSize = staged ? currentDraft.teamsCount : Math.max(2, Math.pow(2, Math.ceil(Math.log2(currentDraft.teamsCount))));
               const byesCount = Math.max(0, treeSize - currentDraft.teamsCount);
               setGenerationFeedback({
                 source: 'ai',
@@ -531,7 +538,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                 byesCount,
                 format: currentDraft.format,
                 matchFormat: currentDraft.matchFormat || 'Bo3',
-                explanation: `Active tournament bracket with ${currentDraft.teamsCount} teams accommodated in an ${treeSize}-slot tree.`,
+                explanation: staged ? `${currentDraft.teamsCount} teams play ${currentDraft.format === 'Swiss' ? swissRoundCount(currentDraft.teamsCount) : currentDraft.teamsCount - 1 + currentDraft.teamsCount % 2} rounds. ${currentDraft.format === 'Swiss' ? 'Pairings are drawn after the previous round finishes.' : 'Every team meets every opponent once.'}` : `Active tournament bracket with ${currentDraft.teamsCount} teams accommodated in an ${treeSize}-slot tree.`,
               });
               setShowFeedbackModal(true);
             }}
@@ -555,7 +562,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       </header>
 
       <details className="studio-builder">
-        <summary><span><strong>Saved drafts ({drafts.length})</strong><small>Open a roster and bracket saved in this browser.</small></span><ChevronDown size={18} /></summary>
+        <summary><span><strong>Saved drafts ({drafts.length})</strong><small>Open a roster and bracket saved to your account.</small></span><ChevronDown size={18} /></summary>
         <div className="studio-builder-body studio-bracket-library">
           {drafts.length === 0 && <p className="studio-muted">Publishing a bracket also keeps its latest draft and team roster here.</p>}
           {drafts.map(draft => <div key={draft.id} className="studio-bracket-library-row">
@@ -589,7 +596,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       </details>}
 
       <ConfirmModal isOpen={draftToDelete !== null} title="Delete saved draft?"
-        description={`Delete “${draftToDelete?.title || 'this draft'}” from this browser?${deletingOpenDraft ? ' The open draft and its unsaved changes will also close.' : ''} Published brackets stay available.`}
+        description={`Delete “${draftToDelete?.title || 'this draft'}” from your account?${deletingOpenDraft ? ' The open draft and its unsaved changes will also close.' : ''} Published brackets stay available.`}
         confirmLabel="Delete draft" isDestructive onCancel={() => setDraftToDelete(null)} onConfirm={deleteDraft} />
 
       {bracketToLoad && <ConfirmModal isOpen title="Open another bracket?"
@@ -750,10 +757,10 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
               <button
                 type="button"
                 onClick={() => setShowManualModal(true)}
-                className="px-4 py-2 rounded-[4px] bg-(--brand) hover:bg-(--brand-hover) text-black text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="arena-primary"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>Create Manual Bracket</span>
+                <Plus size={16} aria-hidden="true" />
+                <span>Create bracket manually</span>
               </button>
             </div>
           ) : (
@@ -869,9 +876,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
           setShowFeedbackModal(false);
         }}
         onSaveAndPublishLive={(draft) => {
-          const saved = firestoreService.saveBracketDraft(draft);
-          loadedBracket.current = saved;
-          setCurrentDraft(saved);
+          setCurrentDraft(draft);
           setShowFeedbackModal(false);
           setShowPublishGameModal(true);
         }}
@@ -883,7 +888,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
         title="Confirm Bracket Generation?"
         description={
           pendingManualConfig
-            ? `Create a ${pendingManualConfig.format} bracket for "${pendingManualConfig.title}" with ${pendingManualConfig.teamCount} teams (${pendingManualConfig.matchFormat})? A prebuilt tournament tree will be created on your canvas where you can click each box to set team names.`
+            ? `Create a ${pendingManualConfig.teamCount}-team ${pendingManualConfig.format} tournament (${pendingManualConfig.matchFormat})? ${pendingManualConfig.format === 'Swiss' ? `The first of ${swissRoundCount(pendingManualConfig.teamCount)} rounds will appear now. Further rounds are paired after the current round finishes.` : pendingManualConfig.format === 'Round Robin' ? 'Every team will meet every other team once.' : 'The tournament bracket will appear on the canvas.'} You can edit team names on the canvas.`
             : 'Proceed with creating this tournament bracket?'
         }
         confirmLabel="Yes, Create Bracket"
@@ -932,7 +937,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       <ConfirmModal
         isOpen={showConfirmSave}
         title="Save Bracket Changes?"
-        description={`Save the current teams, BYE assignments, seeds, and scores for "${currentDraft?.title || 'this bracket'}"? This saves a draft on this device. Publish to share it.`}
+        description={`Save the current teams, BYE assignments, seeds, and scores for "${currentDraft?.title || 'this bracket'}" to your account? Publish to share it with spectators.`}
         confirmLabel="Yes, Save Changes"
         onConfirm={performSaveBracket}
         onCancel={() => {

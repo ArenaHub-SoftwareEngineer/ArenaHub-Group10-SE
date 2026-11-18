@@ -1,4 +1,5 @@
 import { CAMPUS_SHORT_NAME } from './lib/institution';
+import { scheduleMatches } from './lib/formats/placement';
 import { isWatchableLiveMatch } from './lib/streamUtils';
 import { Modal } from './components/ui/Modal';
 import type { AccountPanel } from './components/common/ProfileMenu';
@@ -45,6 +46,7 @@ const PlacementEventsView = lazy(() => import('./components/admin/PlacementEvent
 const BracketStudioView = lazy(() => import('./components/admin/BracketStudioView').then(m => ({ default: m.BracketStudioView })));
 // Loaded on first use: Fair Play brings the Storage SDK and video review, admission brings the QR reader.
 const IntegrityCenter = lazy(() => import('./components/common/FairPlayCenter').then(m => ({ default: m.FairPlayCenter })));
+const PlayerAntiCheat = lazy(() => import('./components/common/PlayerAntiCheat').then(m => ({ default: m.PlayerAntiCheat })));
 const TournamentOperations = lazy(() => import('./components/common/TournamentOperations').then(m => ({ default: m.TournamentOperations })));
 const StandingsPage = lazy(() => import('./components/spectator/StandingsView').then(m => ({ default: m.StandingsPage })));
 const SpectatorQRReader = lazy(() => import('./components/auth/SpectatorQRReader').then(m => ({ default: m.SpectatorQRReader })));
@@ -53,21 +55,27 @@ const AdminMatchDataEntry = lazy(() => import('./components/admin/AdminMatchData
 const AdminLiveStreamManager = lazy(() => import('./components/admin/AdminLiveStreamManager').then(m => ({ default: m.AdminLiveStreamManager })));
 
 import { PreferencesPage, SupportPage, SchedulePage } from './components/common/WorkspacePages';
-import { useHistoryTab } from './lib/navigation';
+import { readHistoryTab, useWorkspaceRoute } from './lib/navigation';
 import { auth } from './lib/firebase';
 import { firestoreService } from './lib/firestore';
-import { Tournament, Match, BracketDraft } from './lib/types';
+import type { BracketDraft } from './lib/types';
 import type { AskFocus } from './lib/ai';
 
 // ─── Full-screen loading skeleton ─────────────────────────────────────────────
 /** Inside the shell: a lazily loaded tab shows this while its code arrives; the navigation stays. */
 function TabLoading() {
-  return <div className="tab-loading" role="status" aria-live="polite"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading…</span></div>;
+  return <div className="tab-loading" role="status" aria-live="polite">
+    <span className="tab-loading-text"><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />Loading page…</span>
+    <span className="skeleton-block skeleton-title" aria-hidden="true" />
+    <span className="skeleton-block skeleton-line" aria-hidden="true" />
+    <span className="skeleton-row" aria-hidden="true">{[0, 1, 2, 3].map(i => <span key={i} className="skeleton-block skeleton-tile" />)}</span>
+    <span className="skeleton-block skeleton-panel" aria-hidden="true" />
+  </div>;
 }
 
 function AppLoadingScreen() {
   return (
-    <div className="min-h-screen bg-(--surface) flex items-center justify-center">
+    <div className="auth-status-screen" role="status">
       <div className="flex flex-col items-center gap-4">
         <Brand />
         <div className="flex items-center gap-2 text-(--text-muted) text-sm">
@@ -92,14 +100,19 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
   const { showToast } = useToast();
 
   // Active View State
-  const [spectatorTab, setSpectatorTab] = useHistoryTab('arena', 'home');
-  const [adminTab, setAdminTab] = useHistoryTab('admin', 'overview');
+  const { hash, navigate } = useWorkspaceRoute();
+  const spectatorTab = readHistoryTab('arena', hash, 'home');
+  const adminTab = readHistoryTab('admin', hash, 'overview');
+  const setSpectatorTab = (tab: string, params?: Record<string, string>) => navigate('arena', tab, params);
+  const setAdminTab = (tab: string, params?: Record<string, string>) => navigate('admin', tab, params);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
 
   // Selected Entities
-  const routeParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const routeParams = new URLSearchParams(hash.split('?')[1] || '');
   const selectedPublishedBracketId = routeParams.get('bracket');
   const liveStreamBracketId = routeParams.get('streamBracket');
+  const liveStreamMatchId = routeParams.get('streamMatch');
+  const editBracketId = routeParams.get('editBracket');
 
   // Database State subscriptions
   const [tournaments, setTournaments] = useState(firestoreService.getTournaments());
@@ -134,8 +147,10 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
 
   // Sync default tournament and match
   const officialMatches = publishedBrackets.flatMap(bracket => bracket.matches);
+  const eventMatches = publishedBrackets.flatMap(scheduleMatches);
   const viewerLiveMatch = officialMatches.find(isWatchableLiveMatch);
   const activeTournament = tournaments.find(t => t.id === routeParams.get('tournament')) || tournaments[0];
+  const missingBracket = selectedPublishedBracketId && !publishedBrackets.some(bracket => bracket.id === selectedPublishedBracketId);
   const requestedMatch = routeParams.get('match');
   const activeMatch = requestedMatch ? officialMatches.find(match => match.id === requestedMatch) : viewerLiveMatch;
   const activeMatchBracket = activeMatch && publishedBrackets.find(bracket => bracket.matches.some(match => match.id === activeMatch.id));
@@ -193,16 +208,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
     currentUser.role === 'moderator');
 
   const [accountPanel, setAccountPanel] = useState<AccountPanel | null>(null);
-  const [forceAdminShell, setForceAdminShell] = useState(isAdminRole);
-
-  // Keep shell in sync when role changes
-  useEffect(() => {
-    const syncShell = () => setForceAdminShell(isAdminRole && !window.location.hash.startsWith('#/arena/'));
-    syncShell(); window.addEventListener('popstate', syncShell); window.addEventListener('hashchange', syncShell);
-    return () => { window.removeEventListener('popstate', syncShell); window.removeEventListener('hashchange', syncShell); };
-  }, [isAdminRole]);
-
-  const appShell = forceAdminShell && isAdminRole && !publicMode ? 'admin' : 'spectator';
+  const appShell = isAdminRole && !publicMode && !hash.startsWith('#/arena/') ? 'admin' : 'spectator';
   const [sharedError, setSharedError] = useState('');
   useEffect(() => firestoreService.watchSharedWorkspace(isAdminRole), [isAdminRole, firebaseUser?.uid]);
   useEffect(() => firestoreService.subscribe(() => setSharedError(firestoreService.getSharedError())), []);
@@ -222,23 +228,6 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
     </Modal>
   </>;
 
-  const breadcrumb =
-    spectatorTab === 'home'
-      ? `Good ${getTimeOfDay()}, ${currentUser.name.split(' ')[0]}`
-      : spectatorTab === 'live'
-      ? 'Live match'
-      : spectatorTab === 'current-live'
-      ? 'Match center'
-      : spectatorTab === 'choose-tournament'
-      ? 'Choose a tournament'
-      : spectatorTab === 'brackets'
-      ? 'Tournament bracket'
-      : spectatorTab === 'teams'
-      ? 'Teams & Rosters'
-      : spectatorTab === 'ai-assistant'
-      ? 'AI Assistant'
-      : ({ integrity: 'Fair play', schedule: 'Schedule', standings: 'Standings', support: 'Support', settings: 'Preferences' }[spectatorTab] || 'ArenaHub');
-
   return (
     <div className="min-h-screen flex flex-col">
       {/* Role-switcher is GONE — shell driven by ahUser.role */}
@@ -247,15 +236,16 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           currentUser={currentUser}
           onOpenAccountPanel={setAccountPanel}
           activeTab={adminTab}
+          routeKey={hash}
           onTabChange={(tab) => setAdminTab(tab)}
           onNotificationNavigate={(tab, entityId) => setAdminTab(({ schedule: 'match-data', 'current-live': 'live-stream', brackets: 'bracket-studio' }[tab] || tab), entityId && tab === 'integrity' ? { case: entityId } : entityId && tab === 'operations' ? { entity: entityId } : undefined)}
-          onExitToSpectator={() => { setForceAdminShell(false); setSpectatorTab('home'); }}
+          onExitToSpectator={() => setSpectatorTab('home')}
           onLogout={publicMode ? () => onSignIn?.() : handleLogout}
           openReportsCount={reports.filter((r) => r.status === 'open').length}
           live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => setAdminTab('live-stream', { streamBracket: card.bracket.id, streamMatch: card.match.id }) }))}
         >
           <Suspense fallback={<TabLoading />}>
-          {sharedError && <div className="module-notice mb-6" role="alert">{sharedError}</div>}
+          {sharedError && <div className="module-error mb-6" role="alert">{sharedError}</div>}
           {adminTab === 'overview' && (
             <AdminOverview
               brackets={publishedBrackets}
@@ -270,18 +260,18 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               })}
             />
           )}
-          {adminTab === 'integrity' && <IntegrityCenter key={routeParams.get('case') || 'new'} matches={officialMatches} teams={teams} staff initialCaseId={routeParams.get('case')} />}
+          {adminTab === 'integrity' && <IntegrityCenter key={routeParams.get('case') || 'new'} matches={eventMatches} teams={teams} staff initialCaseId={routeParams.get('case')} />}
           {adminTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'desk'} brackets={publishedBrackets} staff initialEntityId={routeParams.get('entity')} />}
           {adminTab === 'support' && <SupportPage onNavigate={setAdminTab} />}
           {adminTab === 'settings' && <PreferencesPage user={currentUser} onSignIn={onSignIn} />}
-          {adminTab === 'match-monitor' && <MatchMonitorView matches={officialMatches} />}
+          {adminTab === 'match-monitor' && <MatchMonitorView matches={eventMatches} />}
           {adminTab === 'users' && <UsersView users={users} />}
           {adminTab === 'games' && (
             <GamesCategoriesView games={games} categories={categories} />
           )}
           {adminTab === 'reports' && <ReportsView reports={reports} />}
           {adminTab === 'featured' && <FeaturedView tournaments={tournaments} />}
-          {adminTab === 'bracket-studio' && <BracketStudioView initialBracketId={routeParams.get('editBracket')} />}
+          {adminTab === 'bracket-studio' && <BracketStudioView key={editBracketId ?? ''} initialBracketId={editBracketId} />}
           {adminTab === 'battle-royale' && <PlacementEventsView brackets={publishedBrackets} />}
           {adminTab === 'ai-assistant' && (
             <AIAssistantView key={currentUser.id}
@@ -295,7 +285,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
             <AdminMatchDataEntry matches={officialMatches} />
           )}
           {adminTab === 'live-stream' && (
-            <AdminLiveStreamManager matches={matches} initialBracketId={liveStreamBracketId} initialMatchId={routeParams.get('streamMatch')} />
+            <AdminLiveStreamManager key={JSON.stringify([liveStreamBracketId, liveStreamMatchId])} matches={matches} initialBracketId={liveStreamBracketId} initialMatchId={liveStreamMatchId} />
           )}
           {accountDialogs}
           </Suspense>
@@ -306,20 +296,17 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           currentUser={currentUser}
           onOpenAccountPanel={setAccountPanel}
           activeTab={spectatorTab}
-          onTabChange={(tab) => {
-            setSpectatorTab(tab === 'brackets' ? 'choose-tournament' : tab);
-
-          }}
+          routeKey={hash}
+          onTabChange={setSpectatorTab}
           onLogout={publicMode ? () => onSignIn?.() : handleLogout}
-          onOpenAdmin={() => { if (isAdminRole) { setForceAdminShell(true); setAdminTab('overview'); } }}
+          onOpenAdmin={() => { if (isAdminRole) setAdminTab('overview'); }}
           isGuest={publicMode}
-          breadcrumb={breadcrumb}
           live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => card.state === 'live' ? setSpectatorTab('live', { match: card.match.id, game: card.gameId }) : setSpectatorTab('current-live', { game: card.gameId }) }))}
         >
           <Suspense fallback={<TabLoading />}>
-          {spectatorTab === 'integrity' && <IntegrityCenter key={routeParams.get('case') || 'new'} matches={officialMatches} teams={teams} onSignIn={onSignIn} initialCaseId={routeParams.get('case')} />}
+          {spectatorTab === 'integrity' && <PlayerAntiCheat key={routeParams.get('case') || 'new'} matches={eventMatches} teams={teams} onSignIn={onSignIn} initialCaseId={routeParams.get('case')} />}
           {spectatorTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'team'} brackets={publishedBrackets} initialEntityId={routeParams.get('entity')} />}
-          {spectatorTab === 'standings' && <StandingsPage brackets={publishedBrackets} />}
+          {spectatorTab === 'standings' && <StandingsPage brackets={publishedBrackets} selectedId={selectedPublishedBracketId} onSelect={id => setSpectatorTab('standings', { bracket: id })} />}
           {spectatorTab === 'schedule' && <SchedulePage brackets={publishedBrackets} onSelect={m => setSpectatorTab('live', { match: m.id })} />}
           {spectatorTab === 'home' && (
             <HomeScreen
@@ -365,6 +352,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
 
           {spectatorTab === 'current-live' && (
             <CurrentLiveView
+              key={matchCenterGame || 'all'}
               brackets={publishedBrackets}
               initialGame={matchCenterGame}
               onSelectMatch={(match, game) => setSpectatorTab('live', { match: match.id, game })}
@@ -377,14 +365,15 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
             />
           )}
 
-          {spectatorTab === 'brackets' && !activeTournament && <section className="arena-panel match-center-unavailable">
+          {spectatorTab === 'brackets' && (!activeTournament || missingBracket) && <section className="arena-panel match-center-unavailable">
             {/* Opening or reloading a Brackets link renders before tournaments load; BracketsView needs one. */}
-            <h1>No tournament to show yet</h1>
-            <p className="studio-muted">Published tournaments appear here as soon as they load.</p>
+            <h1>{missingBracket ? 'Bracket unavailable' : 'No tournament to show yet'}</h1>
+            <p className="studio-muted">Open the tournament list to see currently published brackets.</p>
             <button type="button" className="arena-outline" onClick={() => setSpectatorTab('choose-tournament')}>All tournaments</button>
           </section>}
-          {spectatorTab === 'brackets' && activeTournament && (
+          {spectatorTab === 'brackets' && activeTournament && !missingBracket && (
             <BracketsView
+              key={selectedPublishedBracketId || activeTournament.id}
               tournament={activeTournament}
               matches={matches}
               colleges={colleges}
@@ -423,13 +412,6 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
   );
 }
 
-function getTimeOfDay(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'morning';
-  if (h < 17) return 'afternoon';
-  return 'evening';
-}
-
 function SpectatorAdmissionGate() {
   const { firebaseUser, logout } = useAuth();
   const [state, setState] = useState<{ email: string; allowed: boolean; error?: string } | null>(null);
@@ -462,11 +444,11 @@ function AppGate() {
   // Not signed in → show auth screen
   if (!firebaseUser || affiliationPending) return <AuthEntry />;
   if (profileError) return <div className="auth-status-screen"><section className="auth-status-card"><Brand /><h1>Finish account setup</h1><p role="alert" className="auth-flow-error">{profileError}</p><button className="arena-primary auth-submit" onClick={() => void retryProfile()}>Retry loading profile</button><button className="auth-flow-text" onClick={() => void logout()}>Return to sign-in</button></section></div>;
-  if (ahUser && ahUser.status !== 'active') return <div className="min-h-screen flex items-center justify-center"><div className="arena-panel max-w-md"><h1 className="text-2xl mb-3">Account access restricted</h1><p className="text-sm text-[var(--text-muted)] mb-5">Contact your tournament organizer about your account status.</p><button className="arena-primary" onClick={logout}>Sign out</button></div></div>;
+  if (ahUser && ahUser.status !== 'active') return <div className="auth-status-screen"><div className="auth-status-card"><Brand /><h1 className="text-2xl mb-3">Account access restricted</h1><p className="text-sm text-[var(--text-muted)] mb-5">Contact your tournament organizer about your account status.</p><button className="arena-primary" onClick={logout}>Sign out</button></div></div>;
 
   if (firebaseUser.isAnonymous) {
-    return <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="arena-panel max-w-md">
+    return <div className="auth-status-screen">
+      <div className="auth-status-card"><Brand />
         <h1 className="text-xl mb-3">Sign in with a verified email</h1>
         <p className="text-sm text-[var(--text-muted)] mb-5">A student invitation grants spectator admission after you sign in with a verified email account.</p>
         <button className="arena-primary" onClick={logout}>Return to sign-in</button>

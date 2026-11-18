@@ -110,13 +110,15 @@ function drawMatchCard(
 }
 
 export async function downloadBracketPng(draft: BracketDraft) {
+  if (!draft.matches.length) throw new Error('Create a bracket before downloading it.');
+  const staged = draft.format !== 'Single Elimination';
   const maxRound = Math.max(...draft.matches.map(match => match.round), 1);
   const rounds = Array.from({ length: maxRound }, (_, index) =>
     draft.matches.filter(match => match.round === index + 1),
   );
-  const firstRoundCount = Math.max(rounds[0]?.length || 1, 1);
+  const firstRoundCount = Math.max(staged ? Math.max(...rounds.map(round => round.length)) : rounds[0]?.length || 1, 1);
   const treeHeight = Math.max(firstRoundCount * (CARD_HEIGHT + ROW_GAP), 390);
-  const width = EDGE * 2 + rounds.length * (CARD_WIDTH + ROUND_GAP) + CHAMPION_WIDTH;
+  const width = EDGE * 2 + rounds.length * (CARD_WIDTH + ROUND_GAP) + (staged ? 0 : CHAMPION_WIDTH);
   const height = HEADER_HEIGHT + treeHeight + 52;
   const maxPixels = 28_000_000;
   const scale = Math.min(2, 16_000 / Math.max(width, height), Math.sqrt(maxPixels / (width * height)));
@@ -149,17 +151,28 @@ export async function downloadBracketPng(draft: BracketDraft) {
 
   rounds.forEach((round, roundIndex) => {
     const x = EDGE + roundIndex * (CARD_WIDTH + ROUND_GAP);
-    const isFinal = roundIndex === rounds.length - 1;
+    context.textAlign = 'left';
+    context.textBaseline = 'alphabetic';
+    const isFinal = !staged && roundIndex === rounds.length - 1;
     context.fillStyle = isFinal ? '#ffb020' : '#9da2ae';
     context.font = '700 12px Arial, sans-serif';
     context.fillText((round[0]?.roundName || `Round ${roundIndex + 1}`).toUpperCase(), x, HEADER_HEIGHT - 22);
 
     round.forEach((match, matchIndex) => {
-      const y = HEADER_HEIGHT + matchCenter(roundIndex, matchIndex) - CARD_HEIGHT / 2;
+      const y = HEADER_HEIGHT + (staged ? matchIndex * (CARD_HEIGHT + ROW_GAP) : matchCenter(roundIndex, matchIndex) - CARD_HEIGHT / 2);
+      if (staged) {
+        context.textAlign = 'left';
+        context.font = '500 10px Arial, sans-serif';
+        context.fillStyle = '#9297a4';
+        const paths = match.sources?.filter(source => source !== null).map(source =>
+          `${source.result === 'winner' ? 'W' : 'L'} ${draft.matches.find(item => item.id === source.matchId)?.matchNumber || source.matchId}`
+        ).join(' / ');
+        context.fillText(fitText(context, `${match.matchNumber} · ${match.inactive ? 'If needed' : match.matchFormat}${paths ? ` · ${paths}` : ''}`, CARD_WIDTH), x, y - 8);
+      }
       drawMatchCard(context, match, x, y, isFinal);
     });
 
-    if (roundIndex < rounds.length - 1) {
+    if (!staged && roundIndex < rounds.length - 1) {
       const connectorX = x + CARD_WIDTH;
       const midX = connectorX + ROUND_GAP / 2;
       context.strokeStyle = '#656b78';
@@ -180,10 +193,11 @@ export async function downloadBracketPng(draft: BracketDraft) {
     }
   });
 
+  if (!staged) {
   const final = rounds[rounds.length - 1]?.[0];
-  const champion = final?.winnerId === final?.team1?.id
+  const champion = final?.status === 'completed' && final?.winnerId && final.winnerId === final.team1?.id
     ? final.team1
-    : final?.winnerId === final?.team2?.id
+    : final?.status === 'completed' && final?.winnerId && final.winnerId === final.team2?.id
     ? final.team2
     : undefined;
   const finalX = EDGE + (rounds.length - 1) * (CARD_WIDTH + ROUND_GAP) + CARD_WIDTH;
@@ -212,6 +226,7 @@ export async function downloadBracketPng(draft: BracketDraft) {
     championX + CHAMPION_WIDTH / 2,
     finalY + 14,
   );
+  }
 
   context.textAlign = 'left';
   context.fillStyle = '#5f6470';

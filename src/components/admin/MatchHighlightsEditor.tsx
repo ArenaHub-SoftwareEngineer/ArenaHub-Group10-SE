@@ -45,10 +45,10 @@ export const MatchHighlightsEditor: React.FC<{ match: Match }> = ({ match }) => 
     finally { setSaving(false); }
   };
 
-  return <section className="rounded-[4px] bg-(--surface-soft) border border-(--border) p-4 highlights-editor" aria-labelledby="highlights-title">
+  return <section className="page-panel highlights-editor" aria-labelledby="highlights-title">
     <div>
-      <h3 id="highlights-title" className="text-sm font-bold text-(--text-primary)">Timeline and MVP</h3>
-      <p className="text-xs text-(--text-muted)">Record key moments with their game time. Viewers see them on the match page, in time order.</p>
+      <h3 id="highlights-title">Timeline and MVP</h3>
+      <p className="field-hint">Record key moments with their game time. Viewers see them on the match page, in time order.</p>
     </div>
 
     <form className="highlights-editor-add module-form" onSubmit={add}>
@@ -66,7 +66,7 @@ export const MatchHighlightsEditor: React.FC<{ match: Match }> = ({ match }) => 
       <time>{event.time}</time>
       <p><strong>{event.title}</strong>{event.team ? ` · ${event.team}` : ''} · {event.text}</p>
       <button type="button" className="quiet-icon-button" aria-label={`Remove ${event.title} at ${event.time}`} onClick={() => setEvents(list => list.filter((_, n) => n !== i))}><Trash2 size={16} /></button>
-    </li>)}</ul> : <p className="text-xs text-(--text-muted)">No events recorded for this match yet.</p>}
+    </li>)}</ul> : <p className="field-hint highlights-empty">No events recorded for this match yet.</p>}
 
     <div className="module-form operations-two-fields">
       <label>Match MVP

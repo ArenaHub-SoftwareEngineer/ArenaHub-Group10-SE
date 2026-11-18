@@ -8,11 +8,12 @@ import { createIntegrityRouter } from './integrity';
 import { publicAccessGuard } from './publicAccess';
 import { corsPolicy } from './cors';
 import { adminMode } from './firebaseAdmin';
+import { publicErrorHandler, securityHeaders } from './securityHeaders';
 
 export interface AppOptions {
   /** Folder with the built site to serve, or null for an API-only deployment. */
   site?: string | null;
-  /** The match monitor keeps recordings on local disk, so it runs only on the event laptop. */
+  /** Requires a persistent Node process and writable private disk; disable on serverless hosts. */
   integrity?: boolean;
 }
 
@@ -20,6 +21,7 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');
+  app.use(securityHeaders({ site: options.site }));
   // Online mode (npm run online): requests through the public tunnel may only reach the player pages.
   app.use(publicAccessGuard(env));
 
@@ -41,7 +43,7 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
   });
   app.use('/api/ai', cors, createAiRouter(env));
   app.use('/api/fair-play', cors, createFairPlayRouter(env));
-  if (options.integrity !== false) app.use('/api/integrity', createIntegrityRouter(env));
+  if (options.integrity !== false) app.use('/api/integrity', cors, createIntegrityRouter(env));
   app.use('/api', (_req, res) => { res.status(404).json({ error: 'Unknown API route.' }); });
 
   if (options.site) {
@@ -49,5 +51,6 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
     app.use(express.static(site));
     app.get('*', (_req, res) => res.sendFile(resolve(site, 'index.html')));
   }
+  app.use(publicErrorHandler);
   return app;
 }

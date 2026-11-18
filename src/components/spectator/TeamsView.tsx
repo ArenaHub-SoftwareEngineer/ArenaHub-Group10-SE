@@ -26,7 +26,6 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
 
   return (
     <div className="team-directory">
-      <section className="rank-discovery"><header><div><span className="section-overline">The competitive ladder</span><h2>Explore the ranks</h2><p>Pick a game. Find your medal and see what comes next.</p></div></header><GameArtworkTiles label="Choose a game to explore ranks" opensDialog onSelect={id=>{setGuide(id as RankGame);setGuideOpen(true);}}/></section>
       <RankGuide key={guide} open={guideOpen} onClose={()=>setGuideOpen(false)} initialGame={guide}/>
       {college ? (
         <>
@@ -100,7 +99,7 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
           <header className="directory-heading">
             <span className="section-overline">Campus esports</span>
             <h1>Players & teams</h1>
-            <p>Find your college. Meet your players.</p>
+            <p>Find your college, then open a game to meet its roster.</p>
           </header>
           <div className="directory-colleges">
             {colleges.map(c => {
@@ -143,6 +142,8 @@ export const TeamsView = ({ colleges, teams }: { colleges: College[]; teams: Tea
           </div>
         </>
       )}
+      {/* Rank explorer sits under the directory: the page is about colleges and players first. */}
+      <section className="rank-discovery" aria-labelledby="rank-discovery-title"><header><div><h2 id="rank-discovery-title">Game ranks</h2><p>Choose a game to compare its competitive ranks.</p></div></header><GameArtworkTiles label="Choose a game to explore ranks" opensDialog onSelect={id=>{setGuide(id as RankGame);setGuideOpen(true);}}/></section>
     </div>
   );
 };

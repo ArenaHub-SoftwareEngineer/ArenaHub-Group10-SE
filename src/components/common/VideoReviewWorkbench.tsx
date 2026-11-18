@@ -6,6 +6,7 @@ import { Upload, ShieldCheck, Play, Pause, ChevronLeft, ChevronRight, X, Check, 
 import { readEvidence, type EvidenceFile } from '../../lib/evidenceStorage';
 import type { Match } from '../../lib/types';
 import { errorMessage } from '../../lib/errors';
+import { matchLabel } from '../../lib/integrityChecks';
 
 type CapturedFrame = ReviewFrame & { state: 'captured' | 'analyzing' | 'reviewed'; finding?: FrameFinding };
 function waitForVideo(video: HTMLVideoElement, event: 'loadedmetadata' | 'seeked', signal: AbortSignal) {
@@ -117,7 +118,7 @@ export function VideoReviewWorkbench({ matches, game, staff, attachment, caseId,
   };
   return <section className="video-workbench">
     <header className="video-review-heading"><div><span className="section-overline">VIDEO EVIDENCE</span><h2>{caseId ? 'Inspect this clip.' : 'Let the footage tell the story.'}</h2><p>{caseId && !staff ? 'Your original evidence is available here while organizers review the report.' : staff ? 'Inspect the actual frames, compare context, and record your decision.' : 'Choose the match and upload a clip. Your organizers take it from here.'}</p></div><ShieldCheck size={28} /></header>
-    {!caseId && <label className="video-match-label">Match<select value={matchId} disabled={busy || saving} onChange={e => { setMatchId(e.target.value); setFrames([]); setSelected(null); setModelName(''); setStage(''); }}>{matches.length !== 1 && <option value="">Choose the match in your clip</option>}{matches.map(m => <option key={m.id} value={m.id}>{m.matchNumber} · {m.team1?.name || 'TBD'} vs {m.team2?.name || 'TBD'}</option>)}</select></label>}
+    {!caseId && <label className="video-match-label">Match<select value={matchId} disabled={busy || saving} onChange={e => { setMatchId(e.target.value); setFrames([]); setSelected(null); setModelName(''); setStage(''); }}>{matches.length !== 1 && <option value="">Choose the match in your clip</option>}{matches.map(m => <option key={m.id} value={m.id}>{matchLabel(m)}</option>)}</select></label>}
     {!file && !attachment && <label className="video-dropzone"><Upload size={30} /><strong>Upload the moment worth reviewing</strong><span>MP4 or WebM · up to 100 MB · original player POV is best</span><input aria-label="Upload evidence video" type="file" accept="video/mp4,video/webm" onChange={e => loadFile(e.target.files?.[0])} /></label>}
     {file && <><div className="video-file-caption"><span>{file.name}</span>{!attachment && <button disabled={busy || saving} className="arena-text-button" onClick={() => { setFile(null); setFrames([]); setDuration(0); }}>Change clip</button>}</div>
       <div className="video-inspection-layout"><div className="video-player-column"><video ref={video} src={url || undefined} controls playsInline preload="metadata" onLoadedMetadata={e => { const d = e.currentTarget.duration; if (Number.isFinite(d) && d > 0 && d <= 600) setDuration(d); else setError('Use a clip no longer than 10 minutes. Trim a longer broadcast first.'); }} onTimeUpdate={e => setPosition(e.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => setError('This video cannot be played here. Try an MP4 encoded with H.264.')} />

@@ -50,19 +50,19 @@ class MainActivity : Activity() {
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
         fun text(value: String, size: Float = 15f) = TextView(this).apply { text = value; textSize = size; setPadding(0, pad / 2, 0, pad / 2) }
 
-        column.addView(text("ArenaHub Match Monitor", 22f))
+        column.addView(text("ArenaHub Anti-cheat", 22f))
         column.addView(text("Ask the referee for the pairing QR code. Scanning it with your camera opens this app with everything filled in."))
         serverField = EditText(this).apply { hint = "Address from the referee, e.g. https://....trycloudflare.com"; inputType = InputType.TYPE_TEXT_VARIATION_URI; isSingleLine = true }
-        codeField = EditText(this).apply { hint = "8-character pairing code"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; isSingleLine = true }
+        codeField = EditText(this).apply { hint = "8-character match scan code"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; isSingleLine = true }
         column.addView(serverField)
         column.addView(codeField)
         column.addView(text(getString(R.string.consent), 14f))
         consent = CheckBox(this).apply { text = "I understand and agree to monitoring for this match" }
         column.addView(consent)
-        column.addView(text("Declining is allowed and is not a penalty. The referee is told and will give you an organizer device or watch you in person.", 13f))
-        startButton = Button(this).apply { text = "Agree and start monitoring"; setOnClickListener { start() } }
-        declineButton = Button(this).apply { text = "Decline monitoring"; setOnClickListener { decline() } }
-        stopButton = Button(this).apply { text = "Stop monitoring"; setOnClickListener { MonitorService.stop(this@MainActivity) } }
+        column.addView(text("A passing scan is required before joining. You can decline or stop. Ask staff for a supported device to play on.", 13f))
+        startButton = Button(this).apply { text = "Agree and start scan"; setOnClickListener { start() } }
+        declineButton = Button(this).apply { text = "Decline scan"; setOnClickListener { decline() } }
+        stopButton = Button(this).apply { text = "Stop scan"; setOnClickListener { MonitorService.stop(this@MainActivity) } }
         usageButton = Button(this).apply {
             text = "Optional: allow app usage access"
             setOnClickListener { startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
@@ -103,14 +103,14 @@ class MainActivity : Activity() {
         val code = codeField.text.toString().trim().uppercase()
         when {
             MonitorState.running -> return show("Monitoring is already on.")
-            !Regex("^https?://[^\\s/]+$").matches(server) -> return show("Enter the laptop address shown on the referee screen.")
-            !Regex("^[A-Z0-9]{8}$").matches(code) -> return show("Enter the 8-character pairing code.")
+            !Api.validServer(server) -> return show("Enter the laptop address shown on the referee screen.")
+            !Regex("^[A-Z0-9]{8}$").matches(code) -> return show("Enter the 8-character match scan code.")
             !consent.isChecked -> return show("Tick the agreement box to start. You can decline and play on an organizer device instead.")
         }
         startButton.isEnabled = false
-        show("Pairing with the referee laptop...")
+        show("Connecting to the tournament server...")
         thread {
-            val device = JSONObject().put("model", "${Build.MANUFACTURER} ${Build.MODEL}".take(80)).put("os", "Android ${Build.VERSION.RELEASE}").put("agent", "android 1.0.0")
+                val device = JSONObject().put("model", "${Build.MANUFACTURER} ${Build.MODEL}".take(80)).put("os", "Android ${Build.VERSION.RELEASE}").put("agent", "android 3.2.0")
             val result = try { Api.postJson(server, "/device/claim", JSONObject().put("code", code).put("device", device)) } catch (_: Exception) { null }
             runOnUiThread {
                 startButton.isEnabled = true
@@ -138,9 +138,9 @@ class MainActivity : Activity() {
     private fun decline() {
         val server = serverField.text.toString().trim().trimEnd('/')
         val code = codeField.text.toString().trim().uppercase()
-        if (!Regex("^https?://[^\\s/]+$").matches(server) || !Regex("^[A-Z0-9]{8}$").matches(code)) return show("Enter the laptop address and pairing code first, so the referee knows who declined.")
+        if (!Api.validServer(server) || !Regex("^[A-Z0-9]{8}$").matches(code)) return show("Enter the laptop address and pairing code first, so the referee knows who declined.")
         AlertDialog.Builder(this)
-            .setTitle("Decline monitoring?")
+            .setTitle("Decline scan?")
             .setMessage("The referee will be told and will arrange an organizer device or watch your match in person.")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Decline") { _, _ ->
@@ -168,6 +168,9 @@ class MainActivity : Activity() {
             .putExtra(MonitorService.EXTRA_TOKEN, body.getString("token"))
             .putStringArrayListExtra(MonitorService.EXTRA_GAMES, monitor.optJSONArray("gamePackages").strings())
             .putStringArrayListExtra(MonitorService.EXTRA_BLOCKED, monitor.optJSONArray("blockedPackages").strings())
+            .putStringArrayListExtra(MonitorService.EXTRA_CERTIFICATES, monitor.optJSONArray("blockedCertificates").strings())
+            .putExtra(MonitorService.EXTRA_EXPIRES, body.optLong("expiresAt", 0))
+            .putExtra(MonitorService.EXTRA_SCAN, monitor.optJSONObject("scan")?.toString())
             .putExtra(MonitorService.EXTRA_HEARTBEAT, body.optInt("heartbeatSeconds", 15))
             .putExtra(MonitorService.EXTRA_RECORD, body.optBoolean("record", true))
             .putExtra(MonitorService.EXTRA_PROJECTION_CODE, resultCode)

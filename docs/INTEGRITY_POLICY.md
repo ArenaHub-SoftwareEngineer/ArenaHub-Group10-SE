@@ -1,53 +1,31 @@
-# Match monitoring: what players should know
+# Match monitoring: player notice
 
-ArenaHub tournaments may ask you to turn on match monitoring during official matches. This notice explains what monitoring does and what happens to your data. It is written to follow the Data Privacy Act of 2012 (RA 10173).
+Updated 17 November 2026. The tournament organizer must identify the hosting provider, responsible staff and contact details before using this notice with players. This is a technical description, not a certification of legal compliance.
 
-## When it runs
+## Your choice and the match window
 
-- Monitoring runs only during your match window, and only after you agree on your own device.
-- On Android, a "monitoring is ON" notification stays visible the whole time. On PC, a window stays open.
-- Monitoring stops by itself when the match window closes. You can also stop it at any time. Stopping is logged for the referee.
+Official match admission requires every roster player to complete a supported companion scan. Monitoring starts after you agree on your device and lasts only for the assigned match window. You can decline, stop the app/agent, or refuse screen capture. Staff are told so they can arrange a supported organizer device. A declined or unsupported personal device does not pass required scan admission. Software does not decide a cheating penalty.
 
-## What is collected
+Android displays a foreground notification; Windows keeps the agent window open. Ending a session at the server revokes its credentials. Devices stop when they next contact the server; closing the local app/agent stops local collection immediately.
 
-**Android phone (Mobile Legends, CODM):**
-- A recording of your screen, only if the referee turned recording on for your match. There is no microphone and no camera.
-- Whether your game app is the official version (checked through its signing certificate) and which app store installed it.
-- Apps on the tournament blocklist, if any are installed, including tools that can change other apps' files. Your full app list never leaves your phone.
-- It cannot open your game's own folder or files: Android does not allow that, and the companion does not try.
-- Whether the phone is rooted or is an emulator.
-- Screen-control (accessibility) apps that are turned on, and apps allowed to draw over other apps.
-- Whether developer options or debugging are on.
-- Optional, only if you allow it: which app was on screen.
+## Reports and recordings
 
-**iPhone (Mobile Legends, CODM):**
-- Only that you checked in. Nothing is installed and nothing on the iPhone is checked. A referee records the match from the observer slot in the custom room.
-- If a referee asks for your own screen recording, you can upload it from the check-in page. Turn on Do Not Disturb before you record, so private notifications do not appear in the video.
+**Windows:** the agent checks running program names and registered installed-software names against the tournament policy. It also checks configured restricted DLL names loaded into Dota 2 through normal OS module inspection. When staff enable file fingerprints, it reads accessible executable and Dota library files to compute SHA-256 hashes. Only matching entries, their paths/versions/hashes when available, Dota-running status and check-completion status are reported. The full process/software/module inventory and module paths stay on the PC. Matched module names and configured hashes are reported. Dota GSI reports hero, match ID, game state and Steam ID. Optional screenshots are captured every 20 seconds only when recording is enabled for the session.
 
-**Windows PC (Dota 2):**
-- Running programs that are on the tournament blocklist. Your full program list never leaves your PC.
-- A screenshot every 20 seconds, only if the referee turned screenshots on for your match.
-- Dota 2's official Game State Integration: your hero, match ID, game state and Steam ID.
+**Android:** the companion reports game package/version, signing-certificate hashes and install source; listed installed apps and configured signer matches; root/emulator indicators; enabled accessibility services, permitted overlay apps and debugging settings. Optional usage access can report the foreground app. Device model, OS, collector version and session/policy scan metadata identify the session. The full installed-app inventory stays on the phone. Screen recording requires both the match recording setting and the Android capture prompt. No microphone or camera is used.
 
-**Never collected:** your messages, photos, files, contacts, location, passwords, browser history, or what other apps contain.
+**iPhone:** the browser reports your check-in/decline and optional device details. No installed-app or cheat scan runs. If recording is enabled and you choose to provide it, you can upload your own screen recording.
 
-## Where it goes and how long it stays
+The collectors do not inspect private documents, messages, contacts, photos, passwords, location, browser history or game memory. **Screen recordings and screenshots can still capture notifications or personal content that is visible on screen.** Close personal apps and enable Do Not Disturb before capture.
 
-- Everything goes to the referee laptop at the venue. It is not uploaded to ArenaHub's cloud database.
-- Only tournament staff can view it, after signing in.
-- It is deleted after 30 days. The exception is data attached to a fair-play case, which is kept until that case and any review request are closed.
+## Destination, access and retention
 
-## How decisions are made
+Reports and recordings go to the tournament API server shown in the join-page/agent address. For public hosting, this is a hosted server, not necessarily a laptop at the venue. Monitoring reports and recordings use its private disk storage, separate from Firestore. Fair Play cases submitted through the main website may use Firebase database/file storage under their own access rules.
 
-- Monitoring produces signals and a risk score. These are reasons for a referee to look, not proof of cheating. Normal apps can trigger some signals.
-- Referees may also watch your recording and note moments that match a known cheat type. A note is one referee's observation, not a verdict.
-- No penalty is automatic. A referee reviews the evidence and records a decision through Fair play.
-- You can ask for one review of that decision.
+Signed-in, active tournament staff can inspect sessions and recordings. Playback uses short-lived links: do not share them. Ended monitor sessions older than 30 days are removed unless staff set an explicit evidence hold. A hold remains until staff release it; it is not automatically tied to a case closing. Backups and host access also need the organizer's retention/access controls.
 
-## If you do not agree
+## Human review and requests
 
-Press **Decline** on the check-in page, in the app, or type NO in the PC agent. Declining is not a penalty. The referee is told straight away, so they can give you an organizer-provided device or watch your match in person.
+Installed software, process names, signing certificates, root indicators and unusual gameplay are review signals. They do not establish intent or prove cheating. A missing signal does not prove a clean device, especially if checks were incomplete or unavailable.
 
-## Your rights
-
-Under RA 10173, you can ask the organizers what data was collected about you, ask for corrections, and ask for deletion once no case depends on it. Contact the tournament organizers through ArenaHub Support.
+Contact tournament staff through ArenaHub Support for your monitoring record, corrections, retention questions or a decision review. Staff must verify the request and preserve evidence needed for any active case.

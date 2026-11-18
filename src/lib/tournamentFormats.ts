@@ -1,6 +1,22 @@
 import { seriesWinsNeeded, type Match, type MatchFormat, type Team } from './types';
 type Source = NonNullable<Match['sources']>[number];
 const source = (match: Match, result: 'winner' | 'loser' = 'winner'): Source => ({ matchId: match.id, result });
+export function canEditRoundFormat(matches: Match[]): boolean {
+  return matches.every(match => match.team1?.isBye || match.team2?.isBye
+    || (['upcoming', 'pre-match'].includes(match.status) && !match.winnerId && match.score.team1Score === 0 && match.score.team2Score === 0));
+}
+
+/** Keep automatic advances valid when the organizer changes an unstarted round's series length. */
+export function changeRoundFormat(matches: Match[], round: number, format: MatchFormat): Match[] {
+  if (!canEditRoundFormat(matches.filter(match => match.round === round))) return matches;
+  return matches.map(match => match.round !== round ? match : {
+    ...match, matchFormat: format,
+    ...((match.team1?.isBye || match.team2?.isBye) ? { score: {
+      team1Score: match.team1?.isBye ? 0 : seriesWinsNeeded(format),
+      team2Score: match.team2?.isBye ? 0 : seriesWinsNeeded(format),
+    } } : {}),
+  });
+}
 function bye(id: string): Team { return { id: `bye-${id}`, name: 'BYE', isBye: true, collegeId: 'bye', collegeCode: 'BYE', gameId: 'game-draft', seed: 0, winRate: 0, record: '0W-0L', players: [] }; }
 
 /** Rebuild both winner and loser paths in topological order after every correction. */

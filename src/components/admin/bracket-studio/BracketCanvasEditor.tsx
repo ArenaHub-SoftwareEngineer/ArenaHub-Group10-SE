@@ -7,11 +7,8 @@ import { CARD_WIDTH, CARD_HEIGHT, BASE_GAP, CONNECTOR_WIDTH, BRACKET_LINE_COLOR,
 
 // ── Horizontal Bracket Tree Component ─────────────────────────────────────────
 
-export function canEditRoundFormat(matches: Match[]): boolean {
-  return matches.every(match => [match.team1, match.team2].some(team => team?.isBye || team?.name === 'BYE')
-    || (['upcoming', 'pre-match'].includes(match.status)
-      && !match.winnerId && match.score.team1Score === 0 && match.score.team2Score === 0));
-}
+import { canEditRoundFormat } from '../../../lib/tournamentFormats';
+export { canEditRoundFormat } from '../../../lib/tournamentFormats';
 
 export interface HorizontalBracketTreeProps {
   onRoundFormatChange: (round: number, format: MatchFormat) => void;

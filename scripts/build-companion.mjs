@@ -29,9 +29,12 @@ const work = join(tools, 'companion');
 copy(resolve('companion', 'android'), work);
 writeFileSync(join(work, 'local.properties'), `sdk.dir=${slash(sdk)}\n`);
 
-const run = spawnSync(`"${gradle}" --no-daemon -q assembleDebug`, { cwd: work, stdio: 'inherit', shell: true, env: { ...process.env, JAVA_HOME: jdk, ANDROID_HOME: sdk } });
+const lan = process.env.ARENAHUB_ALLOW_HTTP_LAN === '1';
+const tasks = process.argv.includes('--verify') ? 'testDebugUnitTest lintDebug assembleDebug' : 'assembleDebug';
+const run = spawnSync(`"${gradle}" --no-daemon -q -PallowLanHttp=${lan} ${tasks}`, { cwd: work, stdio: 'inherit', shell: true, env: { ...process.env, JAVA_HOME: jdk, ANDROID_HOME: sdk } });
 if (run.status !== 0) { console.error('The Android build failed. The messages above say why.'); process.exit(1); }
 const apk = join(work, 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
 mkdirSync(resolve('dist-agent'), { recursive: true });
 copyFileSync(apk, resolve('dist-agent', 'arenahub-companion.apk'));
 console.log(`Built ${resolve('dist-agent', 'arenahub-companion.apk')} (${(statSync(apk).size / 1024 / 1024).toFixed(1)} MB)`);
+console.log(lan ? 'LAN TEST BUILD: local HTTP enabled. Do not distribute as the public release.' : 'HTTPS-only companion build.');

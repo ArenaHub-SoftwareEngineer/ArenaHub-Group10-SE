@@ -37,7 +37,7 @@ function RequestSummary({ request, source }: { request: BracketRequest; source: 
     ['Game', request.game],
     ['Format', request.format + d('format')],
     ['Series', request.matchFormat + d('matchFormat')],
-    ['Final', request.finalMatchFormat + d('finalMatchFormat')],
+    ...(request.format === 'Swiss' || request.format === 'Round robin' ? [] : [['Final', request.finalMatchFormat + d('finalMatchFormat')] as [string, string]]),
     ['Teams', request.teams.length
       ? `${request.teamsCount}: ${request.teams.map(t => t.college ? `${t.name} (${t.college})` : t.name).join(', ')}${unnamed > 0 ? `, plus ${unnamed} numbered slot${unnamed === 1 ? '' : 's'} to rename before publishing` : ''}`
       : `${request.teamsCount} numbered slots (Team 1 to Team ${request.teamsCount}) to rename before publishing`],

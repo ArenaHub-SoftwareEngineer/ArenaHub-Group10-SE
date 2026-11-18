@@ -59,9 +59,9 @@ export function MatchArena({ players, onOpen }: { players: ArenaPlayer[]; onOpen
                 <Block from={0} height={BASE} className="base" />
                 {layers.map(l => <Block key={l.c} from={BASE + (l.from - BASE) * squeeze} height={Math.max(2, l.share * squeeze)} className={`cat-${l.c}`} />)}
                 <div className="monitor3d-label" style={billboard(top + 6)}>
-                  <button type="button" aria-haspopup="dialog" onClick={e => { e.stopPropagation(); onOpen(player.id); }}
-                    aria-label={`${player.playerName}, ${PLATFORM_LABEL[player.platform]}, risk ${player.risk.score} of 100, ${player.risk.level}. Open session`}>
+                  <button type="button" aria-haspopup="dialog" onClick={e => { e.stopPropagation(); onOpen(player.id); }}>
                     <strong>{player.risk.score}</strong><span>{player.playerName}</span>
+                    <span className="sr-only">{PLATFORM_LABEL[player.platform]}, {player.risk.level} risk. Open session</span>
                   </button>
                 </div>
               </div>;

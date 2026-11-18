@@ -66,8 +66,12 @@ try {
   if (emulator && !process.env.FIRESTORE_EMULATOR_HOST) throw new Error('FIRESTORE_EMULATOR_HOST is not set');
   // The script has no ArenaHub account of its own, so the actor is recorded as the command line.
   await getFirestore().collection('auditEvents').add({ actorId: 'cli:set-role', action, createdAt: FieldValue.serverTimestamp() });
+  // Mirror the role onto the profile so the admin Users page shows it. Display only: rules authorize from the
+  // token claim and never from this field, and members cannot change it on their own profile.
+  const profile = getFirestore().collection('users').doc(user.uid);
+  if ((await profile.get()).exists) await profile.update({ role: role === 'none' ? 'user' : role });
 } catch (error) {
-  console.warn(`Claims changed, but the audit event could not be written: ${error.message}`);
+  console.warn(`Claims changed, but the audit event or profile role could not be written: ${error.message}`);
 }
 console.log(`${action} in ${projectId}. ${role === 'none' ? 'Their sessions were ended.' : 'They get the new access the next time they sign in (or within an hour).'}`);
 process.exit(0);

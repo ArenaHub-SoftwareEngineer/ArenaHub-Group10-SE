@@ -50,7 +50,7 @@ test('root, debugging, stopped recording and a missing game all add up, each kin
 test('PC process blocklist and Dota checks', () => {
   const signals = evaluateFacts({ platform: 'pc', processes: [{ name: 'cheatengine-x86_64.exe' }, { name: 'chrome.exe' }], gameRunning: false, screenshotOk: true }, DEFAULT_MONITOR_CONFIG, 'dota2');
   assert.deepEqual(signals.map(s => s.id), ['blocked-process', 'dota-not-running']);
-  assert.match(signals[0].evidence, /unsigned/);
+  assert.match(signals[0].evidence, /signature not checked/);
   assert.equal(scoreSignals(signals).level, 'urgent');
 });
 
@@ -82,8 +82,11 @@ test('the Android companion reports exactly the fields the server schema expects
   const { readFileSync } = await import('node:fs');
   const { androidFactsSchema } = await import('../src/lib/integrityRisk');
   const kotlin = readFileSync('companion/android/app/src/main/java/ph/edu/wmsu/arenahub/companion/DeviceChecks.kt', 'utf8');
-  const collect = kotlin.slice(kotlin.indexOf('fun collect('), kotlin.indexOf('private fun matchesAny'));
-  const sent = [...collect.matchAll(/put\("([A-Za-z]+)"/g)].map(m => m[1]).sort();
+  const collect = kotlin.slice(kotlin.indexOf('fun collect('), kotlin.indexOf('private fun scanApps'));
+  const stampWriter = readFileSync('companion/android/app/src/main/java/ph/edu/wmsu/arenahub/companion/ScanReport.kt', 'utf8');
+  assert.match(collect, /\.withScanStamp\(scanStamp\)/);
+  assert.match(stampWriter, /put\("scan", JSONObject\(/);
+  const sent = [...collect.matchAll(/put\("([A-Za-z]+)"/g)].map(m => m[1]).concat('scan').sort();
   assert.deepEqual(sent, Object.keys(androidFactsSchema.shape).sort());
   const gameKeys = [...kotlin.slice(kotlin.indexOf('private fun gameInfo')).matchAll(/put\("([A-Za-z0-9]+)"/g)].map(m => m[1]).slice(0, 4).sort();
   assert.deepEqual(gameKeys, ['certSha256', 'installer', 'packageName', 'versionName']);

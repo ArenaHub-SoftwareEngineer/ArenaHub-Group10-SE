@@ -6,6 +6,7 @@ import express from 'express';
 import { createAiRouter } from './server/ai.ts';
 import { createFairPlayRouter } from './server/fairPlay.ts';
 import { createIntegrityRouter } from './server/integrity.ts';
+import { securityHeaders, publicErrorHandler } from './server/securityHeaders';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -19,12 +20,14 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           const api = express();
           api.disable('x-powered-by');
+          api.use(securityHeaders({ development: true }));
           // Test mode never calls a real model: browser tests use the scripted provider (emulators only).
           api.use('/api/ai', createAiRouter(mode === 'test' ? { ...env, ARENA_AI_PROVIDER: 'fake', GEMINI_API_KEY: '', GROQ_API_KEY: '' } : env));
           api.use('/api/fair-play', createFairPlayRouter(env));
           // Test mode (emulators, Playwright) never touches the event laptop's real match monitor database in data/,
           // even when Playwright reuses a dev server that was started without INTEGRITY_DATA_DIR.
           api.use('/api/integrity', createIntegrityRouter(mode === 'test' && !env.INTEGRITY_DATA_DIR ? { ...env, INTEGRITY_DATA_DIR: '.test-data/integrity' } : env));
+          api.use(publicErrorHandler);
           server.middlewares.use((req, res, next) => api(req as express.Request, res as express.Response, next));
         },
       },
@@ -33,6 +36,11 @@ export default defineConfig(({ mode }) => {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),
       },
+    },
+    server: {
+      // Browser workflows must keep their form state while test reports and emulator files change.
+      hmr: mode === 'test' ? false : undefined,
+      watch: { ignored: ['**/test-results/**', '**/output/**', '**/.test-data/**', '**/dist-demo/**', '**/dist-agent/**'] },
     },
     build: {
       // Always start from an empty dist/ so stale hashed chunks are never deployed.
