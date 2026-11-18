@@ -39,14 +39,20 @@ test('students and banned staff cannot write tournaments', async () => {
   await assertFails(updateDoc(doc(campus('student'), 'tournaments/t1'), { title: 'Hijacked', revision: 3, updatedAt: serverTimestamp() }));
 });
 
-test('viewers see only published tournaments; staff also see archived ones', async () => {
+test('viewers see published and archived tournaments; withdrawn ones are staff only', async () => {
   const staff = campus('staff', true), student = campus('student');
   await assertSucceeds(setDoc(doc(staff, 'tournaments/old'), tournament('old', { status: 'archived' })));
+  await assertSucceeds(setDoc(doc(staff, 'tournaments/pulled'), tournament('pulled', { status: 'unpublished' })));
   await assertSucceeds(getDoc(doc(student, 'tournaments/t1')));
-  await assertFails(getDoc(doc(student, 'tournaments/old')));
+  // Past events feed the cross-tournament player leaderboard (M10).
+  await assertSucceeds(getDoc(doc(student, 'tournaments/old')));
+  await assertSucceeds(getDocs(query(collection(student, 'tournaments'), where('status', '==', 'archived'))));
+  await assertFails(getDoc(doc(student, 'tournaments/pulled')));
+  await assertFails(getDocs(query(collection(student, 'tournaments'), where('status', '==', 'unpublished'))));
   await assertSucceeds(getDocs(query(collection(student, 'tournaments'), where('status', '==', 'published'))));
-  await assertFails(getDocs(collection(student, 'tournaments')), 'an unfiltered list would expose archived brackets');
+  await assertFails(getDocs(collection(student, 'tournaments')), 'an unfiltered list would expose withdrawn brackets');
   await assertSucceeds(getDoc(doc(staff, 'tournaments/old')));
+  await assertSucceeds(getDoc(doc(staff, 'tournaments/pulled')));
   await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'tournaments/t1')));
 });
 

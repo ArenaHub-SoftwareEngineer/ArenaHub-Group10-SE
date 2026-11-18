@@ -118,7 +118,10 @@ service cloud.firestore {
         && data.featured is bool && data.updatedAt == request.time;
     }
     match /tournaments/{id} {
-      allow read: if (admitted() && resource.data.status == 'published') || activeStaff();
+      // Archived = a past event replaced by a newer bracket for the same game. Viewers read it for the
+      // cross-tournament player leaderboard (M10); it holds the same public fields it had while published.
+      // Unpublished brackets were withdrawn by staff and stay hidden.
+      allow read: if (admitted() && resource.data.status in ['published', 'archived']) || activeStaff();
       allow create: if activeStaff() && validTournament(request.resource.data, id);
       allow update: if activeStaff() && validTournament(request.resource.data, id)
         && request.resource.data.revision == resource.data.revision + 1

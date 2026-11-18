@@ -11,6 +11,7 @@ import { WatchCardView } from './WatchCardView';
 import { LiveChatPanel } from './LiveChatPanel';
 import { MatchTimeline } from './MatchTimeline';
 import { MatchPlayerStatsSummary } from './MatchPlayerStatsSummary';
+import { hasPlayerStats } from '../../lib/matchStats';
 import { MVPCard } from '../ui/MVPCard';
 import { ChevronDown, ExternalLink, Link2 } from '../ui/Icons';
 
@@ -31,7 +32,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
   const team1 = match.team1?.name || 'Awaiting team', team2 = match.team2?.name || 'Awaiting team';
   const links = matchBroadcasts(match);
   // Only real entries: without recorded stats the table would show every player at 0/0/0.
-  const hasStats = Object.keys(match.playerStats || {}).length > 0;
+  const hasStats = hasPlayerStats(match);
 
   const share = async () => {
     try { await navigator.clipboard.writeText(window.location.href); showToast('Link copied. Anyone with ArenaHub access can open this match.', 'success'); }

@@ -33,9 +33,12 @@ N = published tournaments (one per game, normally 3 or 4).
 | Page load: announcements (limit 20) + personal inbox (limit 30) + own profile | up to 51 (lowered from 151 in Phase 1) |
 | **Typical page load** | **about 40, at most 70** |
 | Opening a live match chat (last 60 messages) | up to 60 |
+| Opening the Player leaderboard: archived tournaments + their rosters (A = past events) | 2A, then 1 only when an event is archived or restored |
 | Each score, status or schedule save in any tournament | 1 |
 | Each public announcement (result, schedule change, match going live) | 1 |
 | Each chat message while the chat is open | 1 |
+
+The leaderboard listens to archived tournaments only while that page is open, and it adds nothing to other pages. A grows with the number of past events, not with viewers, so it stays small; if it ever grows into the dozens, a per-game summary document would replace this listener.
 
 Writes per organizer action: 1 for the tournament, plus 1 per announcement it creates. A chat message is 2 writes (the message plus its private author record).
 

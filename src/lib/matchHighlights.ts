@@ -1,6 +1,7 @@
 // Match timeline and MVP, entered by organizers after (or during) a match. Pure functions only.
 // Nothing here is generated: every event and the MVP come from what an organizer recorded.
 import type { Match, MatchMVP, MatchTimelineEvent } from './types';
+import { seriesPlayerStats } from './matchStats';
 
 export const TIMELINE_TYPES = [
   { id: 'first-blood', label: 'First blood' },
@@ -40,11 +41,11 @@ export function sortedTimeline(events: MatchTimelineEvent[]): MatchTimelineEvent
 
 export interface MvpCandidate { ign: string; role: string; teamCode: string; kda?: string }
 
-/** Players who can be named MVP: the two published rosters, with K/D/A when stats were entered. */
+/** Players who can be named MVP: the two published rosters, with series K/D/A when stats were entered. */
 export function mvpCandidates(match: Match): MvpCandidate[] {
-  const stats = Object.values(match.playerStats || {});
+  const stats = seriesPlayerStats(match);
   return [match.team1, match.team2].flatMap(team => (team?.players || []).filter(p => p.ign).map(player => {
-    const stat = stats.find(s => s.ign === player.ign);
+    const stat = stats[player.id];
     return {
       ign: player.ign, role: player.role || '', teamCode: team?.collegeCode || '',
       ...(stat ? { kda: `${stat.kills}/${stat.deaths}/${stat.assists}` } : {}),

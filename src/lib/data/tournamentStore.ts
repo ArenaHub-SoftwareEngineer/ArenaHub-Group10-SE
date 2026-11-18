@@ -27,6 +27,19 @@ export interface LiveTournament { bracket: BracketDraft; revision: number; featu
  * whenever a single tournament changes.
  */
 export function watchPublishedTournaments(receive: (items: LiveTournament[]) => void, fail: (error: unknown) => void) {
+  return watchTournamentsWithStatus('published', receive, fail);
+}
+
+/**
+ * Past events (replaced by a newer bracket for the same game) for the cross-tournament player leaderboard.
+ * Only the leaderboard page listens, and only while it is open. Archived tournaments rarely change,
+ * so after the first load this costs a read only when an event is archived or restored.
+ */
+export function watchArchivedTournaments(receive: (items: LiveTournament[]) => void, fail: (error: unknown) => void) {
+  return watchTournamentsWithStatus('archived', receive, fail);
+}
+
+function watchTournamentsWithStatus(status: 'published' | 'archived', receive: (items: LiveTournament[]) => void, fail: (error: unknown) => void) {
   const tournaments = new Map<string, TournamentDoc>();
   const rosters = new Map<string, RosterDoc | null>();
   const rosterStops = new Map<string, () => void>();
@@ -38,7 +51,7 @@ export function watchPublishedTournaments(receive: (items: LiveTournament[]) => 
       fingerprint: contentFingerprint(t),
     })));
   };
-  const stopTournaments = onSnapshot(query(collection(db, 'tournaments'), where('status', '==', 'published')), snapshot => {
+  const stopTournaments = onSnapshot(query(collection(db, 'tournaments'), where('status', '==', status)), snapshot => {
     tournaments.clear();
     snapshot.docs.forEach(item => tournaments.set(item.id, { ...(item.data() as TournamentDoc), id: item.id }));
     for (const [id, stop] of rosterStops) if (!tournaments.has(id)) { stop(); rosterStops.delete(id); rosters.delete(id); }

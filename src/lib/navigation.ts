@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 const allowed = {
-  arena: ['home', 'live', 'current-live', 'choose-tournament', 'brackets', 'teams', 'ai-assistant', 'support', 'settings', 'schedule', 'integrity', 'operations', 'standings'],
+  arena: ['home', 'live', 'current-live', 'choose-tournament', 'brackets', 'teams', 'ai-assistant', 'support', 'settings', 'schedule', 'integrity', 'operations', 'standings', 'leaderboard'],
   admin: ['overview', 'users', 'games', 'reports', 'featured', 'bracket-studio', 'battle-royale', 'ai-assistant', 'match-data', 'live-stream', 'integrity', 'match-monitor', 'operations', 'support', 'settings'],
 };
 export type Workspace = keyof typeof allowed;

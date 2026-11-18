@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
-import { Home, CalendarDays, Trophy, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag, Settings2, HelpCircle } from '../ui/Icons';
+import { Home, CalendarDays, Trophy, Crown, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag, Settings2, HelpCircle } from '../ui/Icons';
 import { hasCampusEmail } from '../../lib/campusAccess';
 import { CAMPUS_LOGO, CAMPUS_SHORT_NAME } from '../../lib/institution';
 import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
@@ -37,6 +37,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
       { id: 'schedule', label: 'Schedule', icon: CalendarDays, keywords: 'calendar dates times' },
       { id: 'choose-tournament', label: 'Brackets', icon: GitBranch, keywords: 'tournament bracket' },
       { id: 'standings', label: 'Standings', icon: Trophy, keywords: 'rankings table records' },
+      { id: 'leaderboard', label: 'Player leaderboard', short: 'Leaders', icon: Crown, keywords: 'top players kda kills mvp stats rankings' },
       { id: 'teams', label: 'Players & teams', short: 'Teams', icon: Users, keywords: 'rosters colleges ranks' },
     ] },
     { label: 'Participation', items: [

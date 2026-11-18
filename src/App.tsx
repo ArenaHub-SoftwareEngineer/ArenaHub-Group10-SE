@@ -30,6 +30,7 @@ import { ChooseTournamentView } from './components/spectator/ChooseTournamentVie
 import { BracketsView } from './components/spectator/BracketsView';
 import { MatchTimeline } from './components/spectator/MatchTimeline';
 import { MatchPlayerStatsSummary } from './components/spectator/MatchPlayerStatsSummary';
+import { hasPlayerStats } from './lib/matchStats';
 import { MVPCard } from './components/ui/MVPCard';
 const TeamsView = lazy(() => import('./components/spectator/TeamsView').then(m => ({ default: m.TeamsView })));
 const SpectatorAIView = lazy(() => import('./components/spectator/SpectatorAIView').then(m => ({ default: m.SpectatorAIView })));
@@ -49,6 +50,7 @@ const IntegrityCenter = lazy(() => import('./components/common/FairPlayCenter').
 const PlayerAntiCheat = lazy(() => import('./components/common/PlayerAntiCheat').then(m => ({ default: m.PlayerAntiCheat })));
 const TournamentOperations = lazy(() => import('./components/common/TournamentOperations').then(m => ({ default: m.TournamentOperations })));
 const StandingsPage = lazy(() => import('./components/spectator/StandingsView').then(m => ({ default: m.StandingsPage })));
+const PlayerLeaderboardView = lazy(() => import('./components/spectator/PlayerLeaderboardView').then(m => ({ default: m.PlayerLeaderboardView })));
 const SpectatorQRReader = lazy(() => import('./components/auth/SpectatorQRReader').then(m => ({ default: m.SpectatorQRReader })));
 const AIAssistantView = lazy(() => import('./components/admin/AIAssistantView').then(m => ({ default: m.AIAssistantView })));
 const AdminMatchDataEntry = lazy(() => import('./components/admin/AdminMatchDataEntry').then(m => ({ default: m.AdminMatchDataEntry })));
@@ -307,6 +309,8 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
           {spectatorTab === 'integrity' && <PlayerAntiCheat key={routeParams.get('case') || 'new'} matches={eventMatches} teams={teams} onSignIn={onSignIn} initialCaseId={routeParams.get('case')} />}
           {spectatorTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'team'} brackets={publishedBrackets} initialEntityId={routeParams.get('entity')} />}
           {spectatorTab === 'standings' && <StandingsPage brackets={publishedBrackets} selectedId={selectedPublishedBracketId} onSelect={id => setSpectatorTab('standings', { bracket: id })} />}
+          {spectatorTab === 'leaderboard' && <PlayerLeaderboardView brackets={publishedBrackets} game={routeParams.get('game')} sort={routeParams.get('sort')}
+            onChange={params => setSpectatorTab('leaderboard', params)} />}
           {spectatorTab === 'schedule' && <SchedulePage brackets={publishedBrackets} onSelect={m => setSpectatorTab('live', { match: m.id })} />}
           {spectatorTab === 'home' && (
             <HomeScreen
@@ -342,10 +346,10 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               : activeMatch ? 'Match is not live yet' : 'Match unavailable'}</h1>
             <p className="studio-muted">Open Match center to see the current broadcasts and upcoming matches.</p>
             {/* A finished match still shows what organizers recorded: the MVP and the key moments. */}
-            {activeMatch?.status === 'completed' && (activeMatch.mvp || activeMatch.timelineEvents?.length || Object.keys(activeMatch.playerStats || {}).length) ? <div className="match-ended-highlights">
+            {activeMatch?.status === 'completed' && (activeMatch.mvp || activeMatch.timelineEvents?.length || hasPlayerStats(activeMatch)) ? <div className="match-ended-highlights">
               {activeMatch.mvp && <MVPCard mvp={activeMatch.mvp} status="completed" />}
               <MatchTimeline match={activeMatch} />
-              {Object.keys(activeMatch.playerStats || {}).length > 0 && <MatchPlayerStatsSummary match={activeMatch} />}
+              {hasPlayerStats(activeMatch) && <MatchPlayerStatsSummary match={activeMatch} />}
             </div> : null}
             <button type="button" className="arena-outline" onClick={openMatchCenter}>Back to Match center</button>
           </section>)}

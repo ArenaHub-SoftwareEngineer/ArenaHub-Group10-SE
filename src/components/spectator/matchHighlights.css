@@ -24,3 +24,7 @@
 .highlights-editor li p { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .highlights-editor-add { grid-template-columns: 1fr; } }
 .match-ended-highlights { display: grid; gap: 16px; margin: 16px 0; text-align: left; }
+/* A finished match with highlights needs room for the stats table; children fill the panel instead of overflowing it. */
+.match-center-unavailable:has(.match-ended-highlights) { max-width: 980px; }
+.match-ended-highlights { justify-self: stretch; min-width: 0; width: 100%; }
+.match-ended-highlights > * { min-width: 0; }

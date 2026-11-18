@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Match, PlayerMatchStats, Player } from '../../lib/types';
+import { combineStatSheets, matchStatSheets } from '../../lib/matchStats';
 import {
   Swords,
   Trophy,
@@ -35,6 +36,15 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
   const [activeTab, setActiveTab] = useState<'all' | 'team1' | 'team2'>('all');
   const [sortBy, setSortBy] = useState<'kda' | 'kills' | 'assists'>('kills');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  // Series totals by default; a single game on request. Each game is its own sheet in statGames.
+  const sheets = useMemo(() => matchStatSheets(match), [match]);
+  const [chosenGame, setChosenGame] = useState<number | 'series'>('series');
+  const view = chosenGame !== 'series' && sheets.some(sheet => sheet.game === chosenGame) ? chosenGame : 'series';
+  const statsMap = useMemo(() => combineStatSheets(match, view === 'series' ? sheets : sheets.filter(sheet => sheet.game === view)), [match, sheets, view]);
+  const numberedGames = sheets.filter(sheet => sheet.game !== null).map(sheet => sheet.game as number);
+  const scopeLabel = view !== 'series' ? `Game ${view} only`
+    : numberedGames.length ? `Series totals · ${numberedGames.length} game${numberedGames.length === 1 ? '' : 's'} with stats (${numberedGames.map(n => `G${n}`).join(', ')})`
+    : 'Stats recorded for this match';
 
   const team1Code = match.team1?.collegeCode || 'T1';
   const team2Code = match.team2?.collegeCode || 'T2';
@@ -50,7 +60,6 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
   // Aggregate players and stats
   const enrichedStats = useMemo(() => {
     const list: EnrichedPlayerStat[] = [];
-    const statsMap = match.playerStats || {};
 
     const findStat = (player: Player): PlayerMatchStats | undefined => {
       if (statsMap[player.id]) return statsMap[player.id];
@@ -161,7 +170,7 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
     }
 
     return list;
-  }, [match, team1Code, team2Code, team1Name, team2Name, mvpIgn]);
+  }, [match, statsMap, team1Code, team2Code, team1Name, team2Name, mvpIgn]);
 
   // Leaders
   const killLeader = useMemo(() => {
@@ -243,7 +252,7 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
             </h3>
           </div>
           <p className="text-xs text-(--text-muted) mt-1">
-            Real-time kills, deaths, and assists breakdown for all active competitors
+            {scopeLabel}
           </p>
         </div>
 
@@ -283,6 +292,11 @@ export const MatchPlayerStatsSummary: React.FC<MatchPlayerStatsSummaryProps> = (
           </button>
         </div>
       </div>
+
+      {numberedGames.length > 1 && <div className="ah-tabs" role="tablist" aria-label="Stats for">
+        <button type="button" role="tab" aria-selected={view === 'series'} onClick={() => setChosenGame('series')}>Series</button>
+        {numberedGames.map(game => <button key={game} type="button" role="tab" aria-selected={view === game} onClick={() => setChosenGame(game)}>Game {game}</button>)}
+      </div>}
 
       {/* Team Aggregates & Highlights Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

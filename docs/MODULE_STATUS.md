@@ -13,8 +13,9 @@ Reviewed 17 November 2026. This describes the current repository; the missing-fe
 - Arena AI: implemented. Streaming, conversation history, grounded tournament tools, contextual follow-ups, cancellation, provider fallback, rate limits and chat replies are present. Automated browser tests use a scripted provider; they do not prove a production model account's availability.
 - Teams and players: implemented from published/approved tournament records, with game ranks and public/private profile boundaries. No fictional production directory is loaded.
 - Tournament operations: implemented. Registration, duplicate checks, approval, roster locks, match windows, check-ins, referee review, no-shows and sanctions have service/rules coverage.
-- Standings: implemented for head-to-head tournaments and Battle Royale placement events. A cross-tournament individual player ranking is an optional extension; team standings do not claim to provide it.
-- Notifications: implemented with private inboxes, read/unread status, announcements and links to related records. Browser push is optional and is not implemented.
+- Standings: implemented for head-to-head tournaments and Battle Royale placement events.
+- Player leaderboard (M10): implemented. One table per game across current and archived (past) tournaments, ranked by KDA, kills, assists, MVP awards or series wins, with a per-player match breakdown. See "Player leaderboard" below.
+- Notifications: implemented with private inboxes, read/unread status, announcements and links to related records. System (desktop or phone) alerts for new inbox items are opt-in in Settings and appear while an ArenaHub tab is open (M11). Background push through a push service is not implemented, by decision.
 - Fair Play: implemented. Private evidence, link/file submission, human decisions, appeals, history and video review are present. File storage requires the appropriate Firebase storage plan; evidence links are supported separately.
 - Match monitor / anti-cheat indicators: implemented for a persistent public Node API or event laptop, including single-use pairing, consent, recordings, review, scoped Dota telemetry and inspection-coverage notices. Windows 3.1 checks registered installed software and loaded Dota libraries, and optionally fingerprints accessible executables and game libraries; native Windows collector tests pass. Android 3.1 includes configured signer matches and incomplete-inspection reporting and builds with HTTPS required. Android physical-device and iPhone Safari checks remain release work. This is a known-indicator collector, not publisher anti-cheat or proof that a device has no cheats. See INTEGRITY_SETUP.md and ANTI_CHEAT_COVERAGE.md.
 - Administration: implemented. Account restrictions, game catalog, spotlight, community moderation and audit records are present. Staff claims are assigned using the trusted role-management script.
@@ -60,7 +61,7 @@ The remaining CODM BR integration gaps were lobby check-in, referee decisions, e
 - Resolved lobby cases can support recorded team eligibility decisions. Battle Royale games appear in the existing secondary evidence and video review selectors with lobby labels.
 - Schedule edits, live starts, results and result corrections publish event notifications. Unchanged results and reordered result rows avoid duplicate announcements.
 
-The core module inventory above is implemented in source. Remaining optional extensions include browser push delivery, a separate venue admission-pass service and cross-tournament individual rankings. Spectator invitation access, private inbox notifications and tournament team standings already serve their respective current workflows. Public deployment, provider availability, signed anti-cheat distribution and real-device verification remain release work.
+The core module inventory above is implemented in source. Remaining optional extensions include background push delivery and a separate venue admission-pass service (both declined: the open-tab alerts and spectator QR cover them). Spectator invitation access, private inbox notifications and tournament team standings already serve their respective current workflows. Public deployment, provider availability, signed anti-cheat distribution and real-device verification remain release work.
 
 
 ## Anti-cheat collector 3.1 (17 November 2026)
@@ -82,3 +83,22 @@ Verified locally: the audit of the real Steam install on the development PC (bui
 ## Anti-cheat collector 3.3 (17 November 2026)
 
 PC agent 3.3.0 judges files and running programs by content instead of name: internal program identity (renamed listed tools), unsigned programs that target dota2.exe, DLL-injection functions, cheat-loader protectors, Cheat Engine tables and macro scripts under any extension, and ZIP contents. The cheat-file folder check is now required by default and covers the user profile and other drives in the background. Harmless gcc-built simulators (`tests/fixtures/cheat-sim`, run by `npm run test:collector`) verify detection of renamed, re-extensioned, zipped, buried, running and DLL-loaded cheats with real Windows signature checks. A real-PC run showed no blocking false positives. See INTEGRITY_SETUP.md ("Collector 3.3").
+
+
+## Player leaderboard (M10, 18 November 2026)
+
+Viewers open **Player leaderboard** in the Arena navigation (`#/arena/leaderboard?game=…&sort=…`). The page is computed in the browser from the live tournament feeds (`src/lib/playerLeaderboard.ts`), so a saved result, stat sheet, MVP or correction appears without a refresh.
+
+Counting rules:
+- Only finished series with a valid result count (the same check as team standings). Live, upcoming, "if needed", BYE, demo and withdrawn (unpublished) brackets never count.
+- Per-game stat sheets (`statGames`) are added up across the games actually played. `playerStats` holds only the last sheet an organizer saved, so it is used only for older records without per-game sheets, as one game. Sheets for games beyond the series score are ignored.
+- A stat line is credited only when it resolves to exactly one player in the two published rosters. Invalid numbers, unknown players and duplicate lines are skipped, not guessed.
+- Players are merged across tournaments by game, college code and in-game name (case and spacing ignored), because each tournament's roster has new player IDs. Private roster data is never used.
+- KDA = (kills + assists) ÷ deaths, with zero deaths counted as one, compared exactly. A KDA rank needs 3 games with stats. Ties share a rank.
+- CODM Battle Royale records squads, not players, so its tab points to Standings.
+
+Past events: publishing a new bracket for a game archives the previous one. `firestore.rules` now lets admitted viewers read archived tournaments (the same public fields they had while published); unpublished brackets stay staff-only. **The updated rules must be deployed** before the live site shows past events; until then the page shows current tournaments and a load warning.
+
+Verification: `tests/player-leaderboard.test.ts` (14 cases), `tests/data.rules.test.mjs` (archived readable, withdrawn hidden), and `tests/e2e/leaderboard.spec.ts` (an archived and a current tournament merge into one row; a game saved while the page is open updates the totals within 5 seconds; the phone layout keeps the player column pinned). The route is in the axe accessibility scan.
+
+Match page series totals (18 November 2026): the Player Performance Summary on a match page previously read `playerStats`, which is only the last game saved, so a Bo3 showed one game's numbers. It now shows series totals by default with a Series / Game 1 / Game 2… switch, using the same helper as the leaderboard (`src/lib/matchStats.ts`). The MVP picker's K/D/A (stored on the MVP card) is also the series total. Gold and damage are summed only when every game recorded them as plain numbers. Covered by `tests/match-stats.test.ts` and the match-page steps in `tests/e2e/leaderboard.spec.ts`.
