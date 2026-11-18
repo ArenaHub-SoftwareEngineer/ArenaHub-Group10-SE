@@ -71,7 +71,7 @@ export function createChatResponder(deps: ChatDeps) {
     if (!caller.campus) throw new ChatAskError(403, 'Posting in chat is for verified campus accounts.');
     if (!await deps.sink.aiEnabled(matchId)) throw new ChatAskError(409, 'Staff turned Arena AI off in this chat.');
     if (await deps.sink.mutedUntil(matchId, caller.uid) > Date.now()) throw new ChatAskError(403, 'You are muted in this chat.');
-    const tools = buildTools({ brackets: data.brackets, checkedAt: data.checkedAt, staff: false });
+    const tools = buildTools({ brackets: data.brackets, archived: data.archived, checkedAt: data.checkedAt, staff: false });
     const found = await runTool(tools, 'getMatch', { matchId }) as any;
     if (!found || found.error) throw new ChatAskError(404, 'Arena AI answers only in chats of published matches.');
     if (!await deps.rate.hit(`chat_${caller.uid}`, 1, deps.config.chatUserIntervalSec)) {

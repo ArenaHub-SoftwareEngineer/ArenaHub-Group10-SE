@@ -6,7 +6,7 @@
 //   5. when no model is configured, over budget, or every model fails: the live-records answer
 // Every reply is cleaned (sanitize.ts) and labelled with where it came from. No model name is shown.
 import type { KnowledgeFocus, KnowledgeReference } from '../../src/lib/tournamentKnowledge.ts';
-import { answerTournamentQuestion, knowledgeSnapshot } from '../../src/lib/tournamentKnowledge.ts';
+import { answerTournamentQuestion, knowledgeSnapshot, LEADERBOARD_QUESTION } from '../../src/lib/tournamentKnowledge.ts';
 import type { Caller } from '../auth.ts';
 import type { PublishedData } from '../data.ts';
 import { AnswerCache, normalizeQuestion } from './cache.ts';
@@ -19,6 +19,7 @@ import { cleanReply, StreamCleaner } from './sanitize.ts';
 import { buildTools, type Tool, type ToolContext } from './tools.ts';
 import { scheduleMatches } from '../../src/lib/formats/placement.ts';
 import { myTeamAnswer, personalQuestion, type MyTeamsReader } from './myTeam.ts';
+import { leaderboardAnswer } from './leaderboard.ts';
 
 export type Source = 'Live records' | 'Arena AI' | 'Arena AI (backup model)';
 export interface AnswerEvents {
@@ -87,7 +88,10 @@ export function createAssistant(deps: AssistantDeps) {
     if (hit) return emit(events, { ...hit, cached: true });
 
     const snapshot = knowledgeSnapshot(input.data.brackets, 0, input.data.checkedAt);
-    const records = answerTournamentQuestion(snapshot, input.query, history, focus);
+    const records = LEADERBOARD_QUESTION.test(input.query)
+      // The records answer here needs per-game stats and past events, which the snapshot leaves out.
+      ? { ...leaderboardAnswer(input.data.brackets, input.data.archived || [], input.query), kind: 'records' as const, needsModel: true }
+      : answerTournamentQuestion(snapshot, input.query, history, focus);
     const recordsAnswer = (limited = false): AnswerResult => ({ source: 'Live records', text: cleanReply(records.text, MAX_REPLY), references: records.references, ...(limited ? { limited } : {}) });
     const remember = (result: AnswerResult) => { if (cacheable) cache.set(key, result); return result; };
 
@@ -98,14 +102,14 @@ export function createAssistant(deps: AssistantDeps) {
     if (!allowed) return emit(events, recordsAnswer(true));
 
     const references: KnowledgeReference[] = [];
-    const tools: Tool[] = buildTools({ brackets: input.data.brackets, checkedAt: input.data.checkedAt, staff: input.caller.staff, openReports: deps.openReports })
+    const tools: Tool[] = buildTools({ brackets: input.data.brackets, archived: input.data.archived, checkedAt: input.data.checkedAt, staff: input.caller.staff, openReports: deps.openReports })
       .map(tool => ({ ...tool, run: async args => {
         const result = await tool.run(args);
         for (const r of result.references) if (references.length < 12 && !references.some(x => x.bracketId === r.bracketId && x.matchId === r.matchId)) references.push(r);
         return result;
       } }));
 
-    const facts = groundingFacts(input.data.brackets);
+    const facts = groundingFacts([...input.data.brackets, ...(input.data.archived || [])]);
     for (const [index, provider] of deps.providers.entries()) {
       if (cooldown.active(provider)) continue;
       const cleaner = new StreamCleaner(MAX_REPLY);

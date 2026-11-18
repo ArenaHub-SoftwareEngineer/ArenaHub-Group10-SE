@@ -85,6 +85,8 @@ function score(match:Match) {if(match.lobby)return match.status==='completed'?`w
   return [match.score.team1Score,match.score.team2Score].every(Number.isFinite)?`${match.score.team1Score}–${match.score.team2Score}`:'score not recorded';}
 const matchup=(m:Match)=>m.lobby?`${md(m.roundName)}, ${m.lobby.squads} squads`:`${md(m.team1?.name || 'Awaiting team')} vs ${md(m.team2?.name || 'Awaiting team')}`;
 const validMatch=(m:Match)=>!m.inactive && !m.team1?.isBye && !m.team2?.isBye;
+/** Questions about individual player rankings ("most kills", "top players by KDA", "most MVPs"). */
+export const LEADERBOARD_QUESTION=/\b(leaderboard|top\s+(?:\d+\s+)?players?|most\s+(?:kills|assists|mvps?|eliminations|elims|frags)|kill\s*leaders?|(?:highest|best|top)\s+kda|kda\s+(?:leaders?|rankings?)|player\s+(?:rankings?|stats|statistics|standings)|mvp\s+(?:count|awards?|leaders?)|pinakamaraming\s+(?:kills?|mvps?|assists?))\b/i;
 export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string,history:Array<{role:string;text:string}>=[],focus?:KnowledgeFocus|null):KnowledgeAnswer {
   const q=query.trim().toLowerCase(),selected=selectKnowledge(snapshot,query,history,focus),refs:KnowledgeReference[]=[];
   const reference=(b:BracketDraft,m?:Match)=>{if(refs.length<12 && !refs.some(r=>r.bracketId===b.id && r.matchId===m?.id))refs.push({label:m?`${b.title} · ${m.matchNumber || m.roundName}`:b.title,bracketId:b.id,...(m?{matchId:m.id}:{})});};
@@ -92,6 +94,9 @@ export function answerTournamentQuestion(snapshot:KnowledgeSnapshot,query:string
   const askModel=/\b(best player|best team|pinakamagaling|magaling|highlights?|what happened|nangyari|timeline|key moments|predict|prediction|chances?|mananalo|favou?rites?|will [\w ]{2,30} win|who should)\b/.test(q);
   const reply=(text:string,kind:KnowledgeAnswer['kind']='records',needsModel=false):KnowledgeAnswer=>({text,references:refs,kind,needsModel:needsModel||askModel});
   if(/cheat|fair.?play|evidence|report/.test(q))return reply('Open Fair play to submit a recording or review match evidence. Organizers can inspect sampled frames and returned observations. A referee must confirm the finding; a replay alone cannot prove hidden software or input automation.','help',!/\bwhere\b|\bhow\b.*(?:upload|submit|report)|\bcan\b.*detect/.test(q));
+  // Individual rankings span current and past tournaments, so they come from the player leaderboard
+  // (getPlayerLeaderboard, or the server's records answer), never from team standings or rosters.
+  if(LEADERBOARD_QUESTION.test(q))return reply('Open Player leaderboard for individual records per game: kills, deaths, assists, KDA, series won and MVP awards across current and past tournaments.','help',true);
   // "Explain seeding" needs no bracket; only record questions stop at "nothing is published".
   const explanatory=/\b(explain|how|why|what (?:is|are|does)|meaning|rules?|help)\b/.test(q);
   if(!selected.brackets.length)return reply(snapshot.brackets.length?`No published bracket matches ${selected.game?selected.game.toUpperCase():'that tournament'}. Available brackets:\n\n${snapshot.brackets.slice(0,8).map(b=>`- ${md(b.title)} — ${md(b.gameName)}`).join('\n')}`:'No official brackets are published in the records I just checked. Once an organizer publishes one, I can answer questions about its matches, scores, and players.','records',explanatory);

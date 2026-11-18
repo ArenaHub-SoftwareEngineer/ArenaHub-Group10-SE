@@ -11,12 +11,15 @@ import { bracketTeams } from '../../src/lib/data/tournamentDocs.ts';
 import { publicationGameKey } from '../../src/lib/bracketPublication.ts';
 import { manilaToday, scheduleDate, timeOrder } from '../../src/lib/calendar.ts';
 import { sortedTimeline } from '../../src/lib/matchHighlights.ts';
+import { buildPlayerLeaderboards, formatKda, KDA_MIN_GAMES, LEADERBOARD_SORTS, normalizeIgn, rankLeaderboard, type LeaderboardRow, type LeaderboardSort } from '../../src/lib/playerLeaderboard.ts';
 
 export interface ToolSpec { name: string; description: string; parameters: Record<string, unknown> }
 export interface ToolResult { data: unknown; references: KnowledgeReference[] }
 export interface Tool extends ToolSpec { run(args: unknown): Promise<ToolResult> }
 export interface ToolContext {
   brackets: BracketDraft[];
+  /** Past (archived) tournaments. Used only by the player leaderboard, which spans tournaments. */
+  archived?: BracketDraft[];
   checkedAt: string;
   staff: boolean;
   /** Staff only: open fair-play cases, ids and status only. Present when the server has admin access. */
@@ -76,6 +79,7 @@ const HELP: Record<string, string> = {
   admission: 'Personal accounts join as spectators by scanning a campus student\'s invite QR code. Campus accounts can read everything public after signing in.',
   registration: 'Team registration and rosters are handled by facilitators on the organizer side. Only in-game names, roles and colleges are public.',
   account: 'Sign in with your campus Google account. Organizer access is granted by the project administrator only.',
+  leaderboard: 'Open Player leaderboard for individual records per game across current and past tournaments: games, series won and lost, kills, deaths, assists, KDA and MVP awards. Select a player to see the matches behind the totals.',
 };
 
 /** Builds the tools for one request. Staff tools exist only for staff callers. */
@@ -196,9 +200,45 @@ export function buildTools(ctx: ToolContext): Tool[] {
         for (const r of results) { if (r.outcome !== results[0].outcome) break; streak++; }
         return { data: { results, streak: results.length ? `${streak} ${results[0].outcome === 'won' ? 'win' : 'loss'}${streak === 1 ? '' : results[0].outcome === 'won' ? 's' : 'es'} in a row` : null }, references: rows.slice(0, 6).map(({ br, s }) => ref(br, s.match)) };
       }),
+    tool({ name: 'getPlayerLeaderboard', description: 'Individual player records for one game across current and past tournaments: games with stats, series won-lost, kills, deaths, assists, KDA and MVP awards. Rank by kda (default), kills, assists, mvps or wins. Pass player (an in-game name) for one player\'s totals and recent matches. Use it for "top players", "most kills", "best KDA", "how many MVPs", "how is <player> doing".', parameters: object({ game: gameParam, sort: { type: 'string', enum: LEADERBOARD_SORTS.map(s => s.id) }, player: { type: 'string', description: 'In-game name, or part of it.' }, limit: { type: 'integer', minimum: 1, maximum: 10 } }) },
+      z.object({ game, sort: z.enum(LEADERBOARD_SORTS.map(s => s.id) as [LeaderboardSort, ...LeaderboardSort[]]).optional(), player: z.string().min(2).max(40).optional(), limit: z.number().int().min(1).max(10).optional() }),
+      ({ game, sort = 'kda', player, limit = 5 }) => {
+        const boards = buildPlayerLeaderboards([...ctx.brackets.map(bracket => ({ bracket, current: true })), ...(ctx.archived || []).map(bracket => ({ bracket, current: false }))])
+          .filter(board => !game || board.gameKey === `game-${game}`);
+        // Only current tournaments can be opened from an answer; past ones are named in the data.
+        const references = boards.flatMap(board => board.tournaments.filter(t => t.current && t.countedMatches).map(t => ({ label: t.title, bracketId: t.id })));
+        const line = (r: LeaderboardRow) => ({ rank: r.rank, ign: r.ign, team: r.teamName, college: r.collegeCode, role: r.role, gamesWithStats: r.games, seriesWon: r.wins, seriesLost: r.losses,
+          kills: r.kills, deaths: r.deaths, assists: r.assists, kda: r.games ? formatKda(r) : null, mvpAwards: r.mvps, tournaments: r.tournaments });
+        const rankedBy = LEADERBOARD_SORTS.find(s => s.id === sort)!.label;
+        if (!boards.some(board => board.rows.length)) {
+          return { data: { note: boards.some(board => !board.tracksPlayers) && game === 'codm-br' ? 'Battle Royale records squads, not individual players. Use getStandings.' : 'No player stats are published yet. Players appear after a finished match has stats or an MVP.' }, references };
+        }
+        if (player) {
+          const q = normalizeIgn(player);
+          const found = boards.flatMap(board => rankLeaderboard(board.rows, sort).filter(r => normalizeIgn(r.ign).includes(q)).map(r => ({ board, r }))).slice(0, 3);
+          return {
+            data: found.length ? { rankedBy, players: found.map(({ board, r }) => ({ game: board.label, ...line(r), recentMatches: r.history.slice(-5).reverse().map(h => ({
+              tournament: h.tournamentTitle, round: h.roundName, opponent: h.opponent, outcome: h.won ? 'won' : 'lost', series: h.seriesScore,
+              gamesWithStats: h.games, kda: h.games ? `${h.kills}/${h.deaths}/${h.assists}` : null, mvp: h.mvp })) })) }
+              : { note: `No player named like "${player}" has recorded stats${game ? ' in this game' : ''}.` },
+            references,
+          };
+        }
+        return {
+          data: {
+            rankedBy, rules: `Finished series only, every game added up. KDA = (kills + assists) / deaths, zero deaths counted as one. A KDA rank needs ${KDA_MIN_GAMES} games with stats. Ties share a rank.`,
+            games: boards.map(board => board.tracksPlayers ? {
+              game: board.label, tournamentsCounted: board.tournaments.filter(t => t.countedMatches).map(t => `${t.title}${t.current ? '' : ' (past)'}`),
+              top: rankLeaderboard(board.rows, sort).filter(r => r.rank !== null).slice(0, limit).map(line),
+              ...(board.liveMatches ? { liveMatchesNotCounted: board.liveMatches } : {}),
+            } : { game: board.label, note: 'Battle Royale records squads, not individual players. Use getStandings.' }),
+          },
+          references,
+        };
+      }),
     tool({ name: 'explainFormat', description: 'Explain a competition format.', parameters: object({ format: { type: 'string', enum: Object.keys(FORMATS) } }, ['format']) },
       z.object({ format: z.enum(Object.keys(FORMATS) as [string, ...string[]]) }), ({ format }) => ({ data: { format, explanation: FORMATS[format] }, references: [] })),
-    tool({ name: 'getPlatformHelp', description: 'How to use ArenaHub: schedule, brackets, live, chat, fair-play, admission, registration, account.', parameters: object({ topic: { type: 'string', enum: Object.keys(HELP) } }, ['topic']) },
+    tool({ name: 'getPlatformHelp', description: 'How to use ArenaHub: schedule, brackets, live, chat, fair-play, admission, registration, account, leaderboard.', parameters: object({ topic: { type: 'string', enum: Object.keys(HELP) } }, ['topic']) },
       z.object({ topic: z.enum(Object.keys(HELP) as [string, ...string[]]) }), ({ topic }) => ({ data: { topic, help: HELP[topic] }, references: [] })),
     tool({ name: 'getRules', description: 'The rules ArenaHub enforces for a tournament: series lengths, Battle Royale points, chat and fair-play rules. Not the organizers\' full rulebook.', parameters: object({ tournament: { type: 'string' } }) },
       z.object({ tournament: z.string().min(1).max(160).optional() }), ({ tournament }) => {
