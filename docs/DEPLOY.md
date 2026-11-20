@@ -1,6 +1,16 @@
 # Deploying ArenaHub
 
-**No production deployment was performed in this review.** Updated 17 November 2026: the intended deployment is a publicly hosted website and API. For the full Match monitor, use the persistent Node deployment below; the older serverless layout is suitable only for AI/video endpoints.
+## Deployment log
+
+| Date | What | Commit | By |
+|---|---|---|---|
+| 20 Nov 2026 | Firestore rules (first deploy from this repository) and the website to Firebase Hosting site `arenahub-platform` (https://arenahub-platform.web.app), project `wmsu-arl-hub` | `02eb76d` | Kerr's typed approval; checked first with lint, 294 unit, API, video, integrity, pre-match and 40 rules tests, and the build |
+
+Not yet done: storage rules (Blaze only), an API host (step 3), staff claims (step 6), the TTL policies below, and migrating any data left in the old single-document store (`scripts/migrate-brackets.ts`, dry run first). Until there is an API host, Arena AI on the live site answers from the live records on the viewer's device, and video review, `@Arena` in chat and the Match monitor are unavailable there. Until staff claims are granted, nobody can publish or manage tournaments on the live site.
+
+Roll back: website from Firebase Console → Hosting → Release history; rules from Firebase Console → Firestore → Rules (history), or by deploying an earlier `firestore.rules`.
+
+Updated 17 November 2026: the intended deployment is a publicly hosted website and API. For the full Match monitor, use the persistent Node deployment below; the older serverless layout is suitable only for AI/video endpoints.
 
 ## What runs where
 
