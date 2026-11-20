@@ -242,7 +242,9 @@ service cloud.firestore {
         && request.resource.data.author is string
         && request.resource.data.author.matches('[^@]{1,80}')
         && !reservedChatName(request.resource.data.author)
+        // Anonymous posts use the plain word or a generated alias ("Anonymous Swift Kraken", src/lib/anonAlias.ts).
         && (request.resource.data.author == 'Anonymous'
+          || request.resource.data.author.matches('Anonymous [A-Z][a-z]{2,11} [A-Z][a-z]{2,11}')
           || request.resource.data.author == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name)
         // The staff badge is checked against the token role, never the profile.
         && (!request.resource.data.keys().hasAny(['badge']) || (request.resource.data.badge == 'staff' && isStaff()))

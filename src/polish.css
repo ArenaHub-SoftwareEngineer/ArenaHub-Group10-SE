@@ -14,19 +14,26 @@
  */
 
 /* ---------- Buttons ---------- */
-.app-shell :is(.arena-primary, .arena-outline) {
-  min-height: 40px; padding: 0 18px; gap: 8px; border-radius: 999px;
-  font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+:is(.app-shell, .auth-entry, .auth-entry-dialog) :is(.arena-primary, .arena-outline) {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 40px; padding: 0 var(--sp-4); gap: var(--sp-2); border-radius: var(--radius-btn);
+  font-size: var(--fs-sm); font-weight: 600; line-height: 1.2; white-space: nowrap; cursor: pointer;
+  transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
-.app-shell .arena-primary { background: var(--brand); color: var(--on-brand); border: 1px solid transparent; }
-.app-shell .arena-primary:hover:not(:disabled) { background: var(--brand-hover); }
-.app-shell .arena-outline { border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-primary); }
-.app-shell .arena-outline:hover:not(:disabled) { border-color: var(--brand-border); background: var(--surface-soft); color: var(--brand-ink); }
+@media (pointer: coarse) { :is(.app-shell, .auth-entry, .auth-entry-dialog) :is(.arena-primary, .arena-outline):not(.arena-sm) { min-height: 44px; } }
+/* Arrow icons nudge forward on hover: the button says where it goes. */
+:is(.app-shell, .auth-entry) :is(.arena-primary, .arena-outline, .arena-text-button) > svg:last-child:not(:first-child) { transition: transform var(--dur-2) var(--ease-out); }
+@media (hover: hover) { :is(.app-shell, .auth-entry) :is(.arena-primary, .arena-outline, .arena-text-button):hover > svg:last-child:not(:first-child) { transform: translateX(3px); } }
+:is(.app-shell, .auth-entry, .auth-entry-dialog) .arena-primary { background: var(--brand); color: var(--on-brand); border: 1px solid transparent; box-shadow: none; }
+:is(.app-shell, .auth-entry, .auth-entry-dialog) .arena-primary:hover:not(:disabled) { background: var(--brand-hover); }
+/* Secondary: a quiet filled block (Twitch-style), not an outlined pill. */
+:is(.app-shell, .auth-entry, .auth-entry-dialog) .arena-outline { border: 1px solid transparent; background: var(--surface-elevated); color: var(--text-primary); box-shadow: none; }
+:is(.app-shell, .auth-entry, .auth-entry-dialog) .arena-outline:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-elevated) 70%, #fff 12%); color: var(--text-primary); }
 .app-shell .arena-outline[aria-pressed=true] { border-color: var(--brand-border); background: var(--brand-soft); color: var(--brand-ink); }
-.app-shell :is(.arena-primary, .arena-outline):active:not(:disabled) { transform: scale(.97); }
+:is(.app-shell, .auth-entry, .auth-entry-dialog) :is(.arena-primary, .arena-outline):active:not(:disabled) { transform: scale(.97); }
 .app-shell :is(.arena-primary, .arena-outline) svg { flex: none; }
 /* Compact row actions (table rows, card footers). Still a 32px hit area, above the 24px minimum. */
-.app-shell :is(.arena-primary, .arena-outline).arena-sm { min-height: 32px; padding: 0 12px; gap: 6px; font-size: 13px; }
+.app-shell :is(.arena-primary, .arena-outline).arena-sm { min-height: 32px; padding: 0 var(--sp-3); gap: 6px; font-size: var(--fs-xs); }
 .app-shell .arena-icon-only { padding: 0; width: 32px; justify-content: center; }
 .app-shell .arena-primary.arena-danger { background: var(--danger); color: #16080a; }
 .app-shell .arena-primary.arena-danger:hover:not(:disabled) { background: var(--danger); filter: brightness(1.08); }
@@ -38,13 +45,13 @@
 /* ---------- View tabs: one segmented bar ---------- */
 .app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) {
   display: inline-flex; flex-wrap: nowrap; align-self: flex-start; max-width: 100%; overflow-x: auto; scrollbar-width: none;
-  gap: 4px; margin: 0; padding: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft);
+  gap: 4px; margin: 0; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-soft);
 }
 .app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments)::-webkit-scrollbar { display: none; }
 .app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) > button {
   flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent;
-  color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: none;
+  min-height: 36px; padding: 0 var(--sp-4); border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: var(--text-secondary); font-size: var(--fs-sm); transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); font-weight: 600; cursor: pointer; box-shadow: none;
 }
 .app-shell :is(.ah-tabs, .module-tabs, .studio-modes, .broadcast-segments) > button:hover:not([aria-selected=true], [aria-pressed=true]) {
   color: var(--text-primary); background: var(--surface-hover);
@@ -57,7 +64,7 @@
 /* ---------- Filter chips ---------- */
 .ah-chip-count {
   min-width: 20px; height: 20px; padding: 0 6px; display: inline-grid; place-items: center; border-radius: 999px;
-  background: var(--surface-elevated); color: var(--text-secondary); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: var(--surface-elevated); color: var(--text-secondary); font-size: var(--fs-xs); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .ah-chip[aria-pressed=true] .ah-chip-count { background: var(--brand); color: var(--on-brand); }
 
@@ -65,7 +72,7 @@
 .status-pill {
   display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px;
   border: 1px solid var(--border-strong); background: var(--surface-soft); color: var(--text-secondary);
-  font-size: 12px; font-weight: 600; white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: 600; white-space: nowrap;
 }
 .status-pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .status-pill.is-success { color: var(--success); border-color: var(--success-border); background: var(--success-soft); }
@@ -82,9 +89,9 @@
   padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left;
 }
 .app-shell :is(.feature-summary, .organizer-summary) strong {
-  display: block; order: 1; font-size: 28px; line-height: 1.15; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text-primary);
+  display: block; order: 1; font-size: var(--fs-3xl); line-height: 1.15; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text-primary);
 }
-.app-shell :is(.feature-summary, .organizer-summary) span { order: 2; font-size: 13px; color: var(--text-muted); }
+.app-shell :is(.feature-summary, .organizer-summary) span { order: 2; font-size: var(--fs-xs); color: var(--text-muted); }
 .app-shell .organizer-tile > svg { order: 0; margin-bottom: 4px; color: var(--brand-ink); }
 .app-shell .organizer-tile { cursor: pointer; }
 
@@ -92,14 +99,14 @@
 .app-shell .module-page { gap: 24px; }
 .app-shell .page-panel { padding: 20px; }
 .app-shell .feature-section-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px 20px; flex-wrap: wrap; }
-.app-shell .feature-section-bar h2 { font-size: 20px; }
+.app-shell .feature-section-bar h2 { font-size: var(--fs-xl); }
 .ah-empty-panel {
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 20px; text-align: center;
   border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text-secondary);
 }
 .ah-empty-panel > svg { color: var(--brand-ink); }
-.ah-empty-panel strong { color: var(--text-primary); font-size: 16px; }
-.ah-empty-panel p { max-width: 46ch; font-size: 14px; }
+.ah-empty-panel strong { color: var(--text-primary); font-size: var(--fs-md); }
+.ah-empty-panel p { max-width: 46ch; font-size: var(--fs-sm); }
 .ah-empty-panel .arena-outline { margin-top: 8px; }
 
 /* ---------- Game picker tiles: artwork plus a name, always ---------- */
@@ -111,8 +118,8 @@
 .artwork-media > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform var(--dur-3) var(--ease), filter var(--dur-2) var(--ease); }
 .artwork-picker .schedule-game-tile[data-game^=codm] .artwork-media > img { filter: brightness(.48) saturate(.7); }
 .artwork-caption { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px 12px; min-width: 0; }
-.artwork-caption strong { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.artwork-caption small { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artwork-caption strong { font-size: var(--fs-sm); font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artwork-caption small { font-size: var(--fs-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .artwork-picker .schedule-game-tile[aria-pressed=true] .artwork-caption strong { color: var(--brand-ink); }
 @media (hover: hover) {
   .artwork-picker .schedule-game-tile:hover .artwork-media > img { transform: scale(1.04); }
@@ -122,7 +129,7 @@
 .artwork-picker-compact .artwork-caption small { display: none; }
 @media (max-width: 600px) {
   .artwork-picker-compact .schedule-game-tile { aspect-ratio: auto; }
-  .artwork-picker-compact .artwork-caption strong { font-size: 12px; }
+  .artwork-picker-compact .artwork-caption strong { font-size: var(--fs-xs); }
 }
 
 /* ---------- Interactive cards: one hover language ---------- */
@@ -142,7 +149,7 @@
 .app-shell .directory-colleges > button > small:first-of-type { margin-top: auto; }
 
 /* ---------- Brackets ---------- */
-.viewer-bracket-footnote { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.viewer-bracket-footnote { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xs); color: var(--text-muted); }
 .viewer-bracket-footnote i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
 
 /* ---------- Standings: percentage and bar on one line ---------- */
@@ -166,7 +173,7 @@
 .app-shell .faq-item:last-child { border-bottom: 0; }
 .app-shell .faq-item summary {
   display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; padding: 12px 4px;
-  list-style: none; cursor: pointer; font-size: 15px; font-weight: 600; color: var(--text-primary); border-radius: var(--radius-sm);
+  list-style: none; cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--text-primary); border-radius: var(--radius-sm);
 }
 .app-shell .faq-item summary::-webkit-details-marker { display: none; }
 .app-shell .faq-item summary::after {
@@ -175,7 +182,7 @@
 }
 .app-shell .faq-item[open] summary::after { transform: rotate(225deg) translateY(-3px); border-color: var(--brand-ink); }
 .app-shell .faq-item summary:hover { color: var(--brand-ink); }
-.app-shell .faq-item p { margin: 0 4px 16px; max-width: 72ch; font-size: 14px; line-height: 1.6; }
+.app-shell .faq-item p { margin: 0 4px 16px; max-width: 72ch; font-size: var(--fs-sm); line-height: 1.6; }
 .app-shell .faq-item[open] p { animation: ah-rise var(--dur-2) var(--ease) both; }
 
 /* ---------- Admin overview rows: art | text | chevron, meta wraps under the text on phones ---------- */
@@ -198,7 +205,7 @@
   .app-shell .users-table tr { padding: 12px 0; }
   .app-shell .users-table td { padding: 6px 16px; text-align: left; }
   .app-shell .users-table td[data-label] { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-  .app-shell .users-table td[data-label]::before { content: attr(data-label); color: var(--text-muted); font-size: 12px; font-weight: 600; }
+  .app-shell .users-table td[data-label]::before { content: attr(data-label); color: var(--text-muted); font-size: var(--fs-xs); font-weight: 600; }
   .user-row-actions { align-items: stretch; padding-top: 4px; }
   .user-row-buttons { justify-content: flex-start; }
 }
@@ -225,7 +232,7 @@
 .app-shell .tab-loading {
   min-height: 0; display: grid; gap: 16px; padding: 0; border: 0; background: none; justify-content: stretch; align-items: start;
 }
-.tab-loading-text { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 13px; }
+.tab-loading-text { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--fs-xs); }
 .skeleton-block { display: block; border-radius: var(--radius); background: linear-gradient(90deg, var(--surface) 0%, var(--surface-elevated) 50%, var(--surface) 100%); background-size: 200% 100%; animation: ah-shimmer 1.3s linear infinite; }
 .skeleton-title { width: min(320px, 70%); height: 36px; border-radius: var(--radius-sm); }
 .skeleton-line { width: min(520px, 90%); height: 14px; border-radius: 6px; }
@@ -268,13 +275,13 @@ html[data-motion=reduced] .app-shell :is(.stream-game-card, .directory-game, .di
 /* Bracket page: live call-out and the tournament switcher in the toolbar. */
 .live-callout {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px;
-  border: 1px solid var(--danger-border); border-left: 4px solid var(--live); border-radius: var(--radius); background: var(--surface);
+  border: 1px solid var(--danger-border); border-radius: var(--radius); background: var(--danger-soft);
 }
 .live-callout-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--live); animation: shell-live 1.8s var(--ease) infinite; }
 .live-callout-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }
-.live-callout-text > span { font-size: 12px; font-weight: 700; color: var(--danger); }
-.live-callout-text strong { font-size: 15px; font-variant-numeric: tabular-nums; }
-.live-callout-text small { font-size: 12px; color: var(--text-muted); }
+.live-callout-text > span { font-size: var(--fs-xs); font-weight: 700; color: var(--danger); }
+.live-callout-text strong { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.live-callout-text small { font-size: var(--fs-xs); color: var(--text-muted); }
 .app-shell .viewer-bracket-switch { flex-direction: row; align-items: center; gap: 10px; min-width: 0; max-width: 100%; white-space: nowrap; }
 .app-shell .viewer-bracket-switch select { width: min(360px, 60vw); min-height: 40px; }
 @media (max-width: 640px) {
@@ -286,9 +293,9 @@ html[data-motion=reduced] .app-shell :is(.stream-game-card, .directory-game, .di
 /* Fair play: staff case summary (a reading aid, never a decision). */
 .case-summary { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-soft); }
 .case-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.case-summary-head h3 { font-size: 15px; }
-.case-summary-source { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
-.case-summary-text { white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--text-primary); }
+.case-summary-head h3 { font-size: var(--fs-sm); }
+.case-summary-source { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-muted); }
+.case-summary-text { white-space: pre-wrap; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-primary); }
 
 /* ---------- Two-way form choice (collector 3.2) ----------
  * A required radio pair inside a form, such as an iPhone inspection indicator: "Not present" / "Found".
@@ -297,7 +304,7 @@ html[data-motion=reduced] .app-shell :is(.stream-game-card, .directory-game, .di
 .app-shell .ah-choice > label {
   display: inline-flex; flex-direction: row; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px;
   border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface);
-  color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer;
+  color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 600; cursor: pointer;
 }
 .app-shell .ah-choice > label:hover { color: var(--text-primary); background: var(--surface-hover); }
 .app-shell .ah-choice > label:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
@@ -310,7 +317,29 @@ html[data-motion=reduced] .app-shell :is(.stream-game-card, .directory-game, .di
 .app-shell .ios-indicators legend { padding: 0 6px; font-weight: 700; }
 .app-shell .ios-indicator { display: grid; gap: 8px; }
 .app-shell .ios-indicator p { margin: 0; }
+.app-shell .ios-progress { margin-left: 8px; color: var(--text-secondary); font-weight: 500; font-size: var(--fs-sm); }
+.app-shell .ios-indicator .ios-fix { padding: 8px 10px; border: 1px solid var(--warning-border); border-radius: var(--radius-sm); background: var(--warning-soft); font-size: var(--fs-sm); }
 @media (max-width: 480px) {
   .app-shell .ah-choice > label { padding: 0 11px; gap: 6px; }
   .app-shell .ios-indicators { padding: 12px 10px; }
+}
+
+/* ---------- Dialogs: one panel, a plain dim backdrop (no blur); bottom sheets on phones ---------- */
+.arena-dialog::backdrop { background: rgb(0 0 0 / .66); backdrop-filter: none; animation: ah-fade var(--dur-2) var(--ease-out); }
+@keyframes ah-fade { from { opacity: 0; } }
+.arena-dialog .dialog-panel { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 24px 64px rgb(0 0 0 / .55); }
+.arena-dialog .dialog-header h2 { font-size: var(--fs-xl); font-weight: 700; }
+.arena-dialog .dialog-header p { color: var(--text-secondary); font-size: var(--fs-sm); }
+.arena-dialog .dialog-close { width: 40px; height: 40px; display: grid; place-items: center; border-radius: var(--radius-btn); color: var(--text-secondary); background: transparent; transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out); }
+.arena-dialog .dialog-close:hover { background: var(--surface-hover); color: var(--text-primary); }
+.dialog-grabber { display: none; }
+@media (max-width: 640px) {
+  .arena-dialog.is-sheet:not(.auth-entry-dialog) { margin: auto 0 0; padding: 0; width: 100%; max-width: none; max-height: 94dvh; overflow: visible; }
+  .arena-dialog.is-sheet:not(.auth-entry-dialog) > .dialog-panel {
+    max-height: 94dvh; overflow-y: auto; overscroll-behavior: contain; border-bottom: 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: 0 var(--sp-5) calc(var(--sp-5) + env(safe-area-inset-bottom));
+  }
+  .arena-dialog.is-sheet .dialog-grabber { position: sticky; top: 0; z-index: 2; display: flex; justify-content: center; padding: var(--sp-3) 0 var(--sp-2); margin-inline: calc(-1 * var(--sp-5)); background: var(--surface); touch-action: none; cursor: grab; }
+  .arena-dialog.is-sheet .dialog-grabber span { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); }
+  .arena-dialog.is-sheet.auth-entry-dialog .dialog-grabber { display: none; }
 }

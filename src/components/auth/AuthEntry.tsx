@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Brand } from '../ui/Brand';
 import { Modal } from '../ui/Modal';
-import { ArenaScene } from '../spectator/ArenaScene';
 import { pendingSpectatorInvite } from '../../lib/campusAccess';
 import { AuthScreen, type AuthTab } from './AuthScreen';
-import { QrCode } from '../ui/Icons';
+import { ArrowRight, QrCode } from '../ui/Icons';
+import { ArenaHero } from '../three/ArenaHero';
+import { FeatureShowcase } from './FeatureShowcase';
+import { GAME_ART_CREDIT } from '../common/GameCover';
+import { CAMPUS_SHORT_NAME } from '../../lib/institution';
 import { ACCOUNT_RETURN_MESSAGE, takeAccountReturn } from '../../lib/emailLinks';
 
 const DIALOG_TITLE: Record<AuthTab, string> = {
@@ -31,59 +34,31 @@ export function AuthEntry() {
     <div className="auth-entry">
       <header className="auth-entry-header">
         <Brand />
-        <div className="flex items-center gap-2">
-          <button
-            className="arena-outline text-xs flex items-center gap-1.5"
-            onClick={() => handleOpenAuth('qr')}
-          >
-            <QrCode className="w-3.5 h-3.5 text-(--brand-ink)" />
-            <span>Scan QR</span>
+        <div className="auth-entry-header-actions">
+          <button type="button" className="arena-outline" onClick={() => handleOpenAuth('qr')}>
+            <QrCode size={16} aria-hidden="true" />Scan QR
           </button>
-          <button className="arena-primary text-xs" onClick={() => handleOpenAuth('signin')}>
-            Sign in
-          </button>
+          <button type="button" className="arena-primary" onClick={() => handleOpenAuth('signin')}>Sign in</button>
         </div>
       </header>
 
-      <main className="auth-entry-hero">
-        <div className="auth-entry-copy">
-          <p className="auth-entry-eyebrow">Campus esports</p>
-          <h1>
-            Your campus.
-            <br />
-            Your squad.
-            <br />
-            <span>Your arena.</span>
-          </h1>
-          <p>
-            Find upcoming matches, follow your teams, and explore tournament brackets in one
-            place.
-          </p>
-
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button className="arena-primary" onClick={() => handleOpenAuth('signin')}>
-              Sign in to ArenaHub
-            </button>
-
-            <button
-              type="button"
-              className="arena-outline flex items-center gap-2"
-              onClick={() => handleOpenAuth('qr')}
-            >
-              <QrCode className="w-4 h-4 text-(--brand-ink)" />
-              <span>Scan spectator QR</span>
-            </button>
+      <main className="auth-entry-main">
+        <section className="ah-hero is-landing" aria-labelledby="landing-title">
+          <div className="ah-hero-copy">
+            <p className="ah-hero-kicker">{CAMPUS_SHORT_NAME} esports</p>
+            <h1 id="landing-title">Every campus match, live.</h1>
+            <p className="ah-hero-sub">Watch the broadcasts, follow the brackets and check the standings for every {CAMPUS_SHORT_NAME} tournament, on your phone or on a big screen.</p>
+            <div className="ah-hero-actions">
+              <button type="button" className="arena-primary" onClick={() => handleOpenAuth('signin')}>Sign in to ArenaHub <ArrowRight size={16} aria-hidden="true" /></button>
+              <button type="button" className="arena-outline" onClick={() => handleOpenAuth('qr')}><QrCode size={16} aria-hidden="true" />Scan spectator QR</button>
+            </div>
+            <p className="auth-entry-note">Not a student? Scan a current student invitation QR, then sign in or create your own account.</p>
           </div>
+          <ArenaHero className="ah-hero-stage" />
+        </section>
 
-          <p className="auth-entry-note">
-            Joining as a spectator? Scan a current student invitation QR, then sign in
-            or create your own account.
-          </p>
-        </div>
-
-        <div className="auth-entry-feature auth-entry-media">
-          <ArenaScene />
-        </div>
+        <FeatureShowcase onSignIn={() => handleOpenAuth('signin')} />
+        <footer className="ah-footer"><span>ArenaHub · {CAMPUS_SHORT_NAME} · 2026</span><span className="ah-footer-credit">{GAME_ART_CREDIT}</span></footer>
       </main>
 
       <Modal

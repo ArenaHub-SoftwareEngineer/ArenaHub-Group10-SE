@@ -33,20 +33,20 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
   const groups = useMemo<ShellGroup[]>(() => [
     { label: 'Arena', items: [
       { id: 'home', label: 'Home', icon: Home, keywords: 'start featured' },
-      { id: 'current-live', label: 'Match center', short: 'Watch', icon: PlaySquare, keywords: 'live stream watch match' },
+      { id: 'current-live', label: 'Watch', title: 'Match center', icon: PlaySquare, keywords: 'live stream watch match' },
       { id: 'schedule', label: 'Schedule', icon: CalendarDays, keywords: 'calendar dates times' },
       { id: 'choose-tournament', label: 'Brackets', icon: GitBranch, keywords: 'tournament bracket' },
       { id: 'standings', label: 'Standings', icon: Trophy, keywords: 'rankings table records' },
-      { id: 'leaderboard', label: 'Player leaderboard', short: 'Leaders', icon: Crown, keywords: 'top players kda kills mvp stats rankings' },
-      { id: 'teams', label: 'Players & teams', short: 'Teams', icon: Users, keywords: 'rosters colleges ranks' },
+      { id: 'leaderboard', label: 'Leaders', title: 'Player leaderboard', icon: Crown, keywords: 'top players kda kills mvp stats rankings' },
+      { id: 'teams', label: 'Teams', title: 'Players & teams', icon: Users, keywords: 'rosters colleges ranks' },
     ] },
-    { label: 'Participation', items: [
-      { id: 'operations', label: 'My team', icon: Flag, keywords: 'registration check-in roster' },
+    { label: 'Compete', items: [
+      { id: 'operations', label: 'Squad', title: 'My team', icon: Flag, keywords: 'registration check-in roster' },
       { id: 'integrity', label: 'Anti-cheat', icon: ShieldCheck, keywords: 'required scan companion android windows fair play appeal' },
     ] },
-    { label: 'Help & account', items: [
-      { id: 'ai-assistant', label: 'Arena AI', icon: Bot, keywords: 'assistant ask' },
-      { id: 'support', label: 'Support', icon: HelpCircle, keywords: 'help faq' },
+    { label: 'Account', items: [
+      { id: 'ai-assistant', label: 'Assistant', title: 'Arena AI', icon: Bot, keywords: 'assistant ask' },
+      { id: 'support', label: 'Help', title: 'Support', icon: HelpCircle, keywords: 'help faq' },
       { id: 'settings', label: 'Settings', icon: Settings2, keywords: 'profile preferences account' },
     ] },
   ], []);
@@ -55,7 +55,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
   return <div className="spectator-shell">
     <AppShell workspace="arena" context={campus ? CAMPUS_SHORT_NAME : undefined} contextLogo={campus ? CAMPUS_LOGO || undefined : undefined} groups={groups} live={live} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
       mobileTabs={['home', 'current-live', 'choose-tournament', 'schedule']} pageKey={activeTab}
-      routeKey={routeKey} pageTitle={activeTab === 'live' ? 'Match details' : activeTab === 'brackets' ? 'Tournament bracket' : groups.flatMap(group => group.items).find(item => item.id === activeTab)?.label || 'Home'} fullBleed={activeTab === 'ai-assistant'}
+      routeKey={routeKey} pageTitle={activeTab === 'live' ? 'Match details' : activeTab === 'brackets' ? 'Tournament bracket' : (item => item?.title || item?.label)(groups.flatMap(group => group.items).find(item => item.id === activeTab)) || 'Home'} fullBleed={activeTab === 'ai-assistant'}
       actions={<>
         <span className="shell-status" title={status}><i aria-hidden="true" />{status}</span>
         <NotificationBell onNavigate={onNotificationNavigate || onTabChange} />

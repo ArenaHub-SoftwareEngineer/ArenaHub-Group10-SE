@@ -9,6 +9,7 @@ import { BroadcastIllustration, CalendarIllustration } from '../ui/Illustrations
 import { LayoutGrid } from 'lucide-react';
 import { CalendarDays, Radio } from '../ui/Icons';
 import { Modal } from '../ui/Modal';
+import { useViewerCounts } from '../../lib/presence';
 
 type Filter = 'all' | 'live' | 'upcoming' | string;
 
@@ -34,11 +35,12 @@ export function CurrentLiveView({ brackets, initialGame, onSelectMatch }: {
   const totalLive = all.filter(c => c.state === 'live').length;
   // Featured: everything live, then matches about to go live, topped up with the next scheduled ones.
   const featured = [...all.filter(c => c.state === 'live'), ...all.filter(c => c.state === 'waiting'), ...all.filter(c => c.state === 'upcoming').sort(upcomingOrder)].slice(0, 6);
+  const viewerCounts = useViewerCounts(all.filter(c => c.state === 'live').map(c => c.match.id));
   const open = (card: WatchCard) => card.state === 'live' ? onSelectMatch(card.match, card.gameId) : setPending(card);
 
   const shelf = (title: string, icon: React.ReactNode, cards: WatchCard[], id: string) => cards.length > 0 && <section className="watch-shelf" aria-labelledby={id}>
     <h2 id={id}>{icon}{title}<span className="watch-shelf-count">{cards.length}</span></h2>
-    <div className="watch-grid">{cards.map(card => <WatchCardView key={card.match.id} card={card} onOpen={open} />)}</div>
+    <div className="watch-grid">{cards.map(card => <WatchCardView key={card.match.id} card={card} viewers={viewerCounts[card.match.id]} onOpen={open} />)}</div>
   </section>;
   const showLive = filter !== 'upcoming', showUpcoming = filter !== 'live';
   const scopedFilter = games.some(game => game.id === filter) || ['all', 'live', 'upcoming'].includes(filter);

@@ -6,6 +6,7 @@ import express from 'express';
 import { createAiRouter } from './server/ai.ts';
 import { createFairPlayRouter } from './server/fairPlay.ts';
 import { createIntegrityRouter } from './server/integrity.ts';
+import { createPresenceRouter } from './server/presence.ts';
 import { securityHeaders, publicErrorHandler } from './server/securityHeaders';
 
 export default defineConfig(({ mode }) => {
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
           api.use(securityHeaders({ development: true }));
           // Test mode never calls a real model: browser tests use the scripted provider (emulators only).
           api.use('/api/ai', createAiRouter(mode === 'test' ? { ...env, ARENA_AI_PROVIDER: 'fake', GEMINI_API_KEY: '', GROQ_API_KEY: '' } : env));
+          api.use('/api/presence', createPresenceRouter());
           api.use('/api/fair-play', createFairPlayRouter(env));
           // Test mode (emulators, Playwright) never touches the event laptop's real match monitor database in data/,
           // even when Playwright reuses a dev server that was started without INTEGRITY_DATA_DIR.
@@ -58,6 +60,8 @@ export default defineConfig(({ mode }) => {
             // Anchored to the package folder: motion ships a motion/react/ folder that is not React.
             if (/node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'react';
             if (/node_modules[\\/](motion|framer-motion|motion-dom|motion-utils)[\\/]/.test(id)) return 'motion';
+            // 3D hero (React Three Fiber): only downloaded when a scene actually renders (lazy import, WebGL present).
+            if (/node_modules[\\/](three|@react-three)[\\/]/.test(id)) return 'three';
             if (/[\\/](react-markdown|remark-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|unified|unist-[^\\/]+|vfile[^\\/]*|property-information|space-separated-tokens|comma-separated-tokens|decode-named-character-reference|character-entities[^\\/]*|devlop|bail|trough|is-plain-obj|ccount|markdown-table|longest-streak|zwitch|trim-lines|html-url-attributes|estree-util-is-identifier-name)[\\/]/.test(id)) return 'markdown';
             return undefined;
           },

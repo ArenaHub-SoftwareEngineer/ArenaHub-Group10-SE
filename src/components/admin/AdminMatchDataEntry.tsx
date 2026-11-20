@@ -12,20 +12,8 @@ import { Match, Team, seriesGameCount } from '../../lib/types';
 import { useToast } from '../ui/Toast';
 import { MatchHighlightsEditor } from './MatchHighlightsEditor';
 import { errorMessage } from '../../lib/errors';
-import {
-  Swords,
-  Sparkles,
-  Save,
-  ChevronDown,
-  ChevronUp,
-  AlertCircle,
-  CheckCircle2,
-  BarChart3,
-  User,
-  Zap,
-  Trophy,
-  RefreshCw,
-} from '../ui/Icons';
+import { Sparkles, Save, ChevronDown, CheckCircle2, BarChart3, RefreshCw } from '../ui/Icons';
+import { CollegeLogo } from '../common/CollegeLogo';
 
 interface PlayerStatRow {
   playerId: string;
@@ -161,374 +149,116 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
   };
 
 
-  const renderStatInput = (
-    team: 'team1' | 'team2',
-    rows: PlayerStatRow[],
-    accentColor: string,
-    teamCode: string
-  ) => {
+  const num = (value: string) => Number(value) || 0;
+  const kdaOf = (row: PlayerStatRow) => row.kills === '' && row.deaths === '' && row.assists === '' ? null : (num(row.kills) + num(row.assists)) / Math.max(1, num(row.deaths));
+  const filled = [...team1Rows, ...team2Rows].filter(r => r.kills !== '' || r.deaths !== '' || r.assists !== '').length;
+  const short = (name?: string) => (name || 'TBD').replace(/^DEMO\s+/i, '');
+
+  const renderStatInput = (team: 'team1' | 'team2', rows: PlayerStatRow[], teamCode: string) => {
     const collapsed = team === 'team1' ? collapseTeam1 : collapseTeam2;
     const setCollapsed = team === 'team1' ? setCollapseTeam1 : setCollapseTeam2;
+    const teamName = team === 'team1' ? selectedMatch?.team1?.name || 'Team 1' : selectedMatch?.team2?.name || 'Team 2';
+    const totals = rows.reduce((sum, row) => ({ k: sum.k + num(row.kills), d: sum.d + num(row.deaths), a: sum.a + num(row.assists) }), { k: 0, d: 0, a: 0 });
+    const field = (row: PlayerStatRow, i: number, key: 'kills' | 'deaths' | 'assists' | 'gold' | 'damage', label: string, placeholder: string) => {
+      const decimal = key === 'gold' || key === 'damage';
+      return <input className="stats-num" type={decimal ? 'text' : 'number'} inputMode={decimal ? 'decimal' : 'numeric'}
+        {...(decimal ? {} : { min: '0', max: '999', step: '1' })}
+        aria-label={`${teamCode} ${row.ign || row.playerName} ${label}`} value={row[key]} placeholder={placeholder}
+        onChange={e => updateRow(team, i, key, e.target.value)} />;
+    };
 
-    return (
-      <div className="page-panel overflow-hidden">
-        {/* Team Header */}
-        <button
-          aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-between p-4 hover:bg-(--surface-elevated) transition-colors cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <span
-              className="px-2.5 py-1 rounded-[3px] font-heading font-bold text-xs"
-              style={{ backgroundColor: `${accentColor}30`, color: 'var(--text-primary)', border: `1px solid ${accentColor}80` }}
-            >
-              {teamCode}
-            </span>
-            <span className="text-sm font-heading font-bold text-(--text-primary)">
-              {team === 'team1'
-                ? selectedMatch?.team1?.name || 'Team 1'
-                : selectedMatch?.team2?.name || 'Team 2'}
-            </span>
-            <span className="text-xs text-(--text-muted)">— {rows.length} players</span>
-          </div>
-          {collapsed ? (
-            <ChevronDown className="w-4 h-4 text-(--text-muted)" />
-          ) : (
-            <ChevronUp className="w-4 h-4 text-(--text-muted)" />
-          )}
-        </button>
-
-        {!collapsed && (
-          <div className="overflow-x-auto border-t border-(--border)" tabIndex={0} role="region" aria-label={`${teamCode} player stats`}>
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-(--border) bg-(--surface)">
-                  {[
-                    'Player / IGN',
-                    'Role',
-                    'Hero / Agent',
-                    'K',
-                    'D',
-                    'A',
-                    'Gold (K)',
-                    'Dmg (K)',
-                    'Notes',
-                  ].map((h) => (
-                    <th key={h} className="px-3 py-2.5 text-xs font-bold text-(--text-muted) whitespace-nowrap">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-(--border)">
-                {rows.map((row, i) => (
-                  <tr key={row.playerId} className="hover:bg-(--surface-soft) transition-colors">
-                    {/* Player Name */}
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-6 h-6 rounded-[3px] flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
-                        >
-                          <User className="w-3 h-3" />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-(--text-primary) text-xs leading-tight">{row.ign || row.playerName}</div>
-                          {row.ign && <div className="text-xs text-(--text-muted)">{row.playerName}</div>}
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Role */}
-                    <td className="px-3 py-2">
-                      <span className="px-1.5 py-0.5 rounded-[2px] bg-(--surface-soft) border border-(--border) text-xs font-bold text-(--text-secondary)">
-                        {row.role}
-                      </span>
-                    </td>
-
-                    {/* Hero */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} hero or agent`} value={row.hero}
-                        onChange={(e) => updateRow(team, i, 'hero', e.target.value)}
-                        placeholder="e.g. Chou"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 w-24 transition-colors"
-                      />
-                    </td>
-
-                    {/* K */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0" max="999" step="1"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} kills`} value={row.kills}
-                        onChange={(e) => updateRow(team, i, 'kills', e.target.value)}
-                        placeholder="0"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--success) placeholder-(--text-muted) outline-none focus:border-(--success)/60 w-14 tabular-nums transition-colors"
-                      />
-                    </td>
-
-                    {/* D */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0" max="999" step="1"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} deaths`} value={row.deaths}
-                        onChange={(e) => updateRow(team, i, 'deaths', e.target.value)}
-                        placeholder="0"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--danger) placeholder-(--text-muted) outline-none focus:border-(--danger)/60 w-14 tabular-nums transition-colors"
-                      />
-                    </td>
-
-                    {/* A */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min="0" max="999" step="1"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} assists`} value={row.assists}
-                        onChange={(e) => updateRow(team, i, 'assists', e.target.value)}
-                        placeholder="0"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--info) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 w-14 tabular-nums transition-colors"
-                      />
-                    </td>
-
-                    {/* Gold */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} gold in thousands`} value={row.gold}
-                        onChange={(e) => updateRow(team, i, 'gold', e.target.value)}
-                        placeholder="12.4"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--warning) placeholder-(--text-muted) outline-none focus:border-(--warning)/60 w-16 tabular-nums transition-colors"
-                      />
-                    </td>
-
-                    {/* Damage */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} damage in thousands`} value={row.damage}
-                        onChange={(e) => updateRow(team, i, 'damage', e.target.value)}
-                        placeholder="43.2"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--brand-ink) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 w-16 tabular-nums transition-colors"
-                      />
-                    </td>
-
-                    {/* Notes */}
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        aria-label={`${teamCode} ${row.ign || row.playerName} notes`} value={row.notes}
-                        onChange={(e) => updateRow(team, i, 'notes', e.target.value)}
-                        placeholder="Optional notes…"
-                        className="bg-(--surface) border border-(--border) rounded-[3px] px-2 py-1 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none focus:border-(--border-strong) w-36 transition-colors"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    );
+    return <section className="page-panel stats-team" aria-label={`${teamName} stats`}>
+      <button type="button" className="stats-team-head" aria-expanded={!collapsed} onClick={() => setCollapsed(!collapsed)}>
+        <CollegeLogo code={teamCode} size="md" />
+        <span className="stats-team-name"><strong>{teamName}</strong><small>{rows.length} players</small></span>
+        <span className="stats-team-totals" aria-label={`Team totals ${totals.k} kills, ${totals.d} deaths, ${totals.a} assists`}><span><b>{totals.k}</b>/<b>{totals.d}</b>/<b>{totals.a}</b></span><small>K / D / A</small></span>
+        <ChevronDown size={18} className={`stats-team-chevron${collapsed ? '' : ' is-open'}`} aria-hidden="true" />
+      </button>
+      {!collapsed && <div className="stats-table-wrap" tabIndex={0} role="region" aria-label={`${teamCode} player stats`}>
+        <table className="stats-table">
+          <thead><tr>
+            <th>Player</th><th>Hero / Agent</th><th className="is-num">K</th><th className="is-num">D</th><th className="is-num">A</th><th className="is-num">KDA</th><th className="is-num">Gold (K)</th><th className="is-num">Dmg (K)</th><th>Notes</th>
+          </tr></thead>
+          <tbody>{rows.map((row, i) => {
+            const kda = kdaOf(row);
+            return <tr key={row.playerId}>
+              <td><span className="stats-player"><span className="stats-avatar" aria-hidden="true">{(row.ign || row.playerName).slice(0, 2).toUpperCase()}</span>
+                <span><strong>{row.ign || row.playerName}</strong><small>{row.role}{row.ign && row.ign !== row.playerName ? ` · ${row.playerName}` : ''}</small></span></span></td>
+              <td><input className="stats-text" type="text" aria-label={`${teamCode} ${row.ign || row.playerName} hero or agent`} value={row.hero} onChange={e => updateRow(team, i, 'hero', e.target.value)} placeholder="Hero" /></td>
+              <td className="is-num">{field(row, i, 'kills', 'kills', '–')}</td>
+              <td className="is-num">{field(row, i, 'deaths', 'deaths', '–')}</td>
+              <td className="is-num">{field(row, i, 'assists', 'assists', '–')}</td>
+              <td className="is-num"><output className={`stats-kda${kda === null ? ' is-empty' : kda >= 4 ? ' is-high' : ''}`}>{kda === null ? '–' : kda.toFixed(2)}</output></td>
+              <td className="is-num">{field(row, i, 'gold', 'gold in thousands', '–')}</td>
+              <td className="is-num">{field(row, i, 'damage', 'damage in thousands', '–')}</td>
+              <td><input className="stats-text stats-notes" type="text" aria-label={`${teamCode} ${row.ign || row.playerName} notes`} value={row.notes} onChange={e => updateRow(team, i, 'notes', e.target.value)} placeholder="Optional" /></td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>}
+    </section>;
   };
 
-  if (!selectedMatch) return <div className="space-y-6">
+  if (!selectedMatch) return <div className="module-page">
     <PageHeading title="Match stats" description="Record each player’s stats by game and review the KDA summary." />
-    <div className="page-panel ah-empty"><h2>No matches available</h2><p>Publish a bracket with a playable match to start recording stats.</p></div>
+    <div className="ah-empty-panel"><BarChart3 size={22} /><strong>No matches available</strong><p>Publish a bracket with a playable match to start recording stats.</p></div>
   </div>;
 
+  const games = Array.from({ length: seriesGameCount(selectedMatch.matchFormat || 'Bo3') }, (_, i) => String(i + 1));
+  const statusLabel = ({ live: 'Live', completed: 'Completed', upcoming: 'Upcoming', 'pre-match': 'Pre-match', alert: 'Needs review' } as Record<string, string>)[selectedMatch.status] || selectedMatch.status;
+
   return (
-    <div className="space-y-6">
-      <PageHeading title="Match stats" description="Record each player’s stats by game and review the KDA summary."
-        actions={<>
-          <button
-            onClick={handleSave}
-            className="arena-primary" disabled={!selectedMatch}
-          >
-            {isSaved ? (
-              <>
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span role="status">Saved</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Data</span>
-              </>
-            )}
-          </button>
+    <div className="module-page stats-page">
+      <PageHeading title="Match stats" description="Record each player’s stats by game and review the KDA summary." />
 
-          <button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing || !selectedMatch}
-            className="arena-outline"
-          >
-            {isAnalyzing ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Analyzing…</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Summarize stats</span>
-              </>
-            )}
-          </button>
-        </>} />
-
-      {/* Match Selector + Game Number */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="page-panel p-4 space-y-2">
-          <label className="text-xs font-bold text-(--text-muted) block">
-            Select Match
+      <section className="page-panel stats-matchbar" aria-label="Match and game">
+        <div className="stats-matchbar-top">
+          <label className="stats-match-picker"><span>Match</span>
+            <select aria-label="Select match" value={selectedMatch.id} onChange={e => handleMatchChange(e.target.value)}>
+              {matches.map(m => <option key={m.id} value={m.id}>{m.matchNumber} — {m.team1?.collegeCode || 'TBD'} vs {m.team2?.collegeCode || 'TBD'} · {m.status.toUpperCase()}</option>)}
+            </select>
           </label>
-          <select aria-label="Select match"
-            value={selectedMatch.id}
-            onChange={(e) => handleMatchChange(e.target.value)}
-            className="w-full bg-(--surface) border border-(--border) rounded-[4px] px-3 py-2 text-sm text-(--text-primary) outline-none focus:border-(--brand)/60 transition-colors cursor-pointer"
-          >
-            {matches.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.matchNumber} — {m.team1?.collegeCode || 'TBD'} vs {m.team2?.collegeCode || 'TBD'} · {m.status.toUpperCase()}
-              </option>
-            ))}
-          </select>
-
-          <div className="pt-1 flex items-center gap-3 text-xs text-(--text-muted)">
-            <span>Round:</span>
-            <span className="text-(--text-primary) font-semibold">{selectedMatch?.roundName || '—'}</span>
-            <span>·</span>
-            <span>Format:</span>
-            <span className="text-(--text-primary) font-semibold">{selectedMatch?.matchFormat || 'Bo3'}</span>
-          </div>
+          <span className="stats-match-meta"><span className={`status-pill${selectedMatch.status === 'live' ? ' is-danger' : selectedMatch.status === 'completed' ? ' is-success' : ''}`}>{statusLabel}</span>{selectedMatch.roundName} · {selectedMatch.matchFormat}</span>
         </div>
-
-        <div className="page-panel p-4 space-y-2">
-          <label className="text-xs font-bold text-(--text-muted) block">
-            Game Number (within series)
-          </label>
-          <div className="flex flex-wrap items-center gap-2">
-            {Array.from({ length: seriesGameCount(selectedMatch?.matchFormat || 'Bo3') }, (_, i) => String(i + 1)).map((g) => (
-              <button
-                key={g}
-                onClick={() => setGameNumber(g)}
-                className={`w-10 h-10 rounded-[4px] border text-sm font-bold transition-all cursor-pointer ${
-                  gameNumber === g
-                    ? 'bg-(--brand) border-(--brand) text-black'
-                    : 'bg-(--surface) border-(--border) text-(--text-muted) hover:border-(--brand)/50 hover:text-white'
-                }`}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-(--text-muted)">
-            Entering stats for Game {gameNumber} of the {selectedMatch?.matchFormat || 'Bo3'} series
-          </p>
+        <div className="stats-versus">
+          <span className="stats-versus-team"><CollegeLogo code={selectedMatch.team1?.collegeCode || 'TBD'} size="lg" /><strong>{short(selectedMatch.team1?.name)}</strong></span>
+          <span className="stats-versus-score" aria-label={`Series score ${selectedMatch.score.team1Score} to ${selectedMatch.score.team2Score}`}><b>{selectedMatch.score.team1Score}</b><i aria-hidden="true">–</i><b>{selectedMatch.score.team2Score}</b></span>
+          <span className="stats-versus-team is-right"><strong>{short(selectedMatch.team2?.name)}</strong><CollegeLogo code={selectedMatch.team2?.collegeCode || 'TBD'} size="lg" /></span>
         </div>
+        <div className="ah-tabs stats-games" role="tablist" aria-label="Game in the series">
+          {games.map(g => <button key={g} type="button" role="tab" aria-selected={gameNumber === g} onClick={() => setGameNumber(g)}>
+            Game {g}{selectedMatch.statGames?.[g] && <span className="stats-saved-dot" title="Stats saved" />}
+          </button>)}
+        </div>
+      </section>
+
+      {renderStatInput('team1', team1Rows, selectedMatch.team1?.collegeCode || 'TEAM 1')}
+      {renderStatInput('team2', team2Rows, selectedMatch.team2?.collegeCode || 'TEAM 2')}
+      <p className="field-hint stats-hint">Copy K/D/A from the end-of-game scoreboard. Gold and damage are in thousands. KDA is (kills + assists) / deaths.</p>
+
+      <div className="stats-cards">
+        <section className="page-panel stats-notes-card">
+          <header className="stats-card-head"><h3>Notes for game {gameNumber}</h3><p className="field-hint">Saved with this game and shown next to the calculated stats.</p></header>
+          <textarea aria-label="Organizer observations" value={matchNotes} onChange={e => { setMatchNotes(e.target.value); setIsSaved(false); }} rows={4}
+            placeholder="Draft picks, objectives, standout plays…" />
+        </section>
+        <section className="page-panel stats-summary-card" aria-live="polite">
+          <header className="stats-card-head"><h3>Stats summary</h3><p className="field-hint">Ranks the entered players by KDA. Descriptive only, not an MVP verdict.</p></header>
+          {aiAnalysis ? <pre className="stats-summary-text">{aiAnalysis}</pre>
+            : <div className="stats-summary-empty"><BarChart3 size={20} aria-hidden="true" /><span>{filled < 3 ? `Enter stats for at least 3 players (${filled} so far).` : 'Ready to summarize.'}</span></div>}
+          <button type="button" className="arena-outline" onClick={handleAnalyze} disabled={isAnalyzing}>
+            {isAnalyzing ? <RefreshCw size={16} className="animate-spin" /> : <Sparkles size={16} />}{aiAnalysis ? 'Summarize again' : 'Summarize stats'}
+          </button>
+        </section>
       </div>
 
-      {/* Hint Banner */}
-      <div className="flex items-start gap-3 p-3.5 rounded-[4px] bg-(--surface) border border-(--border)">
-        <AlertCircle className="w-4 h-4 text-(--brand-ink) shrink-0 mt-0.5" />
-        <div className="text-xs text-(--text-secondary) leading-relaxed">
-          <span className="text-(--text-primary) font-semibold">How to use:</span> Fill in player stats from the scoreboard at end of each game. KDA (Kills / Deaths / Assists), hero/agent used, and gold/damage dealt are used by the summary to calculate KDA. After entering data for at least 3 players, click{' '}
-          <span className="text-(--brand-ink) font-semibold">Summarize stats</span> to compare the entered stats.
-        </div>
+      {selectedMatch.team1 && selectedMatch.team2 && !selectedMatch.team1.isBye && !selectedMatch.team2.isBye && <MatchHighlightsEditor match={selectedMatch} />}
+
+      <div className="stats-savebar" role="region" aria-label="Save game stats">
+        <span className={`stats-savebar-state${isSaved ? ' is-saved' : ''}`}>{isSaved ? <CheckCircle2 size={16} aria-hidden="true" /> : <span className="stats-dirty-dot" aria-hidden="true" />}
+          <span role="status">{isSaved ? `Game ${gameNumber} saved` : `Game ${gameNumber} · not saved yet`}</span></span>
+        <button type="button" className="arena-primary" onClick={handleSave}><Save size={16} />Save Data</button>
       </div>
-
-      {/* Team Stat Tables */}
-      {renderStatInput(
-        'team1',
-        team1Rows,
-        '#3B82F6',
-        selectedMatch?.team1?.collegeCode || 'TEAM 1'
-      )}
-      {renderStatInput(
-        'team2',
-        team2Rows,
-        '#EF4444',
-        selectedMatch?.team2?.collegeCode || 'TEAM 2'
-      )}
-
-      {/* Match-level Notes */}
-      <div className="page-panel p-4 space-y-2">
-        <label className="text-xs font-bold text-(--text-muted) block flex items-center gap-1.5">
-          <Swords className="w-3.5 h-3.5" />
-          Organizer observations
-        </label>
-        <textarea
-          value={matchNotes}
-          onChange={(e) => setMatchNotes(e.target.value)}
-          rows={3}
-          placeholder="e.g. CCS ran a dive comp in Game 1, COE responded with poke. Dragon secured at 08:00. Notable: CCS Jungler played extremely aggressively…"
-          className="w-full bg-(--surface) border border-(--border) rounded-[4px] px-3 py-2.5 text-xs text-(--text-primary) placeholder-(--text-muted) outline-none focus:border-(--brand)/60 resize-none leading-relaxed transition-colors"
-        />
-        <p className="text-xs text-(--text-muted)">
-          Observations are saved with the selected game and shown alongside calculated stats.
-        </p>
-      </div>
-
-      {selectedMatch?.team1 && selectedMatch.team2 && !selectedMatch.team1.isBye && !selectedMatch.team2.isBye && <MatchHighlightsEditor match={selectedMatch} />}
-
-      {/* Stats summary Output */}
-      {aiAnalysis && (
-        <div className="rounded-[4px] border border-(--brand)/25 bg-(--bg-base) p-5 space-y-3 animate-in fade-in duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-[4px] bg-(--brand)/15 border border-(--brand)/30 flex items-center justify-center">
-                <Sparkles className="w-3.5 h-3.5 text-(--brand-ink)" />
-              </div>
-              <span className="text-sm font-heading font-bold text-(--brand-ink)">Match stats summary</span>
-              <span className="px-1.5 py-0.5 rounded-[2px] bg-(--brand)/10 border border-(--brand)/25 text-xs font-bold text-(--brand-ink)">
-                Game {gameNumber} · {selectedMatch?.matchNumber}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-(--text-muted) tabular-nums">Based on entered stats</span>
-              <button
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
-                className="p-1.5 rounded-[3px] text-(--text-muted) hover:text-(--brand-ink) hover:bg-(--surface-soft) transition-colors cursor-pointer"
-                title="Regenerate analysis"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            {[
-              { label: 'Data Points', value: `${[...team1Rows, ...team2Rows].filter(r => r.kills !== '').length * 3}`, icon: <BarChart3 className="w-3 h-3" />, color: 'text-(--info)' },
-              { label: 'Players Analyzed', value: `${[...team1Rows, ...team2Rows].filter(r => r.kills !== '' || r.deaths !== '' || r.assists !== '').length}/10`, icon: <User className="w-3 h-3" />, color: 'text-(--success)' },
-              { label: 'Summary', value: 'Calculated', icon: <Zap className="w-3 h-3" />, color: 'text-(--brand-ink)' },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-(--bg-base) border border-(--border) rounded-[4px] p-2.5 text-center">
-                <div className={`flex items-center justify-center gap-1 ${stat.color} mb-1`}>
-                  {stat.icon}
-                </div>
-                <div className={`tabular-nums font-bold text-sm ${stat.color}`}>{stat.value}</div>
-                <div className="text-(--text-muted) text-xs">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-(--bg-base) border border-(--border) rounded-[4px] p-4 tabular-nums text-xs text-(--text-secondary) leading-relaxed whitespace-pre-wrap">
-            {aiAnalysis}
-          </div>
-
-          <div className="flex items-center gap-2 pt-1">
-            <Trophy className="w-3.5 h-3.5 text-(--text-muted)" />
-            <span className="text-xs text-(--text-muted)">
-              Analysis generated for WMSU Palaro 2026 · {selectedMatch?.roundName} · {new Date().toLocaleTimeString()}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

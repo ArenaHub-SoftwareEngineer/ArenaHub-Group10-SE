@@ -74,15 +74,19 @@
   </section>
 
   <section id="pc" hidden>
-    <h2>PC: run the ArenaHub agent</h2>
+    <h2>PC: scan this PC</h2>
+    <p><strong>Used the ArenaHub agent on this PC before?</strong> Start your scan in one click. If your browser asks to open ArenaHub Anti-cheat, allow it.
+      <a id="startScan" class="button" href="#">Start my scan</a></p>
     <ol>
-      <li>Download the agent. Verify this download and its fingerprint with tournament staff. This test build is unsigned; use only a trusted event device until staff validate and sign the release.
-        <a class="button secondary" href="/api/integrity/downloads/arenahub-agent.exe" download>Download the agent (90 MB)</a></li>
-      <li>Double-click the downloaded app. Enter the tournament server address and your match scan code, then type YES to agree. You can also run this command from its folder:
-        <code id="command"></code>
-        <button id="copy" type="button" class="secondary">Copy the command</button></li>
-      <li>Wait for <strong>Scan passed</strong> before joining. If restricted software is listed, close it and let the agent scan again. Keep the agent open. For Dota 2 live data, restart the game after the agent starts.</li>
+      <li><strong>First time on this PC:</strong> download your scan and open it. It already has your code and this server's address, so there is nothing to type. This test build is unsigned: if Windows warns you, choose More info, then Run anyway. Verify the download with staff.
+        <a id="pcDownload" class="button secondary" href="/api/integrity/downloads/arenahub-agent.exe" download>Download my scan (90 MB)</a></li>
+      <li>Type <strong>YES</strong> to agree. Wait for <strong>Scan passed</strong> before joining. If restricted software is listed, close it and the agent scans again. Keep the agent open. For Dota 2 live data, restart the game after the agent starts.</li>
     </ol>
+    <details>
+      <summary>Start it by typing a command instead</summary>
+      <code id="command"></code>
+      <button id="copy" type="button" class="secondary">Copy the command</button>
+    </details>
   </section>
 
   <section id="ios" hidden>
@@ -179,6 +183,10 @@
     } else if (info.platform === 'pc') {
       show('pc', true);
       $('command').textContent = 'arenahub-agent.exe --server ' + location.origin + ' --code ' + code;
+      // The download is saved as arenahub-scan-<CODE>.exe; Windows also records which server it came from.
+      $('pcDownload').href = '/api/integrity/downloads/arenahub-agent.exe?code=' + code;
+      // The agent registers arenahub:// the first time it runs, so later scans start from here directly.
+      $('startScan').href = 'arenahub://scan?s=' + encodeURIComponent(location.origin) + '&c=' + code;
     } else {
       show('ios', true);
       if (!isApple) say('This code is for an iPhone. Open it on the player\'s iPhone.', 'error');

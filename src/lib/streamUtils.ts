@@ -93,3 +93,15 @@ export function updateBroadcastLinks(brackets:BracketDraft[],matchId:string,link
     return next;
   })}));
 }
+
+/**
+ * Real thumbnails for match cards, like a streaming site: YouTube serves a frame of the broadcast.
+ * hqdefault.jpg is the stream's own cover; hqdefault_live.jpg is not used because a finished stream returns a black end frame.
+ * Facebook and TikTok offer no public thumbnail, so those cards keep the game artwork.
+ */
+export function broadcastThumbnails(match:{status:string;streamUrl?:string;broadcastLinks?:BroadcastLink[]}):string[] {
+  const youtube=matchBroadcasts(match).find(link=>link.platform==='youtube' && link.embedUrl);
+  const id=youtube?.embedUrl?new URL(youtube.embedUrl).pathname.split('/')[2]:null;
+  if(!id || !/^[A-Za-z0-9_-]{11}$/.test(id))return [];
+  return [`https://i.ytimg.com/vi/${id}/hqdefault.jpg`,`https://i.ytimg.com/vi/${id}/mqdefault.jpg`];
+}

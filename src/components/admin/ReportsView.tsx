@@ -90,7 +90,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
               </div>
 
               {/* Flagged Quote */}
-              <div className="p-3.5 rounded-[4px] bg-(--surface) border-l-2 border-(--danger) text-xs text-(--text-primary) font-medium">
+              <div className="p-3.5 rounded-[4px] bg-(--danger-soft) border border-(--danger-border) text-xs text-(--text-primary) font-medium">
                 "{report.contentSnippet}"
               </div>
 

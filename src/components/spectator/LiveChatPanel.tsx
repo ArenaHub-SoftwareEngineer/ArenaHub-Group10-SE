@@ -14,6 +14,8 @@ import { aiService } from '../../lib/ai';
 import { useToast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { Clock, Flag, Pin, Send, Shield, Sparkles, X } from '../ui/Icons';
+import { aliasOf, rerollAlias, sessionAlias } from '../../lib/anonAlias';
+import { AnonAvatar } from '../ui/AnonAvatar';
 
 interface LiveChatPanelProps { matchId: string; currentUser: User; readOnly: boolean; canPost: boolean }
 
@@ -41,6 +43,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
   const [now, setNow] = useState(() => Date.now());
   const [input, setInput] = useState('');
   const [anonymous, setAnonymous] = useState(false);
+  // This viewer's alias for this match, chosen when they first switch to anonymous (see lib/anonAlias.ts).
+  const [alias, setAlias] = useState<string | null>(null);
+  const takenNames = () => messages.map(message => message.author);
+  useEffect(() => { setAlias(null); }, [matchId]);
+  useEffect(() => { if (anonymous && !alias) setAlias(sessionAlias(matchId, takenNames())); }, [anonymous, alias, matchId]);
   const [sending, setSending] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [kickTarget, setKickTarget] = useState<LiveChatMessage | null>(null);
@@ -89,7 +96,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
     setSending(true);
     try {
       const name = currentUser.name.trim();
-      await sendMatchChat(matchId, currentUser.id, anonymous || !name || name.includes('@') ? 'Anonymous' : name, text, staff);
+      await sendMatchChat(matchId, currentUser.id, anonymous || !name || name.includes('@') ? alias || sessionAlias(matchId, takenNames()) : name, text, staff);
       setInput(''); setLastSent(Date.now()); setNow(Date.now());
       const question = state.aiEnabled ? arenaQuestion(text) : null;
       if (question) {
@@ -159,9 +166,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
       {error && <p className="module-error" role="alert">{error}</p>}
       {!messages.length && !error && <p className="watch-chat-empty">{readOnly ? 'Chat is available for published matches.' : available ? 'No messages yet. Say hi to the other viewers.' : 'Loading chat…'}</p>}
       {messages.map(message => <article key={message.id} className={`watch-chat-message${message.badge ? ' is-staff' : ''}${message.ai ? ' is-ai' : ''}`}>
-        <span className="watch-chat-avatar" aria-hidden="true">{message.ai ? <Sparkles size={14} /> : initials(message.author)}</span>
+        {aliasOf(message.author) ? <AnonAvatar alias={aliasOf(message.author)!} className="watch-chat-avatar is-anon" />
+          : <span className="watch-chat-avatar" aria-hidden="true">{message.ai ? <Sparkles size={14} /> : initials(message.author)}</span>}
         <p>
-          <strong>{message.author}</strong>
+          <strong>{aliasOf(message.author) ?? message.author}</strong>
+          {aliasOf(message.author) && <span className="watch-chat-badge is-anon">Anon</span>}
           {message.badge && <span className="watch-chat-badge">Staff</span>}
           {message.ai && <span className="watch-chat-badge is-ai">AI</span>}
           {message.createdAt && <time dateTime={new Date(message.createdAt).toISOString()}>{formatChatTime(message.createdAt)}</time>}
@@ -188,12 +197,16 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
 
     {canPost ? muteLeft ? <p className="watch-chat-muted" role="status"><Shield size={14} /><span>{muteText} You can post again in <strong>{formatCountdown(muteLeft)}</strong>.</span></p>
       : <form className="watch-chat-form" onSubmit={send}>
-        <span className="watch-chat-avatar" aria-hidden="true">{anonymous ? '?' : initials(currentUser.name || 'You')}</span>
+        {anonymous && alias ? <AnonAvatar alias={aliasOf(alias) || alias} className="watch-chat-avatar is-anon" /> : <span className="watch-chat-avatar" aria-hidden="true">{initials(currentUser.name || 'You')}</span>}
         <input type="text" aria-label="Match chat message" value={input} onChange={event => setInput(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : state.aiEnabled ? 'Chat, or ask @Arena…' : 'Chat…'} maxLength={500} disabled={!available || sending} />
         <button type="submit" className="shell-icon-button" aria-label={slowLeft ? `Wait ${slowLeft} seconds` : 'Send chat message'} disabled={!input.trim() || !available || sending || slowLeft > 0}>
           {slowLeft ? <span className="watch-chat-wait" aria-hidden="true">{slowLeft}</span> : <Send size={18} />}
         </button>
-        <label className="watch-chat-anon"><input type="checkbox" checked={anonymous} onChange={event => setAnonymous(event.target.checked)} /> Post anonymously</label>
+        <div className="watch-chat-anon-row">
+          <label className="watch-chat-anon"><input type="checkbox" checked={anonymous} onChange={event => setAnonymous(event.target.checked)} /> Post anonymously</label>
+          {anonymous && alias && <span className="watch-chat-alias">as <strong>{aliasOf(alias)}</strong>
+            <button type="button" onClick={() => setAlias(rerollAlias(matchId, takenNames()))}>New name</button></span>}
+        </div>
       </form>
       : !readOnly && <p className="watch-chat-readonly">You can read chat. Posting is reserved for verified WMSU accounts.</p>}
 

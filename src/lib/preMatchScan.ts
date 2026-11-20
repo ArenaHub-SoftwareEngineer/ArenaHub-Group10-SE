@@ -46,7 +46,7 @@ export function preMatchScan(input: ScanInput): ScanReadiness {
   if (facts.platform === 'pc') {
     if (input.game === 'dota2') {
       if (!facts.dota || !facts.checks?.dotaFiles) return result('incomplete', 'Dota 2 file check missing', 'Update the Windows agent to version 3.2 or later. It checks the Dota 2 install against Valve\'s file list.', [], warnings);
-      if (!facts.dota.found) return result('incomplete', 'Dota 2 install not found', 'The agent could not find Dota 2 in this PC\'s Steam libraries. Play on the PC that has the tournament install.', [], warnings);
+      if (!facts.dota.found) return result('incomplete', 'Dota 2 install not found', 'The agent could not find Dota 2 in this PC\'s Steam libraries. Open Dota 2 and keep the agent open: it finds the game from the running dota2.exe on its next check.', [], warnings);
       if (facts.checks.dotaFiles !== 'complete') return result('incomplete', 'Dota 2 file check incomplete', 'The agent could not read every Dota 2 file. Close other programs that lock the game folder and keep the agent open until it rescans.', [], warnings);
       if (facts.gameRunning && facts.checks.moduleSigners && !['complete', 'not-configured'].includes(facts.checks.moduleSigners)) return result('incomplete', 'Game library signatures incomplete', 'The agent could not check the signatures of every library loaded from user folders. Keep it open until it rescans.', [], warnings);
     }

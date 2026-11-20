@@ -7,8 +7,10 @@ import { Menu, Radio, Search, X } from './Icons';
 
 export interface ShellItem {
   id: string;
+  /** One word in the navigation ("Watch", "Brackets"). */
   label: string;
-  short?: string;
+  /** Full page name for the search, the browser tab and the page landmark ("Match center"). Defaults to label. */
+  title?: string;
   icon: LucideIcon | React.ComponentType<{ className?: string; size?: number }>;
   badge?: { kind: 'count'; value: number } | { kind: 'live' };
   keywords?: string;
@@ -80,10 +82,10 @@ function ShellSearch({ items, onNavigate, mobile = false, reduced }: {
   const results = useMemo(() => {
     if (!q) return items.slice(0, 8);
     const rank = (item: ShellItem) => {
-      const label = item.label.toLowerCase();
+      const label = `${item.label} ${item.title || ''}`.toLowerCase();
       if (label.startsWith(q)) return 0;
       if (label.includes(q)) return 1;
-      return q.split(/\s+/).every(word => `${label} ${item.short || ''} ${item.keywords || ''}`.toLowerCase().includes(word)) ? 2 : 3;
+      return q.split(/\s+/).every(word => `${label} ${item.keywords || ''}`.toLowerCase().includes(word)) ? 2 : 3;
     };
     return items.map(item => ({ item, rank: rank(item) }))
       .filter(result => result.rank < 3)
@@ -157,7 +159,7 @@ function ShellSearch({ items, onNavigate, mobile = false, reduced }: {
           const Icon = item.icon;
           return <li key={item.id} id={optionId(item)} role="option" aria-selected={active?.id === item.id}
             onMouseDown={event => event.preventDefault()} onClick={() => go(item)}>
-            <Icon className="w-4 h-4" aria-hidden="true" /><span>{item.label}</span><Badge badge={item.badge} />
+            <Icon className="w-4 h-4" aria-hidden="true" /><span>{item.title || item.label}</span><Badge badge={item.badge} />
           </li>;
         })}
       </ul>
@@ -240,10 +242,10 @@ export function AppShell({
       const active = isActive(item.id), Icon = item.icon, mini = mode === 'rail' && collapsed;
       return <NavigationLink key={item.id} href={workspaceHref(workspace, item.id)} data-tab={item.id} aria-current={active ? 'page' : undefined}
         className={`shell-item${active ? ' is-active' : ''}${mini ? ' is-mini' : ''}`} onNavigate={() => go(item.id)}
-        aria-label={mini ? item.label : undefined} title={mini ? item.label : undefined}>
+        title={item.title && item.title !== item.label ? item.title : undefined}>
         {active && <motion.span layoutId={`shell-active-${mode}`} className="shell-item-marker" transition={markerTransition} />}
         <Icon className="shell-item-icon" aria-hidden="true" />
-        <span className="shell-item-label">{mini ? item.short || item.label : item.label}</span>
+        <span className="shell-item-label">{item.label}</span>
         {mini ? <span className="shell-item-dot"><Badge badge={item.badge} /></span> : <Badge badge={item.badge} />}
       </NavigationLink>;
     })}
@@ -326,11 +328,11 @@ export function AppShell({
           <span className="shell-tab-icon">{active && <motion.span layoutId="shell-tab-pill" className="shell-tab-pill" transition={markerTransition} />}
             <Icon className="w-5 h-5" aria-hidden="true" /><span className="shell-item-dot"><Badge badge={item.badge} /></span>
           </span>
-          <span className="shell-tab-label">{item.short || item.label}</span>
+          <span className="shell-tab-label">{item.label}</span>
         </NavigationLink>;
       })}
       <button type="button" className={`shell-tab${moreActive ? ' is-active' : ''}`} aria-haspopup="dialog" aria-controls={drawerId}
-        aria-label={moreActive ? `More pages. Current page: ${activeItem?.label || pageTitle}` : 'More pages'} onClick={() => drawer.current?.showModal()}>
+        aria-label={moreActive ? `More pages. Current page: ${activeItem?.title || activeItem?.label || pageTitle}` : 'More pages'} onClick={() => drawer.current?.showModal()}>
         <span className="shell-tab-icon">{moreActive && <motion.span layoutId="shell-tab-pill" className="shell-tab-pill" transition={markerTransition} />}
           <Menu size={20} aria-hidden="true" />
         </span>

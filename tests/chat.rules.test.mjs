@@ -96,6 +96,16 @@ test('"Arena AI" is reserved in chat and in profile names', async () => {
   await assertSucceeds(updateDoc(doc(student(), 'users', 'student'), { name: 'Chat Student' }));
 });
 
+test('anonymous posts may use a generated alias, but only in the exact alias shape', async () => {
+  await assertSucceeds(send(db('other'), 'alias-a', 'other', 'Anonymous Swift Kraken'));
+  await assertSucceeds(send(db('other'), 'alias-b', 'other', 'Anonymous Tidal Pawikan'));
+  // Lower-case words, extra words or a lookalike prefix are refused: only the profile name or an alias may be used.
+  await assertFails(send(db('other'), 'alias-c', 'other', 'Anonymous swift kraken'));
+  await assertFails(send(db('other'), 'alias-d', 'other', 'Anonymous Swift Kraken Staff'));
+  await assertFails(send(db('other'), 'alias-e', 'other', 'Anon Swift Kraken'));
+  await assertFails(send(db('other'), 'alias-f', 'other', 'Anonymous Arena Ai'));
+});
+
 test('a timed mute blocks posting until it expires; the viewer sees only their own mute', async () => {
   await assertFails(mute(student(), 'student', 'mute', 'other', 20));
   await assertFails(mute(mod(), 'mod', 'mute', 'mod', 20));

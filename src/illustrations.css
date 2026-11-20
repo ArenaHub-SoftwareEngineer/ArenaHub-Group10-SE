@@ -32,6 +32,6 @@ html[data-motion=reduced] .ah-illo-waves path { opacity: .7; }
 /* Empty states: illustration, a short line of text, and one action */
 .ah-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 40px 16px; }
 .ah-empty .ah-illo { max-width: 200px; margin-bottom: 8px; }
-.ah-empty h3 { font-size: 16px; font-weight: 600; }
+.ah-empty h3 { font-size: var(--fs-md); font-weight: 600; }
 .ah-empty p { color: var(--text-secondary); max-width: 44ch; }
 .ah-empty .arena-outline, .ah-empty .arena-primary { margin-top: 8px; }

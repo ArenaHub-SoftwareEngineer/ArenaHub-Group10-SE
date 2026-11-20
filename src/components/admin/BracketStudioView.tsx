@@ -28,6 +28,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
 
   // Mode
   const [buildMode, setBuildMode] = useState<'prompt' | 'manual' | 'upload'>('prompt');
+  const [libraryTab, setLibraryTab] = useState<'drafts' | 'live' | 'versions'>('drafts');
 
   // Bracket state
   const [currentDraft, setCurrentDraft] = useState<BracketDraft | null>(() => {
@@ -504,7 +505,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
   };
 
   return (
-    <div className="bracket-studio space-y-6">
+    <div className="bracket-studio module-page">
       {/* ── Top Header ── */}
       <header className="studio-header">
         <div>
@@ -561,39 +562,21 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
         </div>
       </header>
 
-      <details className="studio-builder">
-        <summary><span><strong>Saved drafts ({drafts.length})</strong><small>Open a roster and bracket saved to your account.</small></span><ChevronDown size={18} /></summary>
-        <div className="studio-builder-body studio-bracket-library">
-          {drafts.length === 0 && <p className="studio-muted">Publishing a bracket also keeps its latest draft and team roster here.</p>}
-          {drafts.map(draft => <div key={draft.id} className="studio-bracket-library-row">
-            <span><strong>{draft.title}</strong><small>{draft.gameName} · {draft.teamsCount} teams</small></span>
-            <button type="button" className="arena-outline" onClick={() => requestBracket(draft)}>Open draft</button>
-            <button type="button" className="arena-outline studio-delete-draft" onClick={() => setDraftToDelete(draft)}>Delete draft</button>
-          </div>)}
-        </div>
-      </details>
-
-      <details className="studio-builder">
-        <summary><span><strong>Live published brackets ({publishedBrackets.length})</strong><small>Open a published copy to edit or unpublish it.</small></span><ChevronDown size={18} /></summary>
-        <div className="studio-builder-body studio-bracket-library">
-          {publishedBrackets.length === 0 && <p className="studio-muted">No brackets are currently published.</p>}
-          {publishedBrackets.map(bracket => <div key={bracket.id} className="studio-bracket-library-row">
-            <span><strong>{bracket.title}</strong><small>{bracket.gameName} · {bracket.teamsCount} teams</small></span>
-            <button type="button" className="arena-outline" onClick={() => requestBracket(bracket)}>Edit published copy</button>
-            <button type="button" className="arena-outline" onClick={() => setBracketToUnpublish(bracket)}>Unpublish</button>
-          </div>)}
-        </div>
-      </details>
-
-      {previousVersions.length > 0 && <details className="studio-builder">
-        <summary><span><strong>Published versions ({previousVersions.length})</strong><small>Restore a previous live bracket and schedule.</small></span><ChevronDown size={18} /></summary>
-        <div className="studio-builder-body studio-bracket-library">
-          {previousVersions.map(version => <div key={publicationGameKey(version)} className="studio-bracket-library-row">
-            <span><strong>{version.title}</strong><small>{version.gameName}</small></span>
-            <button type="button" className="arena-outline" onClick={() => setVersionToRestore(version)}>Restore previous version</button>
-          </div>)}
-        </div>
-      </details>}
+      {(() => {
+        const published = Boolean(currentDraft && currentDraft.status === 'published' && currentDraft === loadedBracket.current);
+        const steps = [
+          { label: 'Build', hint: 'Prompt, manual setup or roster', done: Boolean(currentDraft) },
+          { label: 'Edit and schedule', hint: 'Names, scores, series and times', done: published },
+          { label: 'Publish', hint: 'Spectators see it live', done: published },
+        ];
+        const current = !currentDraft ? 0 : published ? 3 : 1;
+        return <ol className="studio-steps" aria-label="Bracket progress">
+          {steps.map((step, index) => <li key={step.label} className={step.done ? 'is-done' : index === current ? 'is-current' : undefined} aria-current={index === current ? 'step' : undefined}>
+            <span className="studio-step-dot" aria-hidden="true">{step.done ? <Check size={14} strokeWidth={3} /> : index + 1}</span>
+            <span><strong>{step.label}</strong><small>{step.hint}</small></span>
+          </li>)}
+        </ol>;
+      })()}
 
       <ConfirmModal isOpen={draftToDelete !== null} title="Delete saved draft?"
         description={`Delete “${draftToDelete?.title || 'this draft'}” from your account?${deletingOpenDraft ? ' The open draft and its unsaved changes will also close.' : ''} Published brackets stay available.`}
@@ -603,8 +586,8 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
         description={`“${currentDraft?.title}” has unsaved changes. Cancel to save that draft first, or continue to open “${bracketToLoad.title}”.`}
         confirmLabel="Open bracket" onCancel={() => setBracketToLoad(null)} onConfirm={() => loadBracket(bracketToLoad)} />}
 
-      <div className="studio-workspace">
-        <details className="studio-builder" open={!currentDraft}>
+      <div className="studio-top">
+        <details className="studio-builder studio-build" open={!currentDraft}>
           <summary>
             <span><strong>Build settings</strong><small>Start from a prompt, set up manually, or upload a roster.</small></span>
             <ChevronDown size={18} />
@@ -723,6 +706,45 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
           </div>
         </details>
 
+        <aside className="page-panel studio-library" aria-label="Bracket library">
+          <h2>Library</h2>
+          <div className="ah-tabs studio-library-tabs" role="tablist" aria-label="Bracket library">
+            {([['drafts', 'Drafts', drafts.length], ['live', 'Live', publishedBrackets.length], ['versions', 'Versions', previousVersions.length]] as const).map(([id, label, count]) =>
+              <button key={id} type="button" role="tab" aria-selected={libraryTab === id} onClick={() => setLibraryTab(id)}>{label}<span className="ah-chip-count">{count}</span></button>)}
+          </div>
+          <div className="studio-bracket-library" role="tabpanel">
+            {libraryTab === 'drafts' && <>
+              {drafts.length === 0 && <p className="studio-muted">No saved drafts. Publishing a bracket also keeps its latest draft and roster here.</p>}
+              {drafts.map(draft => <div key={draft.id} className="studio-bracket-library-row">
+                <span><strong>{draft.title}</strong><small>{draft.gameName} · {draft.teamsCount} teams</small></span>
+                <span className="studio-row-actions">
+                  <button type="button" className="arena-outline arena-sm" onClick={() => requestBracket(draft)}>Open draft</button>
+                  <button type="button" className="arena-outline arena-sm arena-danger-text studio-delete-draft" onClick={() => setDraftToDelete(draft)}>Delete draft</button>
+                </span>
+              </div>)}
+            </>}
+            {libraryTab === 'live' && <>
+              {publishedBrackets.length === 0 && <p className="studio-muted">No brackets are published right now.</p>}
+              {publishedBrackets.map(bracket => <div key={bracket.id} className="studio-bracket-library-row">
+                <span><strong><i className="studio-live-dot" aria-hidden="true" />{bracket.title}</strong><small>{bracket.gameName} · {bracket.teamsCount} teams</small></span>
+                <span className="studio-row-actions">
+                  <button type="button" className="arena-outline arena-sm" onClick={() => requestBracket(bracket)}>Edit published copy</button>
+                  <button type="button" className="arena-outline arena-sm arena-danger-text" onClick={() => setBracketToUnpublish(bracket)}>Unpublish</button>
+                </span>
+              </div>)}
+            </>}
+            {libraryTab === 'versions' && <>
+              {previousVersions.length === 0 && <p className="studio-muted">Earlier live versions appear here after you publish a change.</p>}
+              {previousVersions.map(version => <div key={publicationGameKey(version)} className="studio-bracket-library-row">
+                <span><strong>{version.title}</strong><small>{version.gameName}</small></span>
+                <span className="studio-row-actions"><button type="button" className="arena-outline arena-sm" onClick={() => setVersionToRestore(version)}>Restore previous version</button></span>
+              </div>)}
+            </>}
+          </div>
+        </aside>
+      </div>
+
+      <div className="studio-workspace">
       {currentDraft && <details className="studio-builder">
         <summary><span><strong>Draft schedule</strong><small>Add match times before publishing.</small></span><ChevronDown size={18} /></summary>
         <div className="studio-builder-body">
@@ -744,14 +766,12 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
 
         <div className="min-w-0">
           {!currentDraft ? (
-            <div className="rounded-[6px] bg-(--surface-soft) border border-(--border) p-16 text-center flex flex-col items-center justify-center min-h-[460px] shadow-xl">
-              <div className="w-14 h-14 rounded-[6px] bg-(--bg-base) border border-(--border) flex items-center justify-center text-(--brand-ink) mb-4">
-                <Grid className="w-7 h-7" />
+            <div className="studio-empty">
+              <div className="studio-empty-art" aria-hidden="true">
+                <svg viewBox="0 0 220 120"><path d="M8 14h46v20H8zM8 50h46v20H8zM8 86h46v20H8zM88 32h46v20H88zM88 74h46v20H88zM166 53h46v20h-46z" /><path className="studio-empty-lines" d="M54 24h17v18h17M54 60h17V42M54 96h17V84h17M134 42h16v21h16M134 84h16V63" /></svg>
               </div>
-              <h3 className="text-xl font-heading font-bold text-(--text-primary) tracking-tight mb-2">
-                Your bracket canvas is ready
-              </h3>
-              <p className="text-xs text-(--text-muted) max-w-sm mb-4">
+              <h3>Your bracket canvas is ready</h3>
+              <p>
                 Describe a tournament, create one manually, or import a roster. Your connected bracket will appear here.
               </p>
               <button

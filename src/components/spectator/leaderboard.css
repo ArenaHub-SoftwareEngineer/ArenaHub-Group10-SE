@@ -1,6 +1,6 @@
 /* Player leaderboard (M10). Table rules come from .published-standings; this file adds only what differs. */
 .player-leaderboard .page-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-.leaderboard-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.leaderboard-live { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-secondary); }
 .leaderboard-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
 @media (prefers-reduced-motion: no-preference) { .leaderboard-live i { animation: leaderboard-pulse 1.8s ease-in-out infinite; } }
 @keyframes leaderboard-pulse { 50% { opacity: .35; } }
@@ -20,10 +20,10 @@
 .leaderboard-panel abbr { text-decoration: none; }
 
 .leaderboard-notes { display: grid; gap: 10px; margin-top: 12px; }
-.leaderboard-note { font-size: 13px; color: var(--text-secondary); }
-.leaderboard-sources summary { cursor: pointer; font-size: 13px; color: var(--text-secondary); width: fit-content; }
+.leaderboard-note { font-size: var(--fs-xs); color: var(--text-secondary); }
+.leaderboard-sources summary { cursor: pointer; font-size: var(--fs-xs); color: var(--text-secondary); width: fit-content; }
 .leaderboard-sources ul { display: grid; gap: 6px; margin-top: 8px; }
-.leaderboard-sources li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.leaderboard-sources li { display: flex; justify-content: space-between; gap: 12px; font-size: var(--fs-xs); padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
 .leaderboard-sources small { color: var(--text-muted); white-space: nowrap; }
 
 /* Phones: rank and player stay pinned while the numbers scroll beside them. */
@@ -42,4 +42,4 @@
 
 .leaderboard-summary { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 560px) { .leaderboard-summary { grid-template-columns: repeat(2, 1fr); } }
-.leaderboard-mvp { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; background: var(--brand-soft); color: var(--brand-ink); border: 1px solid var(--brand-border); vertical-align: 1px; }
+.leaderboard-mvp { display: inline-block; margin-left: 8px; padding: 1px 6px; border-radius: 4px; font-size: var(--fs-xs); font-weight: 700; background: var(--brand-soft); color: var(--brand-ink); border: 1px solid var(--brand-border); vertical-align: 1px; }

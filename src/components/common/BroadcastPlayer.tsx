@@ -4,6 +4,7 @@ import { matchBroadcasts, type BroadcastPlatform } from '../../lib/streamUtils';
 import { PLATFORM_NAMES } from '../ui/PlatformLogo';
 import { ExternalLink, RotateCcw, VideoOff } from 'lucide-react';
 import './Broadcasting.css';
+import { ArenaHero } from '../three/ArenaHero';
 
 /**
  * The ArenaHub player. It carries ArenaHub's own branding; the platform behind the stream (YouTube, Facebook)
@@ -28,7 +29,7 @@ export function BroadcastPlayer({ match, compact = false }: { match: Match; comp
     </header>
     <div className="broadcast-video">{source
       ? <iframe key={`${source.href}:${attempt}`} src={source.href} title={`${teams} · ArenaHub Live`} allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
-      : <div className="broadcast-video-empty"><VideoOff size={29} /><strong>Broadcast unavailable</strong><p>The organizer has not attached a supported player to this match.</p></div>}</div>
+      : <div className="broadcast-video-empty"><ArenaHero className="broadcast-slate" decorative /><VideoOff size={29} /><strong>{match.status === 'live' ? 'Broadcast starting soon' : 'Broadcast unavailable'}</strong><p>{match.status === 'live' ? 'The match is on. The organizer is attaching the video now.' : 'The organizer has not attached a supported player to this match.'}</p></div>}</div>
     {current && <footer className="broadcast-player-footer"><p>Streaming from {PLATFORM_NAMES[current.platform]}. Quality and captions are in the player's settings.</p><div>
       <button type="button" onClick={() => setAttempt(value => value + 1)} aria-label={`Reload ${teams} video`}><RotateCcw size={12} />Reload</button>
       <a href={current.url} target="_blank" rel="noopener noreferrer">Open original <ExternalLink size={11} /></a>

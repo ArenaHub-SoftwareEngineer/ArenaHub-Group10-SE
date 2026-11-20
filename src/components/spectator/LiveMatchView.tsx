@@ -8,12 +8,14 @@ import { useToast } from '../ui/Toast';
 import { CollegeLogo } from '../common/CollegeLogo';
 import { MatchRostersAndCareerStats } from './MatchRostersAndCareerStats';
 import { WatchCardView } from './WatchCardView';
+import { ShareMatchDialog } from './ShareMatchDialog';
 import { LiveChatPanel } from './LiveChatPanel';
 import { MatchTimeline } from './MatchTimeline';
 import { MatchPlayerStatsSummary } from './MatchPlayerStatsSummary';
 import { hasPlayerStats } from '../../lib/matchStats';
 import { MVPCard } from '../ui/MVPCard';
 import { ChevronDown, ExternalLink, Link2 } from '../ui/Icons';
+import { formatViewers, useViewerCounts, useWatchPresence } from '../../lib/presence';
 
 interface LiveMatchViewProps {
   match: Match; gameName?: string; gameImage?: string; currentUser: User; onBack: () => void; readOnly?: boolean;
@@ -33,11 +35,11 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
   const links = matchBroadcasts(match);
   // Only real entries: without recorded stats the table would show every player at 0/0/0.
   const hasStats = hasPlayerStats(match);
+  // This viewer counts toward the match while the page is open; Up next shows the other live counts.
+  const viewers = useWatchPresence(match.id, match.status === 'live');
+  const upNextCounts = useViewerCounts(upNext.filter(card => card.state === 'live').map(card => card.match.id));
 
-  const share = async () => {
-    try { await navigator.clipboard.writeText(window.location.href); showToast('Link copied. Anyone with ArenaHub access can open this match.', 'success'); }
-    catch { showToast('Copy the address from your browser bar to share this match.', 'info'); }
-  };
+  const [sharing, setSharing] = useState(false);
 
   return <div className="watch-page">
     <div className="watch-primary">
@@ -49,9 +51,10 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
         <div className="watch-channel-block">
           <span className="watch-channel-avatar">{gameImage ? <img src={gameImage} alt="" /> : initials(gameName || 'ArenaHub')}</span>
           <span><strong>{gameName || 'ArenaHub'}</strong><small>{[match.roundName, match.matchFormat].filter(Boolean).join(' · ')}</small></span>
+          {match.status === 'live' && typeof viewers === 'number' && viewers > 0 && <span className="watch-viewers-inline" aria-live="off">{formatViewers(viewers)}</span>}
         </div>
         <div className="watch-actions">
-          <button type="button" className="watch-action" onClick={() => void share()}><Link2 size={18} />Share</button>
+          <button type="button" className="watch-action" aria-haspopup="dialog" onClick={() => setSharing(true)}><Link2 size={18} />Share</button>
           {links[0] && <a className="watch-action" href={links[0].url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} />Open original</a>}
         </div>
       </div>
@@ -69,12 +72,14 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
       </section>
     </div>
 
+    <ShareMatchDialog open={sharing} onClose={() => setSharing(false)} match={match} gameName={gameName} canInvite={canPost} />
+
     <aside className="watch-secondary">
       <LiveChatPanel matchId={match.id} currentUser={currentUser} readOnly={readOnly} canPost={canPost} />
 
       {upNext.length > 0 && onOpenCard && <section className="watch-upnext" aria-labelledby="watch-upnext-title">
         <h2 id="watch-upnext-title">Up next</h2>
-        <div className="watch-upnext-list">{upNext.map(card => <WatchCardView key={card.match.id} card={card} layout="row" onOpen={onOpenCard} />)}</div>
+        <div className="watch-upnext-list">{upNext.map(card => <WatchCardView key={card.match.id} card={card} layout="row" viewers={upNextCounts[card.match.id]} onOpen={onOpenCard} />)}</div>
       </section>}
     </aside>
   </div>;

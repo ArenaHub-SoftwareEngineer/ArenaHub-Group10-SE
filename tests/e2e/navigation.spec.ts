@@ -38,15 +38,15 @@ test('admin navigation shows the current page and works on narrow screens', asyn
     await expect(drawer).toBeHidden();
     await expect(more).toBeFocused();
     await more.click();
-    await nav.getByRole('link', { name: 'Game catalog' }).click();
+    await nav.getByRole('link', { name: 'Games', exact: true }).click();
     await expect(drawer).toBeHidden();
     const current = page.getByRole('button', { name: 'More pages. Current page: Game catalog' });
     await current.click();
-    await expect(nav.getByRole('link', { name: 'Game catalog' })).toHaveAttribute('aria-current', 'page');
+    await expect(nav.getByRole('link', { name: 'Games', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.keyboard.press('Escape');
   } else {
-    await nav.getByRole('link', { name: 'Game catalog' }).click();
-    await expect(nav.getByRole('link', { name: 'Game catalog' })).toHaveAttribute('aria-current', 'page');
+    await nav.getByRole('link', { name: 'Games', exact: true }).click();
+    await expect(nav.getByRole('link', { name: 'Games', exact: true })).toHaveAttribute('aria-current', 'page');
   }
   await expect(page.getByRole('heading', { name: 'Game catalog' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);

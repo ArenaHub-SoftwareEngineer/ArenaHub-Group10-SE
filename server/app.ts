@@ -6,6 +6,7 @@ import { createAiRouter } from './ai';
 import { createFairPlayRouter } from './fairPlay';
 import { createIntegrityRouter } from './integrity';
 import { publicAccessGuard } from './publicAccess';
+import { createPresenceRouter } from './presence';
 import { corsPolicy } from './cors';
 import { adminMode } from './firebaseAdmin';
 import { publicErrorHandler, securityHeaders } from './securityHeaders';
@@ -41,6 +42,7 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
       firebaseAccess: access,
     });
   });
+  app.use('/api/presence', cors, createPresenceRouter());
   app.use('/api/ai', cors, createAiRouter(env));
   app.use('/api/fair-play', cors, createFairPlayRouter(env));
   if (options.integrity !== false) app.use('/api/integrity', cors, createIntegrityRouter(env));

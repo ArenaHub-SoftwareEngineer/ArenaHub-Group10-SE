@@ -8,7 +8,7 @@ import { TournamentBracketCanvas } from './TournamentBracketCanvas';
 import { PlacementStandingsView } from './PlacementStandingsView';
 import { PublishedScheduleDialog } from '../common/SchedulePage';
 import { FAIR_PLAY_GAMES } from '../../lib/fairPlayGames';
-import { ArrowLeft, Calendar, ChevronDown, ChevronRight, Radio } from '../ui/Icons';
+import { ArrowLeft, Calendar, Check, ChevronDown, ChevronRight, Radio } from '../ui/Icons';
 
 interface BracketsViewProps {
   tournament: Tournament;
@@ -136,18 +136,32 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
         })()}
       </section>
 
-      {/* One toolbar: view tabs on the left, the tournament switcher on the right (it changes context, not the view). */}
+      {/* Switch tournament: pick by the game's picture. */}
+      {publishedBrackets.length > 1 && <div className="bracket-switcher" role="group" aria-labelledby="bracket-switcher-title">
+        <span id="bracket-switcher-title" className="bracket-switcher-title">Switch tournament</span>
+        <div className="bracket-switcher-row">
+          {publishedBrackets.map(bracket => {
+            const art = FAIR_PLAY_GAMES.find(game => `game-${game.id}` === publicationGameKey(bracket))?.image;
+            const active = activeBracket.status === 'published' && bracket.id === activeBracket.id;
+            const liveCount = bracket.matches.filter(match => match.status === 'live').length;
+            return <button key={bracket.id} type="button" className={`bracket-switch-card${active ? ' is-active' : ''}`} aria-pressed={active} onClick={() => setSelectedBracketId(bracket.id)}>
+              <span className="bracket-switch-art">
+                {art ? <img src={art} alt="" loading="lazy" /> : <span className="bracket-switch-art-blank" />}
+                {liveCount > 0 && <span className="watch-badge watch-badge-live">{liveCount} live</span>}
+                {active && <span className="bracket-switch-check" aria-hidden="true"><Check size={14} strokeWidth={3} /></span>}
+              </span>
+              <span className="bracket-switch-text"><strong>{bracket.title}</strong><small>{bracket.gameName} · {bracket.teamsCount} {bracket.placement ? 'squads' : 'teams'}</small></span>
+            </button>;
+          })}
+        </div>
+      </div>}
+
+      {/* View tabs. */}
       <div className="page-toolbar">
         {!activeBracket.placement ? <div className="ah-tabs" role="tablist" aria-label="Bracket views">
           {([['bracket', 'Bracket'], ['standings', 'Standings']] as const).map(([id, label]) =>
             <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id)}>{label}</button>)}
         </div> : <span />}
-        {publishedBrackets.length > 1 && <label className="module-form viewer-bracket-selector viewer-bracket-switch">Switch tournament
-          <select value={activeBracket.status === 'published' ? activeBracket.id : ''} onChange={event => setSelectedBracketId(event.target.value)}>
-            {activeBracket.status !== 'published' && <option value="" disabled>Choose a published bracket</option>}
-            {publishedBrackets.map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.gameName} · {bracket.title}</option>)}
-          </select>
-        </label>}
       </div>
 
       {activeBracket.placement ? <PlacementStandingsView event={activeBracket.placement} /> : <>
