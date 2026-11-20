@@ -5,6 +5,7 @@
 | Date | What | Commit | By |
 |---|---|---|---|
 | 20 Nov 2026 | Firestore rules (first deploy from this repository) and the website to Firebase Hosting site `arenahub-platform` (https://arenahub-platform.web.app), project `wmsu-arl-hub` | `02eb76d` | Kerr's typed approval; checked first with lint, 294 unit, API, video, integrity, pre-match and 40 rules tests, and the build |
+| 20 Nov 2026 | Redeploy of rules (adds anonymous chat names) and the website (redesign, viewer counts, sharing, app icons, anti-cheat practice scan) | `2ad0e55` | Kerr's typed approval; checked with lint, 308 unit, API, integrity, pre-match and 41 rules tests, and the build; live page opened on phone and desktop with no browser errors |
 
 Not yet done: storage rules (Blaze only), an API host (step 3), staff claims (step 6), the TTL policies below, and migrating any data left in the old single-document store (`scripts/migrate-brackets.ts`, dry run first). Until there is an API host, Arena AI on the live site answers from the live records on the viewer's device, and video review, `@Arena` in chat and the Match monitor are unavailable there. Until staff claims are granted, nobody can publish or manage tournaments on the live site.
 
