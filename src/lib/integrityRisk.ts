@@ -254,6 +254,15 @@ export function inspectionCoverage(platform: MonitorPlatform, facts: unknown): {
 }
 
 const signal = (id: SignalId, evidence: string, level: Severity = SIGNAL_CATALOG[id].severity): Signal => ({ id, severity: level, evidence: evidence.slice(0, 200) });
+// The fingerprint goes last and is never cut off by the 200-character limit, so staff can always add it to the list.
+const HASH_SUFFIX = ' SHA-256 '.length + 64;
+const withHash = (text: string, sha256?: string) => sha256 ? `${text.slice(0, 200 - HASH_SUFFIX)} SHA-256 ${sha256}` : text;
+
+/** Findings about one file on a PC. A referee who confirms one can add its fingerprint, so renamed copies on other PCs are caught. */
+export const FINGERPRINTABLE_SIGNALS: ReadonlySet<string> = new Set<SignalId>(['cheat-file-found', 'suspicious-program-running', 'untrusted-game-module']);
+export function reportedFingerprint(signal: { id: string; evidence: string }): string | undefined {
+  return FINGERPRINTABLE_SIGNALS.has(signal.id) ? /SHA-256 ([0-9a-f]{64})$/.exec(signal.evidence)?.[1] : undefined;
+}
 
 /** Turns one device report into signals. The server re-checks every list against its own config. */
 export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: MonitorGame, options: { recordingRequired?: boolean } = {}): Signal[] {
@@ -278,7 +287,7 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
     }
     for (const module of facts.untrustedModules || []) {
       const hash = module.sha256 && config.pc.blockedFileHashes?.find(entry => entry.sha256 === module.sha256);
-      out.push(signal('untrusted-game-module', `${module.name} in dota2.exe: ${module.status}${module.signer ? `, signer ${module.signer}` : ''}${hash ? ` (matches ${hash.label})` : ''}${module.sha256 ? ` SHA-256 ${module.sha256}` : ''}`, hash ? 'critical' : undefined));
+      out.push(signal('untrusted-game-module', withHash(`${module.name} in dota2.exe: ${module.status}${module.signer ? `, signer ${module.signer}` : ''}${hash ? ` (matches ${hash.label})` : ''}`, module.sha256), hash ? 'critical' : undefined));
     }
     const dota = facts.dota;
     if (dota?.found) {
@@ -299,12 +308,12 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
       const entry = listedEntry(file.listedAs);
       // A listed name the server does not recognise any more (list changed) is not reported.
       if (file.listedAs && !entry && !hash) continue;
-      out.push(signal('cheat-file-found', `${file.folder}: ${file.name} - ${hash ? hash.label : entry ? `${file.reason}: ${entry.label}` : file.reason}`, hash?.severity || entry?.severity || file.severity));
+      out.push(signal('cheat-file-found', withHash(`${file.folder}: ${file.name} - ${hash ? hash.label : entry ? `${file.reason}: ${entry.label}` : file.reason}`, file.sha256), hash?.severity || entry?.severity || file.severity));
     }
     for (const program of facts.suspiciousPrograms || []) {
       const entry = listedEntry(program.listedAs);
       if (program.listedAs && !entry) continue;
-      out.push(signal('suspicious-program-running', `${program.name}: ${entry ? `${program.reason}: ${entry.label}` : program.reason}${program.sha256 ? ` SHA-256 ${program.sha256}` : ''}`, entry ? entry.severity : program.severity === 'high' ? 'critical' : program.severity === 'medium' ? 'high' : 'medium'));
+      out.push(signal('suspicious-program-running', withHash(`${program.name}: ${entry ? `${program.reason}: ${entry.label}` : program.reason}`, program.sha256),entry ? entry.severity : program.severity === 'high' ? 'critical' : program.severity === 'medium' ? 'high' : 'medium'));
     }
     if (facts.checks && Object.values(facts.checks).some(status => status === 'failed' || status === 'partial')) out.push(signal('checks-incomplete', Object.entries(facts.checks).filter(([, state]) => state === 'failed' || state === 'partial').map(([name, state]) => `${name}: ${state}`).join(', ')));
     if (game === 'dota2' && !facts.gameRunning) out.push(signal('dota-not-running', 'dota2.exe was not running'));

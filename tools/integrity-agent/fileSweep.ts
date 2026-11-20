@@ -116,15 +116,19 @@ export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, opti
     const content = await readRange(path, info.size);
     const traits = analyzeContent(content);
     const whole = content.length === info.size;
-    const sha256 = policy.blockedFileHashes.length && traits.kind !== 'text' && whole ? createHash('sha256').update(content).digest('hex') : undefined;
-    if (sha256 && policy.blockedFileHashes.includes(sha256)) add({ name, folder, reason: 'Matches a staff file fingerprint', sha256, severity: 'high' });
+    // Hashed only when needed: to compare with the staff list, or to attach to a finding so staff can add it to that list.
+    let digest: string | undefined;
+    const fingerprint = () => traits.kind !== 'text' && whole ? (digest ??= createHash('sha256').update(content).digest('hex')) : undefined;
+    const listed = policy.blockedFileHashes.length ? fingerprint() : undefined;
+    if (listed && policy.blockedFileHashes.includes(listed)) add({ name, folder, reason: 'Matches a staff file fingerprint', sha256: listed, severity: 'high' });
     if (traits.kind === 'zip') {
       for (const verdict of judgeArchive(name, traits, lists)) add({ name: verdict.name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity });
       return;
     }
     // Name and internal-identity verdicts do not depend on a signature; behaviour verdicts wait for it.
-    for (const verdict of judgeTraits(name, traits, lists, 'valid')) add({ name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity, ...(sha256 ? { sha256 } : {}) });
-    if (needsSignature(traits)) unsigned.push({ path, name, folder, traits, ...(sha256 ? { sha256 } : {}) });
+    for (const verdict of judgeTraits(name, traits, lists, 'valid')) { const sha256 = fingerprint(); add({ name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity, ...(sha256 ? { sha256 } : {}) }); }
+    // The content is released after this function, so a file still waiting for its signature check keeps its fingerprint.
+    if (needsSignature(traits)) { const sha256 = fingerprint(); unsigned.push({ path, name, folder, traits, ...(sha256 ? { sha256 } : {}) }); }
   };
 
   const visit = async (root: SweepRoot, path: string, relative: string[]): Promise<void> => {

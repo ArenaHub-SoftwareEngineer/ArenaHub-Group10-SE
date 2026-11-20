@@ -7,6 +7,7 @@ const PLAYER_PATHS = [
   /^\/join\.html$/,
   /^\/api\/integrity\/device\/[a-z]+(\/[A-Za-z0-9]{1,12})?$/,
   /^\/api\/integrity\/downloads\/[a-z0-9.-]+$/,
+  /^\/api\/integrity\/practice\/(policy|check)$/,
   /^\/api\/integrity\/dota\/gsi$/,
 ];
 

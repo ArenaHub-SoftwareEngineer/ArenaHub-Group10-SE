@@ -97,3 +97,14 @@ test('Battle Royale public rosters survive storage hydration and include every s
   assert.equal(resolved.game, 'codm-br'); assert.equal(resolved.players.length, 12);
   assert.throws(() => scanMatch({ brackets: [empty], revision: '1', checkedAt: '' }, event.placement!.games[0].id), /named players/);
 });
+
+test('practice verdict uses the official rules but never clears anyone', async () => {
+  const { practiceVerdict } = await import('../src/lib/practiceScan');
+  const { scan: _, ...unstamped } = pc();
+  const clean = practiceVerdict('dota2', unstamped, config(), now);
+  assert.equal(clean.status, 'ready'); assert.equal(clean.label, 'No cheats found'); assert.equal(clean.validUntil, null);
+  const sha = 'd'.repeat(64);
+  const found = practiceVerdict('dota2', { ...unstamped, fileFindings: [{ name: 'loader.exe', folder: 'Downloads', reason: 'Unsigned program that targets dota2.exe', sha256: sha, severity: 'high' }] }, config(), now);
+  assert.equal(found.status, 'blocked');
+  assert.deepEqual(found.blockers, ['Downloads: loader.exe - Unsigned program that targets dota2.exe'], 'players see the file and reason, not the fingerprint');
+});

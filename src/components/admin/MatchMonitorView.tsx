@@ -26,7 +26,7 @@ interface SessionView {
   iosClearance?: IosClearance | null;
 }
 interface SessionDetail extends SessionView {
-  signals: { id: string; severity: Severity; evidence: string; firstSeen: number; lastSeen: number; count: number; title: string; explain: string; category: SignalCategory }[];
+  signals: { id: string; severity: Severity; evidence: string; firstSeen: number; lastSeen: number; count: number; title: string; explain: string; category: SignalCategory; fingerprint?: { sha256: string; listed: boolean } }[];
   media: { id: number; kind: 'video' | 'image'; bytes: number; createdAt: number }[];
   audit: { at: number; actor: string; action: string; note: string }[];
   lastFacts?: { dota?: { found: boolean; buildId?: string; manifestSha256?: string; updatePending?: boolean } } | null;
@@ -73,6 +73,17 @@ function textToHashes(text: string) {
     return { sha256, ...entry };
   });
 }
+/** A referee fills these in by hand: software cannot know who is watching or where the recording comes from. */
+export const NOTE_BLANK = '[fill in]';
+/** Drafts the iPhone inspection note from the indicator answers, so the referee only adds what they saw. */
+export function iosNoteDraft(s: Pick<SessionDetail, 'playerName' | 'matchLabel' | 'device'>, indicators: Partial<Record<IosIndicator, 'clear' | 'found'>>) {
+  const found = IOS_INDICATOR_KEYS.filter(key => indicators[key] === 'found').map(key => IOS_SIDELOAD_INDICATORS[key].found);
+  return [
+    `Inspected ${s.playerName}'s ${[s.device?.model, s.device?.os].filter(Boolean).join(' ') || 'iPhone'} for ${s.matchLabel}. Device and in-game account matched the roster.`,
+    found.length ? `Found: ${found.join('; ')}. The player was told how to remove it.` : `All ${IOS_INDICATOR_KEYS.length} sideload and jailbreak indicators were not present.`,
+    `Recording source: ${NOTE_BLANK}. Supervising referee: ${NOTE_BLANK}.`,
+  ].join(' ');
+}
 export function caseSummary(s: SessionDetail) {
   return [
     `[Match monitor] ${s.playerName} - ${s.matchLabel} (${s.gameLabel}, ${DEVICE_LABEL[s.platform]})`,
@@ -100,6 +111,7 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
   const [cheatId, setCheatId] = useState(''), [seenNote, setSeenNote] = useState(''), [seenLevel, setSeenLevel] = useState<Severity>('medium');
   const [iosChecks, setIosChecks] = useState<Partial<Record<keyof typeof IOS_INSPECTION_CHECKS, boolean>>>({}), [iosNote, setIosNote] = useState('');
   const [iosIndicators, setIosIndicators] = useState<Partial<Record<IosIndicator, 'clear' | 'found'>>>({});
+  const [blocking, setBlocking] = useState<{ sha256: string; label: string } | null>(null);
   const indicatorFound = IOS_INDICATOR_KEYS.some(key => iosIndicators[key] === 'found');
   const load = useCallback(() => call<SessionDetail>(`/sessions/${id}`).then(d => { setDetail(d); setError(''); }).catch(e => setError(e.message)), [id]);
   useEffect(() => { void load(); const timer = setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
@@ -119,16 +131,19 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
           {detail.iosClearance && <p className="field-hint">Last reviewed at {time(detail.iosClearance.reviewedAt)} by {detail.iosClearance.actor}. {detail.iosClearance.note}</p>}
           <form className="module-form" onSubmit={event => { event.preventDefault(); void act(async () => { await call(`/sessions/${id}/ios-review`, { body: { approved: true, checks: iosChecks, indicators: iosIndicators, note: iosNote } }); setIosChecks({}); setIosIndicators({}); setIosNote(''); }, 'iPhone inspection saved. Supervised clearance lasts up to 15 minutes.'); }}>
             {Object.entries(IOS_INSPECTION_CHECKS).map(([key, label]) => <label className="settings-toggle" key={key}>{label}<input type="checkbox" required checked={iosChecks[key as keyof typeof IOS_INSPECTION_CHECKS] === true} onChange={event => setIosChecks(checks => ({ ...checks, [key]: event.target.checked }))} /></label>)}
-            <fieldset className="ios-indicators"><legend>Sideload and jailbreak indicators</legend>
+            <fieldset className="ios-indicators"><legend>Sideload and jailbreak indicators <span className="ios-progress">Checked {IOS_INDICATOR_KEYS.filter(key => iosIndicators[key]).length} of {IOS_INDICATOR_KEYS.length}</span></legend>
               <p className="field-hint">Check each place on the phone with the player. Any indicator marked found blocks approval until it is removed and the phone is inspected again.</p>
               {IOS_INDICATOR_KEYS.map(key => { const item = IOS_SIDELOAD_INDICATORS[key]; return <div className="ios-indicator" key={key} role="radiogroup" aria-label={item.found}>
                 <p><strong>{item.where}</strong><br />{item.found}. <span className="field-hint">{item.why}</span></p>
                 <div className="ah-choice">{([['clear', 'Not present'], ['found', 'Found']] as const).map(([value, label]) => <label key={value} className={iosIndicators[key] === value ? 'is-active' : ''}><input type="radio" name={`ios-${key}`} value={value} required checked={iosIndicators[key] === value} onChange={() => setIosIndicators(current => ({ ...current, [key]: value }))} />{label}</label>)}</div>
+                {iosIndicators[key] === 'found' && <p className="ios-fix"><strong>Tell the player:</strong> {item.fix} Then check this place again.</p>}
               </div>; })}
             </fieldset>
             {indicatorFound && <p className="field-error" role="alert">An indicator is marked found. Revoke clearance with a note, or have the player remove it and inspect again.</p>}
             <label>iPhone inspection note<textarea required minLength={10} maxLength={2000} value={iosNote} onChange={event => setIosNote(event.target.value)} placeholder="Record the account, device, inspection findings, recording source and supervising referee." /></label>
-            <div className="operations-actions"><button className="arena-primary" disabled={busy || detail.status !== 'active' || indicatorFound}>Approve supervised iPhone</button><button type="button" className="arena-outline" disabled={busy || iosNote.trim().length < 10} onClick={() => void act(async () => { await call(`/sessions/${id}/ios-review`, { body: { approved: false, indicators: iosIndicators, note: iosNote } }); setIosChecks({}); setIosIndicators({}); setIosNote(''); }, 'iPhone clearance revoked. A new inspection is required before admission.')}>Revoke iPhone clearance</button></div>
+            <div className="operations-actions"><button type="button" className="arena-outline" disabled={busy || !IOS_INDICATOR_KEYS.every(key => iosIndicators[key])} onClick={() => setIosNote(iosNoteDraft(detail, iosIndicators))}>Write note from checks</button></div>
+            {iosNote.includes(NOTE_BLANK) && <p className="field-hint" role="status">Replace each {NOTE_BLANK} in the note before saving.</p>}
+            <div className="operations-actions"><button className="arena-primary" disabled={busy || detail.status !== 'active' || indicatorFound || iosNote.includes(NOTE_BLANK)}>Approve supervised iPhone</button><button type="button" className="arena-outline" disabled={busy || iosNote.trim().length < 10 || iosNote.includes(NOTE_BLANK)} onClick={() => void act(async () => { await call(`/sessions/${id}/ios-review`, { body: { approved: false, indicators: iosIndicators, note: iosNote } }); setIosChecks({}); setIosIndicators({}); setIosNote(''); }, 'iPhone clearance revoked. A new inspection is required before admission.')}>Revoke iPhone clearance</button></div>
           </form>
         </section>}
         <dl className="monitor-facts">
@@ -153,6 +168,13 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
         {!detail.signals.length ? <p className="field-hint">No signals yet.</p> : <ul className="monitor-signals">{detail.signals.map(s => <li key={`${s.id}${s.evidence}`} className={`sev-${s.severity}`}>
           <div className="operations-row"><strong>{s.title}</strong><span className="monitor-sev">{s.severity}</span></div>
           <p>{s.explain}</p><code>{s.evidence}</code><small>Seen {s.count} times · {time(s.firstSeen)} to {time(s.lastSeen)}</small>
+          {s.fingerprint && (s.fingerprint.listed ? <p className="field-hint">This file is on the fingerprint list. Copies on other PCs are flagged even when renamed.</p>
+            : blocking?.sha256 === s.fingerprint.sha256 ? <form className="module-form monitor-inline" onSubmit={e => { e.preventDefault(); void act(async () => { await call(`/sessions/${id}/block-fingerprint`, { body: blocking }); setBlocking(null); }, 'Fingerprint added. The same file is now flagged on every PC, even renamed. Players scanned before this change must scan again.'); }}>
+              <p className="field-hint">Only add a file you have confirmed is a cheat. Every PC with this exact file will be flagged.</p>
+              <label><Req>Name for this file</Req><input required minLength={2} value={blocking.label} maxLength={80} onChange={e => setBlocking({ ...blocking, label: e.target.value })} placeholder="e.g. Dota map hack loader" /></label>
+              <div className="operations-actions"><button className="arena-primary" disabled={busy || blocking.label.trim().length < 2}>Add fingerprint</button><button type="button" className="arena-outline" disabled={busy} onClick={() => setBlocking(null)}>Cancel</button></div>
+            </form>
+            : <button type="button" className="arena-outline" disabled={busy} onClick={() => setBlocking({ sha256: s.fingerprint!.sha256, label: '' })}>Confirmed cheat? Add its fingerprint</button>)}
         </li>)}</ul>}
         {unverified.length > 0 && <div className="module-notice"><strong>Game signature not trusted yet.</strong> Only trust a signature independently verified on a staff-controlled Android phone with the correct regional game from its official store.
           {unverified.map(s => { const cert = s.evidence.match(/[0-9a-f]{64}/)?.[0]; return cert && <button key={cert} type="button" className="arena-outline" disabled={busy} onClick={() => void act(() => call(`/sessions/${id}/trust-signature`, { body: { cert } }), 'Signature trusted. Phones with a different signature will now be flagged as critical.')}>Trust {cert.slice(0, 12)}...</button>; })}

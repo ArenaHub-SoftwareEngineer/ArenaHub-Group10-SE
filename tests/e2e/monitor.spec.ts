@@ -79,6 +79,39 @@ test('the 3D arena shows flagged players by category and opens their evidence', 
   expect(errors).toEqual([]);
 });
 
+test('a referee adds a flagged file\'s fingerprint from the session', async ({ page, request }, testInfo) => {
+  test.setTimeout(90_000);
+  const errors = watchErrors(page);
+  const staff = await staffHeaders(request);
+  const playerName = `Print ${testInfo.project.name}`;
+  // A fixed, harmless value: not the fingerprint of any real file.
+  const sha256 = testInfo.project.name === 'mobile-375' ? 'e'.repeat(64) : 'f'.repeat(64);
+  const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId: `print-${Date.now()}`, matchLabel: 'Fingerprint test', game: 'dota2', playerName, serverUrl: 'http://192.168.50.10:3000' } })).json();
+  const claim = await (await request.post('/api/integrity/device/claim', { data: { code: pair.code, device: { model: 'Test PC' } } })).json();
+  const finding = { name: 'dota_helper.exe', folder: 'Downloads', reason: 'Unsigned program that references dota2.exe', sha256, severity: 'high' };
+  expect((await request.post('/api/integrity/device/heartbeat', { headers: { Authorization: `Bearer ${claim.token}` }, data: { platform: 'pc', processes: [], gameRunning: true, screenshotOk: true, fileFindings: [finding] } })).ok()).toBe(true);
+  try {
+    await signIn(page, ORGANIZER);
+    await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
+    await page.locator('.monitor-session').filter({ hasText: playerName }).first().getByRole('button', { name: /open session/i }).click({ timeout: 20_000 });
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'Confirmed cheat? Add its fingerprint' }).click();
+    await dialog.getByLabel(/Name for this file/).fill('Dota helper loader');
+    await dialog.locator('li', { hasText: 'Cheat file found' }).screenshot({ path: testInfo.outputPath('fingerprint-form.png') });
+    await dialog.getByRole('button', { name: 'Add fingerprint', exact: true }).click();
+    await expect(dialog).toContainText('Fingerprint added.');
+    await expect(dialog).toContainText('This file is on the fingerprint list.');
+    await dialog.locator('li', { hasText: 'Cheat file found' }).screenshot({ path: testInfo.outputPath('fingerprint-listed.png') });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    expect(errors).toEqual([]);
+  } finally {
+    // Leave the shared test settings as they were.
+    const config = await (await request.get('/api/integrity/config', { headers: staff })).json();
+    config.pc.blockedFileHashes = (config.pc.blockedFileHashes || []).filter((entry: { sha256: string }) => entry.sha256 !== sha256);
+    await request.put('/api/integrity/config', { headers: staff, data: config });
+  }
+});
+
 const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1';
 const ANDROID = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 async function staffHeaders(request: any) {
@@ -106,8 +139,15 @@ test('one QR link: the join page adapts to Android, PC and iPhone', async ({ bro
   await pc.waitForTimeout(400);
   const p = await make('dota2', 'pc', 'Dusk');
   await pc.goto(`/join.html?c=${p.code}`);
+  // One click for a PC that has run the agent before; otherwise the download already carries the code.
+  const origin = new URL(pc.url()).origin;
+  await expect(pc.getByRole('link', { name: 'Start my scan' })).toHaveAttribute('href', `arenahub://scan?s=${encodeURIComponent(origin)}&c=${p.code}`);
+  const download = pc.getByRole('link', { name: /Download my scan/ });
+  await expect(download).toHaveAttribute('href', `/api/integrity/downloads/arenahub-agent.exe?code=${p.code}`);
+  await pc.getByText('Start it by typing a command instead').click();
   await expect(pc.locator('#command')).toHaveText(new RegExp(`^arenahub-agent\\.exe --server http://[^ ]+ --code ${p.code}$`));
-  await expect(pc.getByRole('link', { name: /Download the agent/ })).toHaveAttribute('href', '/api/integrity/downloads/arenahub-agent.exe');
+  expect(await pc.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  await pc.locator('#pc').screenshot({ path: test.info().outputPath('join-pc.png') });
   await pc.close();
 });
 

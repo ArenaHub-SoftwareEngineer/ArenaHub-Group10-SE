@@ -13,7 +13,8 @@ import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFOR
 import { HEARTBEAT_SECONDS, IntegrityStore, type SessionRow } from './integrityStore.ts';
 import { AuthError, verifyStaffToken } from './staffAuth.ts';
 import { clientAddress } from './publicAccess.ts';
-import { inspectionCoverage } from '../src/lib/integrityRisk.ts';
+import { inspectionCoverage, reportedFingerprint } from '../src/lib/integrityRisk.ts';
+import { PRACTICE_NOTE, practicePlatform, practiceVerdict } from '../src/lib/practiceScan.ts';
 import { monitorAddress } from '../src/lib/monitorAddress.ts';
 import { originAllowed } from './cors.ts';
 import { publishedReader, type PublishedReader } from './data.ts';
@@ -84,13 +85,14 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     lastCall.set(key, now); return false;
   };
 
-  const deviceConfig = (row: SessionRow) => {
+  /** What a device checks for. Official and practice scans get the same lists. */
+  const deviceLists = (platform: 'android' | 'pc', game: MonitorGame) => {
     const config = store.config();
-    if (row.platform === 'ios') return {};
-    return row.platform === 'android'
-      ? { gamePackages: row.game === 'mlbb' ? config.android.games.mlbb.packages : config.android.games.codm.packages, blockedPackages: config.android.blockedPackages.map(e => e.match), blockedCertificates: (config.android.blockedCertificates || []).map(e => e.sha256), scan: { challenge: row.scan_challenge, policyVersion: store.policyVersion() } }
-      : { blockedProcesses: config.pc.blockedProcesses.map(e => e.match), blockedApplications: (config.pc.blockedApplications || []).map(e => e.match), blockedFileHashes: (config.pc.blockedFileHashes || []).map(e => e.sha256), blockedModules: (config.pc.blockedModules || []).map(e => e.match), fileSweep: config.pc.fileSweep === true, scan: { challenge: row.scan_challenge, policyVersion: store.policyVersion() } };
+    return platform === 'android'
+      ? { gamePackages: game === 'mlbb' ? config.android.games.mlbb.packages : config.android.games.codm.packages, blockedPackages: config.android.blockedPackages.map(e => e.match), blockedCertificates: (config.android.blockedCertificates || []).map(e => e.sha256) }
+      : { blockedProcesses: config.pc.blockedProcesses.map(e => e.match), blockedApplications: (config.pc.blockedApplications || []).map(e => e.match), blockedFileHashes: (config.pc.blockedFileHashes || []).map(e => e.sha256), blockedModules: (config.pc.blockedModules || []).map(e => e.match), fileSweep: config.pc.fileSweep === true };
   };
+  const deviceConfig = (row: SessionRow) => row.platform === 'ios' ? {} : { ...deviceLists(row.platform, row.game), scan: { challenge: row.scan_challenge, policyVersion: store.policyVersion() } };
   const sessionView = (row: SessionRow) => ({
     id: row.id, matchId: row.match_id, matchLabel: row.match_label, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, team: row.team, record: row.record === 1,
     expectedSteamId: row.expected_steam_id, status: row.status, connection: store.connection(row), createdAt: row.created_at, expiresAt: row.expires_at, claimedAt: row.claimed_at,
@@ -105,7 +107,11 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   router.get('/downloads/:name', (req, res) => {
     const name = String(req.params.name);
     if (!Object.hasOwn(DOWNLOADS, name) || !available().includes(name)) { res.status(404).type('text/plain').send('This download is not on the laptop yet. Ask the referee.'); return; }
-    res.download(resolve(downloadDir, name), name, { headers: { 'Content-Type': DOWNLOADS[name], 'X-Content-Type-Options': 'nosniff' } });
+    // ?code= names the agent arenahub-scan-<CODE>.exe, so double-clicking the download already knows the
+    // player's scan code. The file itself is identical; only the saved name changes.
+    const code = typeof req.query.code === 'string' ? req.query.code.toUpperCase() : '';
+    const saveAs = name === 'arenahub-agent.exe' && /^[A-Z2-9]{8}$/.test(code) ? `arenahub-scan-${code}.exe` : name;
+    res.download(resolve(downloadDir, name), saveAs, { headers:{ 'Content-Type': DOWNLOADS[name], 'X-Content-Type-Options': 'nosniff' } });
   });
 
   // ---------- Device routes ----------
@@ -124,6 +130,26 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const row = claimed.session;
     res.json({ token: claimed.token, ...(claimed.gsiToken ? { gsiToken: claimed.gsiToken } : {}), sessionId: row.id, game: row.game, gameLabel: GAME_LABEL[row.game], platform: row.platform, playerName: row.player_name, matchLabel: row.match_label, expiresAt: row.expires_at, heartbeatSeconds: HEARTBEAT_SECONDS, record: row.record === 1, monitor: deviceConfig(row) });
   });
+  // ---------- Practice scan (no code) ----------
+  // Players check their own device before match day. Nothing here is stored or linked to a match.
+  const practiceGame = (value: unknown) => typeof value === 'string' && (MONITOR_GAMES as readonly string[]).includes(value) && practicePlatform(value as MonitorGame) ? value as MonitorGame : null;
+  router.post('/practice/policy', express.json({ limit: '1kb' }), (req, res) => {
+    const game = practiceGame(req.body?.game);
+    if (!game) { res.status(400).json({ error: 'Choose Mobile Legends, CODM or Dota 2.' }); return; }
+    if (tooManyLookups(clientAddress(req))) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
+    const platform = practicePlatform(game)!;
+    // The PC agent judges its practice scan on the PC itself, so it needs the rules, not just the lists.
+    res.json({ game, gameLabel: GAME_LABEL[game], platform, monitor: deviceLists(platform, game), ...(platform === 'pc' ? { config: store.config() } : {}), note: PRACTICE_NOTE });
+  });
+  // The Android app cannot run the TypeScript rules, so it sends its findings once and gets the verdict back.
+  router.post('/practice/check', express.json({ limit: '64kb' }), (req, res) => {
+    if (tooFast(`practice:${clientAddress(req)}`, 3000)) { res.status(429).json({ error: 'Wait a few seconds before checking again.' }); return; }
+    const game = practiceGame(req.body?.game);
+    const facts = deviceFactsSchema.safeParse(req.body?.facts);
+    if (!game || !facts.success || facts.data.platform !== practicePlatform(game)) { res.status(400).json({ error: 'Update the app and try the practice scan again.' }); return; }
+    const verdict = practiceVerdict(game, facts.data, store.config());
+    res.json({ ...verdict, note: PRACTICE_NOTE });
+  });
   // The join page reads what a code is for (device type, game, player) before the player decides. The code stays unused.
   router.get('/device/pairing/:code', (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -131,7 +157,8 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const code = String(req.params.code);
     const row = /^[A-Za-z0-9]{8}$/.test(code) ? store.pending(code) : undefined;
     if (!row) { res.status(404).json({ error: 'That pairing code is wrong, already used or expired. Ask the referee for a new one.' }); return; }
-    res.json({ platform: row.platform, game: row.game, gameLabel: GAME_LABEL[row.game], playerName: row.player_name, matchLabel: row.match_label, record: row.record === 1, codeExpiresAt: row.code_expires_at });
+    // folderCheck lets the PC agent ask for consent once, covering the folder check too.
+    res.json({ platform: row.platform, game: row.game, gameLabel: GAME_LABEL[row.game], playerName: row.player_name, matchLabel: row.match_label, record: row.record === 1, codeExpiresAt: row.code_expires_at, ...(row.platform === 'pc' ? { folderCheck: store.config().pc.fileSweep === true } : {}) });
   });
   router.post('/device/decline', express.json({ limit: '2kb' }), (req, res) => {
     const code = typeof req.body?.code === 'string' ? req.body.code : '';
@@ -283,7 +310,9 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   });
   staff.get('/sessions/:id', (req, res) => {
     const row = sessionOr404(req, res); if (!row) return;
-    res.json({ ...sessionView(row), signals: store.signals(row.id).map(s => ({ ...s, ...SIGNAL_CATALOG[s.id] && { title: SIGNAL_CATALOG[s.id].title, explain: SIGNAL_CATALOG[s.id].explain, category: SIGNAL_CATEGORY[s.id] } })), media: store.media(row.id), audit: store.auditFor(row.id), lastFacts: row.last_facts ? JSON.parse(row.last_facts) : null });
+    const listed = new Set((store.config().pc.blockedFileHashes || []).map(entry => entry.sha256));
+    const fingerprintOf = (s: { id: string; evidence: string }) => { const sha256 = row.platform === 'pc' ? reportedFingerprint(s) : undefined; return sha256 ? { fingerprint: { sha256, listed: listed.has(sha256) } } : {}; };
+    res.json({ ...sessionView(row), signals: store.signals(row.id).map(s => ({ ...s, ...SIGNAL_CATALOG[s.id] && { title: SIGNAL_CATALOG[s.id].title, explain: SIGNAL_CATALOG[s.id].explain, category: SIGNAL_CATEGORY[s.id] }, ...fingerprintOf(s) })), media: store.media(row.id), audit: store.auditFor(row.id), lastFacts: row.last_facts ? JSON.parse(row.last_facts) : null });
   });
   staff.post('/sessions/:id/end', (req, res) => {
     const row = sessionOr404(req, res); if (!row) return;
@@ -343,6 +372,24 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const config = store.config(), key = row.game === 'mlbb' ? 'mlbb' : 'codm';
     if (!config.android.games[key].trustedCertSha256.includes(cert)) config.android.games[key].trustedCertSha256.push(cert);
     store.saveConfig(config, uidOf(req)); store.audit(uidOf(req), 'signature-trusted', row.id, `${key} ${cert}`);
+    res.json(config);
+  });
+  // A referee confirmed that a flagged file is a cheat. Its fingerprint joins the PC list, so renamed copies on other PCs are caught too.
+  // Only a fingerprint this PC actually reported can be added here; anything else goes through the settings form.
+  staff.post('/sessions/:id/block-fingerprint', (req, res) => {
+    const row = sessionOr404(req, res); if (!row) return;
+    const sha256 = typeof req.body?.sha256 === 'string' ? req.body.sha256.toLowerCase() : '';
+    // "|" separates fields in the settings text box, so it cannot appear in a label.
+    const label = typeof req.body?.label === 'string' ? req.body.label.replace(/[|\s]+/g, ' ').trim() : '';
+    if (row.platform !== 'pc' || !/^[0-9a-f]{64}$/.test(sha256) || !store.signals(row.id).some(s => reportedFingerprint(s) === sha256)) { res.status(400).json({ error: 'Choose a file fingerprint reported by this PC.' }); return; }
+    if (label.length < 2 || label.length > 80) { res.status(400).json({ error: 'Name the file in 2 to 80 characters, for example "Dota map hack loader".' }); return; }
+    const config = store.config(), list = config.pc.blockedFileHashes || [];
+    if (!list.some(entry => entry.sha256 === sha256)) {
+      if (list.length >= 300) { res.status(400).json({ error: 'The fingerprint list is full (300). Remove an old entry in the settings first.' }); return; }
+      config.pc.blockedFileHashes = [...list, { sha256, label, severity: 'high' }];
+      store.saveConfig(config, uidOf(req));
+    }
+    store.audit(uidOf(req), 'fingerprint-blocked', row.id, `${label} ${sha256}`);
     res.json(config);
   });
   staff.post('/sessions/:id/opendota', async (req, res) => {

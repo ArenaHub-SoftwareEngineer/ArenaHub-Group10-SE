@@ -37,6 +37,18 @@ test('player anti-cheat entry prioritizes the required app scan and keeps disput
   await expect(page.getByRole('alert').filter({ hasText: '8-character scan code' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: info.outputPath('player-required-scan.png'), fullPage: true });
+
+  // Practice before match day: no code, one way per device, and the iPhone self-check list.
+  const practice = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Practice before match day' }) });
+  await expect(practice.getByRole('link', { name: 'Scan this PC' })).toHaveAttribute('href', /^arenahub:\/\/practice\?s=http%3A%2F%2F127\.0\.0\.1%3A\d+$/);
+  await practice.getByText('Start it by typing a command instead').click();
+  await expect(practice).toContainText('arenahub-agent.exe --practice --server http://127.0.0.1:');
+  await expect(practice).toContainText('Server address for the app:');
+  await practice.getByText('The six referee checks').click();
+  await expect(practice.locator('.anticheat-ios-checks li')).toHaveCount(6);
+  await expect(practice).toContainText('Turn Developer Mode off.');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+  await practice.screenshot({ path: info.outputPath('player-practice.png') });
   expect(errors).toEqual([]);
 });
 
@@ -162,11 +174,21 @@ test('collector 3.2: iPhone sideload indicators gate approval and Dota install f
   await expect(dialog.getByRole('alert').filter({ hasText: 'An indicator is marked found' })).toBeVisible();
   const approve = dialog.getByRole('button', { name: 'Approve supervised iPhone' });
   await expect(approve).toBeDisabled();
+  await expect(indicators).toContainText('Checked 6 of 6');
+  await expect(indicators.locator('.ios-fix')).toHaveText('Tell the player: Turn Developer Mode off. Then check this place again.');
+  await indicators.locator('.ios-indicator').filter({ hasText: 'Developer Mode is on' }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('ios-indicator-found.png') });
   const axe = await new AxeBuilder({ page: page as never }).include('.feature-dialog').disableRules(['color-contrast']).analyze();
   expect(axe.violations.map(v => v.id)).toEqual([]);
   await indicators.getByRole('radiogroup', { name: 'Developer Mode is on' }).getByText('Not present', { exact: true }).click();
-  await dialog.getByLabel('iPhone inspection note').fill('Indicators checked with the player; Referee B supervising with observer recording.');
+  await expect(indicators.locator('.ios-fix')).toHaveCount(0);
+  // The drafted note leaves the two things only a person knows; saving waits until they are filled in.
+  await dialog.getByRole('button', { name: 'Write note from checks' }).click();
+  const note = dialog.getByLabel('iPhone inspection note');
+  await expect(note).toHaveValue(new RegExp(`^Inspected Indigo ${suffix}'s .+ All 6 sideload and jailbreak indicators were not present\\. Recording source: \\[fill in\\]\\. Supervising referee: \\[fill in\\]\\.$`));
+  await expect(approve).toBeDisabled();
+  await expect(dialog.getByText('Replace each [fill in] in the note before saving.')).toBeVisible();
+  await note.fill((await note.inputValue()).replace('Recording source: [fill in]', 'Recording source: observer slot').replace('Supervising referee: [fill in]', 'Supervising referee: Referee B'));
   await expect(approve).toBeEnabled();
   await approve.click();
   await expect(dialog.getByText('iPhone inspection saved.')).toBeVisible();

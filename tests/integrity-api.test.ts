@@ -328,3 +328,76 @@ test('online mode: the public tunnel reaches only player routes, and rate limits
   assert.equal(playerPathAllowed('/api/integrity/dota/gsi'), true);
   assert.equal(playerPathAllowed('/api/integrity/sessions/abc/end'), false);
 });
+
+test('a referee turns a confirmed cheat file into a PC fingerprint', async t => {
+  const { call } = await setup(t);
+  const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2' } })).json() as any;
+  const claimed = await (await call('/device/claim', { body: { code: pair.code } })).json() as any;
+  const loader = 'c'.repeat(64), other = 'd'.repeat(64);
+  // A long name and reason must not push the fingerprint past the 200-character evidence limit.
+  const finding = { name: `${'very-long-folder-name-'.repeat(4)}loader.exe`, folder: 'Downloads', reason: 'Unsigned program that references dota2.exe and contains DLL-injection functions', sha256: loader, severity: 'high' };
+  const report = { platform: 'pc', processes: [], gameRunning: true, screenshotOk: true, fileFindings: [finding] };
+  assert.equal((await call('/device/heartbeat', { token: claimed.token, body: report })).status, 200);
+  const session = `/sessions/${claimed.sessionId}`;
+  const flagged = (await (await call(session, { token: 'staff' })).json() as any).signals.find((s: any) => s.id === 'cheat-file-found');
+  assert.ok(flagged.evidence.length <= 200);
+  assert.deepEqual(flagged.fingerprint, { sha256: loader, listed: false });
+
+  const block = (body: unknown) => call(`${session}/block-fingerprint`, { token: 'staff', body });
+  assert.equal((await block({ sha256: other, label: 'Not reported here' })).status, 400, 'only fingerprints this PC reported');
+  assert.equal((await block({ sha256: loader, label: 'x' })).status, 400);
+  assert.equal((await call(`${session}/block-fingerprint`, { body: { sha256: loader, label: 'Map hack loader' } })).status, 401);
+  assert.equal((await block({ sha256: loader.toUpperCase(), label: ' Map | hack\nloader ' })).status, 200);
+  assert.equal((await block({ sha256: loader, label: 'Map hack loader' })).status, 200, 'adding twice is harmless');
+
+  const config = await (await call('/config', { token: 'staff' })).json() as any;
+  assert.deepEqual(config.pc.blockedFileHashes, [{ sha256: loader, label: 'Map hack loader', severity: 'high' }]);
+  const after = await (await call(session, { token: 'staff' })).json() as any;
+  assert.equal(after.signals.find((s: any) => s.id === 'cheat-file-found').fingerprint.listed, true);
+  assert.ok(after.audit.some((a: any) => a.action === 'fingerprint-blocked' && a.actor === 'staff-uid'));
+
+  // The next PC to claim receives the fingerprint in its policy.
+  const next = await (await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2', playerName: 'Bolt' } })).json() as any;
+  await pause();
+  const nextClaim = await (await call('/device/claim', { body: { code: next.code } })).json() as any;
+  assert.deepEqual(nextClaim.monitor.blockedFileHashes, [loader]);
+});
+
+test('practice scan: no code, same rules as the official scan, nothing stored', async t => {
+  const { call, store } = await setup(t);
+  const policy = await (await call('/practice/policy', { body: { game: 'mlbb' } })).json() as any;
+  assert.equal(policy.platform, 'android');
+  assert.ok(policy.monitor.blockedPackages.length > 0); assert.ok(policy.monitor.gamePackages.includes('com.mobile.legends'));
+  assert.equal(policy.config, undefined, 'phones get lists; only the PC agent needs the rules');
+  const pc = await (await call('/practice/policy', { body: { game: 'dota2' } })).json() as any;
+  assert.equal(pc.platform, 'pc'); assert.ok(pc.config.pc.blockedProcesses.length > 0);
+  assert.equal((await call('/practice/policy', { body: { game: 'chess' } })).status, 400);
+
+  // A trusted game signature lets a clean phone pass, exactly as it would in the official scan.
+  const config = store.config(); config.android.games.mlbb.trustedCertSha256 = [OFFICIAL]; store.saveConfig(config, 'staff');
+  const check = (facts: unknown, game = 'mlbb') => call('/practice/check', { body: { game, facts } });
+  const clean = await (await check({ ...facts(), checks: { installedApps: true, gameSignatures: true, overlays: true, certificates: true } })).json() as any;
+  assert.equal(clean.status, 'ready'); assert.equal(clean.label, 'No cheats found'); assert.match(clean.note, /does not clear you/);
+  await pause(3100);
+  const flagged = await (await check({ ...facts({ installedFlagged: ['com.topjohnwu.magisk'] }), checks: { installedApps: true, gameSignatures: true, overlays: true, certificates: true } })).json() as any;
+  assert.equal(flagged.status, 'blocked'); assert.ok(flagged.blockers.some((b: string) => /magisk/i.test(b)));
+  assert.equal((await check(facts())).status, 429, 'one check every few seconds per address');
+  await pause(3100);
+  assert.equal((await check(facts(), 'dota2')).status, 400, 'Android facts cannot be judged as a PC');
+  assert.equal(store.sessions().length, 0, 'practice creates no session');
+});
+
+test('one-click PC scan: the code lookup states the folder check and the download carries the code', async t => {
+  const { call } = await setup(t);
+  const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, game: 'dota2' } })).json() as any;
+  const info = await (await call(`/device/pairing/${pair.code}`)).json() as any;
+  assert.equal(info.platform, 'pc'); assert.equal(info.folderCheck, true, 'one consent question can cover the folder check');
+  const phone = await (await call('/pairings', { token: 'staff', body: pairing })).json() as any;
+  assert.equal((await (await call(`/device/pairing/${phone.code}`)).json() as any).folderCheck, undefined);
+
+  const named = async (query: string) => (await call(`/downloads/arenahub-agent.exe${query}`, { method: 'HEAD' })).headers.get('content-disposition') || '';
+  if (!(await call('/downloads/arenahub-agent.exe', { method: 'HEAD' })).ok) { t.skip('dist-agent/arenahub-agent.exe is not built'); return; }
+  assert.match(await named(`?code=${pair.code.toLowerCase()}`), new RegExp(`filename="arenahub-scan-${pair.code}\.exe"`));
+  assert.match(await named('?code=../../x'), /filename="arenahub-agent\.exe"/, 'anything but a code keeps the normal name');
+  assert.match(await named(''), /filename="arenahub-agent\.exe"/);
+});

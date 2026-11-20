@@ -195,6 +195,10 @@ test('folder check judges content: renamed tables and scripts, listed tools, fin
       'Downloads:settings.txt:Cheat Engine table that targets dota2.exe',
     ]);
     assert.ok(findings.every(f => !f.name.includes(home)), 'file names only');
+    // Even with no fingerprints configured, a flagged program carries its own, so staff can add it to the list.
+    const unlisted = await sweepFolders([{ folder: 'Downloads', path: downloads }], { ...policy, blockedFileHashes: [] });
+    assert.equal(unlisted.findings.find(f => f.name === 'cheatengine-x86_64.exe')?.sha256, sha256Buffer(pe('portable')));
+    assert.equal(unlisted.findings.find(f => f.name === 'settings.txt')?.sha256, undefined, 'text files are judged by content, not fingerprinted');
     assert.equal((await sweepFolders([{ folder: 'Downloads', path: downloads }], policy, { limits: { maxEntries: 2 } })).status, 'partial');
     assert.equal((await sweepFolders([{ folder: 'Temp', path: join(home, 'missing') }], policy)).status, 'failed');
   } finally { rmSync(home, { recursive: true, force: true }); }

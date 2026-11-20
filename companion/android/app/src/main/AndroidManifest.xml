@@ -37,12 +37,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- The referee's QR code opens arenahub://pair?s=<laptop>&c=<code> -->
+            <!-- The referee's QR code opens arenahub://pair?s=<laptop>&c=<code>.
+                 The ArenaHub Anti-cheat page opens arenahub://practice?s=<server> for a practice scan. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="arenahub" android:host="pair" />
+                <data android:scheme="arenahub" />
+                <data android:host="pair" />
+                <data android:host="practice" />
             </intent-filter>
         </activity>
 
