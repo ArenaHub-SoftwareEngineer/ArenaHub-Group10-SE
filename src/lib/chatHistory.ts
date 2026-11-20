@@ -1,3 +1,5 @@
+import { parseBlocks, type AnswerBlock } from './aiBlocks';
+
 export type RetentionDays = 0 | 30 | 90 | 180;
 export const DEFAULT_RETENTION_DAYS: RetentionDays = 30;
 export const DAY_MS = 86_400_000;
@@ -8,7 +10,19 @@ export interface ChatMessage {
   references?: ChatReference[];
   /** This account's rating of the answer, once given. */
   rating?: 'up' | 'down';
+  /** Which Arena AI mode answered (Quick, Think or Deep). */
+  mode?: AiMode;
+  /** Lookups the assistant made, in order, and its own reasoning summary. */
+  steps?: string[];
+  thinking?: string;
+  /** Milliseconds from the question to the first answer text. */
+  thoughtMs?: number;
+  /** Tables and match cards built from the records the answer used. */
+  blocks?: AnswerBlock[];
+  /** A reused answer: the records had not changed since it was written. */
+  cached?: boolean;
 }
+export type AiMode = 'quick' | 'think' | 'deep';
 export interface ChatReference { label: string; bracketId?: string; matchId?: string }
 const safeId = (value: unknown) => typeof value === 'string' && /^[\w#.:-]{1,160}$/.test(value) ? value : undefined;
 /** Saved references: label-only strings (earlier saves) or { label, bracketId, matchId }. */
@@ -48,6 +62,12 @@ function parseThread(value: unknown, now: number): ChatThread | null {
       timestamp: timestamp(raw.timestamp, now), source: typeof raw.source === 'string' ? raw.source : undefined,
       ...(Array.isArray(raw.references) ? { references: parseReferences(raw.references) } : {}),
       ...(raw.rating === 'up' || raw.rating === 'down' ? { rating: raw.rating } : {}),
+      ...(['quick', 'think', 'deep'].includes(raw.mode) ? { mode: raw.mode } : {}),
+      ...(Array.isArray(raw.steps) ? { steps: raw.steps.filter((s: unknown): s is string => typeof s === 'string').slice(0, 12).map((s: string) => s.slice(0, 120)) } : {}),
+      ...(typeof raw.thinking === 'string' && raw.thinking ? { thinking: raw.thinking.slice(0, 6000) } : {}),
+      ...(Number.isFinite(raw.thoughtMs) && raw.thoughtMs >= 0 ? { thoughtMs: Math.min(raw.thoughtMs, 600_000) } : {}),
+      ...(Array.isArray(raw.blocks) ? { blocks: parseBlocks(raw.blocks) } : {}),
+      ...(raw.cached === true ? { cached: true } : {}),
       status: writing ? 'stopped' : ['complete', 'stopped', 'error'].includes(raw.status) ? raw.status : 'complete' }];
   });
   if (!messages.length || messages.length !== input.messages.length) return null;

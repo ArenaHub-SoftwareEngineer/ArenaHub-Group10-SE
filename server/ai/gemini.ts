@@ -16,11 +16,16 @@ export function geminiProvider(apiKey: string, model: string): Provider {
       const functionDeclarations = request.tools.map(t => ({ name: t.name, description: t.description, parametersJsonSchema: t.parameters }));
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         const last = round === MAX_TOOL_ROUNDS - 1;
+        const budget = request.thinkingBudget || 0;
         const stream = await client.models.generateContentStream({
           model, contents,
           config: {
-            systemInstruction: request.system, temperature: 0.2, maxOutputTokens: request.maxOutputTokens,
-            abortSignal: request.signal, httpOptions: { timeout: 30_000 },
+            systemInstruction: request.system, temperature: 0.2,
+            // Thinking tokens count against the output limit, so the answer keeps its own room.
+            maxOutputTokens: request.maxOutputTokens + budget,
+            // Budget 0 leaves thinking at the model's default: some models reject an explicit 0 (measured 18 Nov 2026).
+            ...(budget > 0 ? { thinkingConfig: { includeThoughts: true, thinkingBudget: budget } } : {}),
+            abortSignal: request.signal, httpOptions: { timeout: budget > 0 ? 60_000 : 30_000 },
             ...(functionDeclarations.length ? {
               tools: [{ functionDeclarations }],
               toolConfig: { functionCallingConfig: { mode: last ? FunctionCallingConfigMode.NONE : FunctionCallingConfigMode.AUTO } },
@@ -28,13 +33,18 @@ export function geminiProvider(apiKey: string, model: string): Provider {
           },
         });
         const parts: Part[] = [], calls: FunctionCall[] = [];
+        let tokens = 0;
         for await (const chunk of stream) {
           for (const part of chunk.candidates?.[0]?.content?.parts || []) {
             parts.push(part);
             if (part.functionCall) calls.push(part.functionCall);
-            else if (part.text && !part.thought) yield part.text;
+            else if (part.text && part.thought) request.onThought?.(part.text);
+            else if (part.text) yield part.text;
           }
+          // The last chunk carries the totals for the whole call.
+          if (chunk.usageMetadata?.totalTokenCount) tokens = chunk.usageMetadata.totalTokenCount;
         }
+        if (tokens) request.onUsage?.(tokens);
         if (!calls.length) return;
         contents.push({ role: 'model', parts });
         const responses = await Promise.all(calls.map(async call => ({

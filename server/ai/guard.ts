@@ -10,6 +10,8 @@ export const askSchema = z.object({
     .refine(items => items.reduce((sum, item) => sum + item.text.length, 0) <= 20_000, 'History is too long.'),
   // Ids of what the viewer was looking at. Only ids: the server reads the records itself.
   focus: z.object({ bracketId: z.string().regex(/^[\w#.:-]{1,160}$/), matchId: z.string().regex(/^[\w#.:-]{1,160}$/).optional() }).strict().optional(),
+  // Quick, Think (default) or Deep: which models answer and how long they reason (config.ts).
+  mode: z.enum(['quick', 'think', 'deep']).optional(),
 }).strict();
 export const chatAskSchema = z.object({
   matchId: z.string().regex(/^[A-Za-z0-9_#.:-]{1,160}$/),

@@ -4,12 +4,13 @@ import { originAllowed } from './cors.ts';
 import { AuthError, bearer, callerVerifier, type Caller, type VerifyCaller } from './auth.ts';
 import { publishedReader, type PublishedReader } from './data.ts';
 import { adminApp } from './firebaseAdmin.ts';
-import { aiConfig } from './ai/config.ts';
+import { aiConfig, AI_MODES, type AiMode } from './ai/config.ts';
+import { allowanceOf, FirestoreUsageStore, MemoryUsageStore, type UsageStore } from './ai/usage.ts';
 import { askSchema, bracketSchema, caseSummarySchema, chatAskSchema, FirestoreRateStore, MemoryRateStore, type RateStore } from './ai/guard.ts';
 import { draftBracket } from './ai/bracketDraft.ts';
 import { ChatAskError, createChatResponder, firestoreChatSink } from './ai/chat.ts';
 import { firestoreMyTeams, type MyTeamsReader } from './ai/myTeam.ts';
-import { createAssistant, InterruptedAnswer } from './ai/index.ts';
+import { createAssistant, InterruptedAnswer, type ModeSetup } from './ai/index.ts';
 import type { Provider } from './ai/provider.ts';
 import { geminiProvider } from './ai/gemini.ts';
 import { groqProvider } from './ai/groq.ts';
@@ -33,6 +34,8 @@ export interface AiDeps {
   cases?: CaseReader | null;
   /** The model for case summaries. Groq only (plan Q5); null means the digest without a model. */
   caseProvider?: Provider | null;
+  /** Per-person token allowance. Defaults to Firestore with admin access, memory otherwise. */
+  usage?: UsageStore;
 }
 
 /** Gemini first, Groq as the backup. The scripted provider replaces both on the test emulators only. */
@@ -43,6 +46,24 @@ export function configuredProviders(env: Env, fetcher: typeof fetch = fetch): Pr
     ...(config.gemini ? config.gemini.models.map(model => geminiProvider(config.gemini!.key, model)) : []),
     ...(config.groq ? [groqProvider(config.groq.key, config.groq.model, fetcher)] : []),
   ];
+}
+
+/**
+ * Quick, Think and Deep: each mode's models (Gemini, then Groq as backup) and thinking budget. With
+ * `providers` given (tests), every mode uses them with its own budget. Thinking modes get a longer
+ * silence allowance, because a model may reason for a while before its first word.
+ */
+export function modeSetups(env: Env, fetcher: typeof fetch = fetch, providers?: Provider[]): Record<AiMode, ModeSetup> {
+  const config = aiConfig(env);
+  return Object.fromEntries(AI_MODES.map(mode => {
+    const setup = config.modes[mode];
+    const list = providers || (config.fake ? [fakeProvider()] : [
+      ...(config.gemini ? setup.models.map(model => geminiProvider(config.gemini!.key, model)) : []),
+      ...(config.groq ? [groqProvider(config.groq.key, config.groq.model, fetcher)] : []),
+    ]);
+    const firstTokenMs = mode === 'quick' ? config.firstTokenMs : Math.max(config.firstTokenMs, mode === 'deep' ? 45_000 : 25_000);
+    return [mode, { providers: list, thinkingBudget: setup.thinkingBudget, recordsFirst: setup.recordsFirst, firstTokenMs }];
+  })) as Record<AiMode, ModeSetup>;
 }
 
 /** Case summaries may go to Groq only, never the free Gemini tier (plan Q5). The scripted provider stands in on the test emulators. */
@@ -76,7 +97,13 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
   const app = adminApp(env);
   const providers = deps.providers || configuredProviders(env, deps.fetcher);
   const rate = deps.rate || (app ? new FirestoreRateStore(app) : new MemoryRateStore());
-  const assistant = createAssistant({ providers, config, rate, openReports: openReportsReader(env), myTeams: deps.myTeams !== undefined ? deps.myTeams || undefined : app ? firestoreMyTeams(app) : undefined });
+  // Without admin access the allowance lives in this process only: it resets on restart and is not shared
+  // between server instances (docs/DEPLOY.md). Firestore keeps it with a service account or the emulators.
+  const usage = deps.usage || (app ? new FirestoreUsageStore(app, config.usage.windowHours) : new MemoryUsageStore(config.usage.windowHours));
+  const assistant = createAssistant({
+    providers, modes: modeSetups(env, deps.fetcher, deps.providers), usage: { store: usage, policy: config.usage },
+    config, rate, openReports: openReportsReader(env), myTeams: deps.myTeams !== undefined ? deps.myTeams || undefined : app ? firestoreMyTeams(app) : undefined,
+  });
   const burst = new MemoryRateStore();
 
   const fail = (res: express.Response, status: number, error: string) => { res.status(status).json({ error }); };
@@ -120,15 +147,33 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
     // The viewer pressed stop or left: stop the model call too.
     res.on('close', () => { if (!res.writableFinished) controller.abort(new Error('client closed')); });
     try {
-      const result = await assistant.answer({ caller, query: body.data.query, history: body.data.history, data, signal: controller.signal, focus: body.data.focus }, {
+      const result = await assistant.answer({ caller, query: body.data.query, history: body.data.history, data, signal: controller.signal, focus: body.data.focus, mode: body.data.mode }, {
         start: source => send('start', { source }),
         delta: text => send('delta', { text }),
         replace: (source, text) => send('replace', { source, text }),
+        step: label => send('step', { label }),
+        thinking: text => send('thinking', { text }),
+        block: block => send('block', { block }),
       });
-      send('done', { source: result.source, references: result.references, ...(result.limited ? { limited: true } : {}) });
+      send('done', {
+        source: result.source, references: result.references, mode: result.mode,
+        ...(result.limited ? { limited: true } : {}), ...(result.cached ? { cached: true } : {}), ...(result.allowanceUsed ? { allowanceUsed: true } : {}),
+        ...(result.thoughtMs !== undefined ? { thoughtMs: result.thoughtMs } : {}), ...(result.allowance ? { allowance: result.allowance } : {}),
+      });
     } catch (error) {
       if (!controller.signal.aborted) send('error', { message: error instanceof InterruptedAnswer ? error.message : 'The assistant could not answer. Try again.' });
     } finally { res.end(); }
+  });
+
+  // The asker's own allowance, for the meter beside the composer. Reading it never changes it.
+  router.get('/usage', async (req, res) => {
+    const token = admit(req, res);
+    if (!token) return;
+    const caller = await identify(res, token);
+    if (!caller) return;
+    try {
+      res.set('Cache-Control', 'no-store').json({ allowance: allowanceOf(await usage.read(caller.uid), config.usage, caller.staff, Date.now()), modes: AI_MODES });
+    } catch { fail(res, 503, 'Your Arena AI allowance could not be read. Try again.'); }
   });
 
   // "@Arena ..." in a match's live chat. The reply is posted into the chat for every viewer.

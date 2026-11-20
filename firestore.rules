@@ -226,6 +226,10 @@ service cloud.firestore {
     match /aiRate/{id} {
       allow read, write: if false;
     }
+    // Arena AI allowance per person (tokens per 5-hour window). Server only; the API reports it to its owner.
+    match /aiUsage/{uid} {
+      allow read, write: if false;
+    }
     // Arena AI replies (isAI: true, author "Arena AI") are written by the server through firebase-admin.
     // Clients can write neither: isAI is not an allowed key and the name is reserved.
     match /matchChat/{matchId}/messages/{messageId} {

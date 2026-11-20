@@ -152,6 +152,12 @@ test('Arena AI replies are server-only: clients cannot write isAI or read the re
     await assertFails(getDoc(doc(database, 'aiRate', 'user_student_20261115120000')));
     await assertFails(setDoc(doc(database, 'aiRate', 'user_student_20261115120000'), { count: 0 }));
   }
+  // The 5-hour allowance: nobody can read or reset it from a browser, not even their own.
+  await seed(store => setDoc(doc(store, 'aiUsage', 'student'), { used: 400000, windowStart: Timestamp.now() }));
+  for (const database of [student(), mod()]) {
+    await assertFails(getDoc(doc(database, 'aiUsage', 'student')));
+    await assertFails(setDoc(doc(database, 'aiUsage', 'student'), { used: 0, windowStart: Timestamp.now() }));
+  }
 });
 
 test('only staff turn Arena AI on or off in a chat, with an audit event', async () => {

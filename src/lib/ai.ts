@@ -18,6 +18,8 @@ import { answerTournamentQuestion, knowledgeSnapshot, type KnowledgeReference } 
 import { screenQuestion } from './aiGuard';
 import { parseBracketPromptLocally, resolveBracketRequest, type BracketRequest, type Resolution } from './bracketRequest';
 import { parseSse } from './sse';
+import { parseBlocks, type AnswerBlock } from './aiBlocks';
+import type { AiMode } from './chatHistory';
 
 export interface StreamChunk {
   delta: string;
@@ -26,7 +28,27 @@ export interface StreamChunk {
   references?: KnowledgeReference[];
   /** delta replaces everything received so far instead of being appended. */
   replace?: boolean;
+  /** A lookup the assistant is making ("Reading MLBB standings"). */
+  step?: string;
+  /** More of the model's reasoning summary. */
+  thinking?: string;
+  /** A table or match cards built from the records. */
+  block?: AnswerBlock;
+  /** Sent with done. */
+  meta?: { mode?: AiMode; cached?: boolean; limited?: boolean; allowanceUsed?: boolean; thoughtMs?: number; allowance?: Allowance };
 }
+
+/** The asker's Arena AI allowance (tokens per window), as the server reports it. */
+export interface Allowance { used: number; limit: number; windowHours: number; startedAt: number | null; resetsAt: number | null; exhausted: boolean }
+export interface ModeInfo { id: AiMode; name: string; summary: string }
+export const AI_MODES: ModeInfo[] = [
+  { id: 'quick', name: 'Quick', summary: 'Instant answers from the live records. Uses the least of your allowance.' },
+  { id: 'think', name: 'Think', summary: 'Reasons through your question and checks the records first. Best for most questions.' },
+  { id: 'deep', name: 'Deep', summary: 'Longest reasoning, for comparisons and “why” questions. Uses more of your allowance.' },
+];
+const allowanceOf = (raw: any): Allowance | undefined => raw && Number.isFinite(raw.used) && Number.isFinite(raw.limit) && raw.limit > 0
+  ? { used: raw.used, limit: raw.limit, windowHours: Number(raw.windowHours) || 5, startedAt: Number.isFinite(raw.startedAt) ? raw.startedAt : null, resetsAt: Number.isFinite(raw.resetsAt) ? raw.resetsAt : null, exhausted: raw.exhausted === true }
+  : undefined;
 export type DraftResolution = Resolution & { source: string };
 /** What the viewer was looking at before opening Arena AI. The label is shown; only the ids are sent. */
 export interface AskFocus { bracketId: string; matchId?: string; label: string }
@@ -54,7 +76,17 @@ class AIService {
    * Streams one answer. Throws when stopped, or when the server's answer broke off partway
    * (the caller keeps the text it already has and offers a retry).
    */
-  public async *streamAnswer(query: string, history: History = [], signal?: AbortSignal, focus?: AskFocus | null): AsyncGenerator<StreamChunk> {
+  /** The signed-in person's allowance, or null when the server cannot be reached or nobody is signed in. */
+  public async getAllowance(signal?: AbortSignal): Promise<Allowance | null> {
+    const token = await idToken();
+    if (!token) return null;
+    try {
+      const response = await fetch(apiUrl('/api/ai/usage'), { headers: { Authorization: `Bearer ${token}` }, signal: withTimeout(10_000, signal) });
+      return response.ok ? allowanceOf((await response.json())?.allowance) ?? null : null;
+    } catch { return null; }
+  }
+
+  public async *streamAnswer(query: string, history: History = [], signal?: AbortSignal, focus?: AskFocus | null, mode: AiMode = 'think'): AsyncGenerator<StreamChunk> {
     const stopped = () => { if (signal?.aborted) throw new Error('Response stopped.'); };
     const token = await idToken();
     if (token) {
@@ -63,7 +95,7 @@ class AIService {
         response = await fetch(apiUrl('/api/ai'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ query, history, ...(focus ? { focus: { bracketId: focus.bracketId, ...(focus.matchId ? { matchId: focus.matchId } : {}) } } : {}) }),
+          body: JSON.stringify({ query, history, mode, ...(focus ? { focus: { bracketId: focus.bracketId, ...(focus.matchId ? { matchId: focus.matchId } : {}) } } : {}) }),
           signal: withTimeout(90_000, signal),
         });
       } catch { stopped(); }
@@ -74,7 +106,16 @@ class AIService {
           else if (event === 'delta' && typeof data?.text === 'string') { wrote = true; yield { delta: data.text, done: false, source }; }
           // The server withdrew what it had sent (a sentence failed its fact check) and sends the records answer.
           else if (event === 'replace' && typeof data?.text === 'string') { source = data.source || source; yield { delta: data.text, done: false, source, replace: true }; }
-          else if (event === 'done') { yield { delta: '', done: true, source: data?.source || source, references: Array.isArray(data?.references) ? data.references : [] }; return; }
+          else if (event === 'step' && typeof data?.label === 'string') yield { delta: '', done: false, source, step: data.label.slice(0, 120) };
+          else if (event === 'thinking' && typeof data?.text === 'string') yield { delta: '', done: false, source, thinking: data.text };
+          else if (event === 'block') { const [block] = parseBlocks([data?.block]); if (block) yield { delta: '', done: false, source, block }; }
+          else if (event === 'done') {
+            const mode = ['quick', 'think', 'deep'].includes(data?.mode) ? data.mode as AiMode : undefined;
+            yield { delta: '', done: true, source: data?.source || source, references: Array.isArray(data?.references) ? data.references : [],
+              meta: { mode, cached: data?.cached === true, limited: data?.limited === true, allowanceUsed: data?.allowanceUsed === true,
+                ...(Number.isFinite(data?.thoughtMs) ? { thoughtMs: data.thoughtMs } : {}), ...(allowanceOf(data?.allowance) ? { allowance: allowanceOf(data.allowance) } : {}) } };
+            return;
+          }
           else if (event === 'error') throw new Error(data?.message || 'The answer stopped partway.');
         }
         stopped();

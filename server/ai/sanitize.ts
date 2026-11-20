@@ -1,6 +1,7 @@
 // Every reply passes through here before it reaches a viewer, whichever engine wrote it:
-// no emoji, no markdown tables, no raw HTML, no email addresses, and a hard length cap.
-// The streaming version works line by line so a table row split across chunks is still caught.
+// no emoji, no raw HTML, no email addresses, and a hard length cap. Markdown tables are kept (the chat
+// renders them) with every cell cleaned. The streaming version holds a table row until its line break,
+// so a row is never released half-written.
 import { stripEmoji } from '../../src/lib/emoji.ts';
 
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
@@ -12,11 +13,11 @@ export function cleanText(text: string): string {
   return stripEmoji(text).replace(EMAIL, '[email hidden]').replace(/<\/?[a-z][^>]*>/gi, '');
 }
 
-/** One complete line. Table rules disappear and table rows become bullet points. */
+/** One complete line. A table row keeps its cells, each cleaned; the separator row is normalised. */
 export function cleanLine(line: string): string | null {
-  if (TABLE_RULE.test(line) && line.includes('-') && line.includes('|')) return null;
+  if (TABLE_RULE.test(line) && line.includes('-') && line.includes('|')) return `|${line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(() => ' --- ').join('|')}|`;
   const row = line.match(TABLE_ROW);
-  return cleanText(row ? `- ${row[1].split('|').map(cell => cell.trim()).filter(Boolean).join(' · ')}` : line);
+  return row ? `| ${row[1].split('|').map(cell => cleanText(cell).trim()).join(' | ')} |` : cleanText(line);
 }
 
 export function cleanReply(text: string, maxChars = 2400): string {

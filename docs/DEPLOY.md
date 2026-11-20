@@ -50,6 +50,8 @@ Why the service account matters: with it, the API checks sign-in tokens with `ve
 
 Add a Firestore TTL policy on the `aiRate` collection group, field `expiresAt` (Firebase Console, Firestore, TTL), so old counters are deleted automatically. Each counter expires an hour after its minute ends.
 
+The per-person Arena AI allowance (tokens per 5-hour window, `AI_WINDOW_TOKENS`) is kept in `aiUsage/{uid}` with the service account: one read before and one transaction after each model answer, plus one read when the Arena AI page opens. Add the same TTL policy on `aiUsage`, field `expiresAt` (a day after the window ends). Without the service account the allowance is held in memory: it resets when the API restarts and is not shared between instances, so a serverless host without it does not enforce a reliable limit.
+
 The case-summary route now uses a scrubbed case digest with its configured provider/fallback. Validate provider configuration and data handling on the selected host; automated tests do not establish a live account's availability.
 
 ## 4. Website

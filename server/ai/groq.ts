@@ -3,6 +3,10 @@
 import { MAX_TOOL_ROUNDS, readSse, runTool, toolOutput, type Provider } from './provider.ts';
 
 const ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+/** Reasoning models stream their reasoning in delta.reasoning. Others ignore the setting, so it is sent only to these. */
+const REASONING = /gpt-oss|qwen3|deepseek-r1/i;
+/** Groq takes an effort level, not a token budget. */
+export const reasoningEffort = (budget: number) => budget <= 1024 ? 'low' : budget <= 4096 ? 'medium' : 'high';
 
 export function groqProvider(apiKey: string, model: string, fetcher: typeof fetch = fetch): Provider {
   const call = (body: object, signal: AbortSignal) => fetcher(ENDPOINT, {
@@ -21,14 +25,25 @@ export function groqProvider(apiKey: string, model: string, fetcher: typeof fetc
       const tools = request.tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
       for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
         const last = round === MAX_TOOL_ROUNDS - 1;
-        const response = await call({ messages, stream: true, max_completion_tokens: request.maxOutputTokens, ...(tools.length ? { tools, tool_choice: last ? 'none' : 'auto' } : {}) }, request.signal);
+        const budget = request.thinkingBudget || 0, reasons = REASONING.test(model);
+        const response = await call({
+          messages, stream: true, stream_options: { include_usage: true },
+          // Reasoning tokens count as output tokens, so the answer keeps its own room.
+          max_completion_tokens: request.maxOutputTokens + (reasons ? Math.max(budget, 1024) : 0),
+          ...(reasons ? { reasoning_effort: reasoningEffort(budget), ...(/qwen3|deepseek/i.test(model) ? { reasoning_format: 'parsed' } : {}) } : {}),
+          ...(tools.length ? { tools, tool_choice: last ? 'none' : 'auto' } : {}),
+        }, request.signal);
         if (!response.ok || !response.body) throw new Error(`Groq returned ${response.status}.`);
-        let text = '';
+        let text = '', tokens = 0;
         const calls: Array<{ id: string; name: string; args: string }> = [];
         for await (const data of readSse(response.body, request.signal)) {
           if (data === '[DONE]') break;
-          let delta: any;
-          try { delta = JSON.parse(data).choices?.[0]?.delta; } catch { continue; }
+          let chunk: any;
+          try { chunk = JSON.parse(data); } catch { continue; }
+          const usage = chunk?.usage || chunk?.x_groq?.usage;
+          if (Number.isFinite(usage?.total_tokens)) tokens = usage.total_tokens;
+          const delta = chunk?.choices?.[0]?.delta;
+          if (typeof delta?.reasoning === 'string' && delta.reasoning) request.onThought?.(delta.reasoning);
           if (typeof delta?.content === 'string' && delta.content) { text += delta.content; yield delta.content; }
           for (const piece of delta?.tool_calls || []) {
             const slot = calls[piece.index ?? 0] ||= { id: '', name: '', args: '' };
@@ -37,6 +52,7 @@ export function groqProvider(apiKey: string, model: string, fetcher: typeof fetc
             if (piece.function?.arguments) slot.args += piece.function.arguments;
           }
         }
+        if (tokens) request.onUsage?.(tokens);
         const made = calls.filter(Boolean);
         if (!made.length) return;
         messages.push({ role: 'assistant', content: text || null, tool_calls: made.map(c => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.args || '{}' } })) });

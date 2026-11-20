@@ -9,6 +9,12 @@ export interface ProviderRequest {
   tools: Tool[];
   signal: AbortSignal;
   maxOutputTokens: number;
+  /** Thinking tokens per model call; 0 or absent turns thinking off where the model allows it. */
+  thinkingBudget?: number;
+  /** The model's own summary of its reasoning, as the API returns it. Shown to the viewer, never fact-checked as an answer. */
+  onThought?(text: string): void;
+  /** Tokens the API reports for one model call (prompt, output, thinking and tool results). Called once per call. */
+  onUsage?(tokens: number): void;
 }
 export interface JsonRequest { system: string; prompt: string; schema: Record<string, unknown>; signal: AbortSignal }
 
@@ -37,10 +43,13 @@ export function attemptSignal(parent: AbortSignal, firstTokenMs: number) {
   const controller = new AbortController();
   const onAbort = () => controller.abort(parent.reason);
   if (parent.aborted) onAbort(); else parent.addEventListener('abort', onAbort, { once: true });
-  const timer = setTimeout(() => controller.abort(new Error(`no reply within ${firstTokenMs} ms`)), firstTokenMs);
+  const expire = () => setTimeout(() => controller.abort(new Error(`no reply within ${firstTokenMs} ms`)), firstTokenMs);
+  let timer: ReturnType<typeof setTimeout> | undefined = expire();
   return {
     signal: controller.signal,
-    gotText: () => clearTimeout(timer),
+    gotText: () => { clearTimeout(timer); timer = undefined; },
+    /** The model is working (a thought, a tool call): restart the silence timer until text arrives. */
+    alive: () => { if (timer !== undefined) { clearTimeout(timer); timer = expire(); } },
     done: () => { clearTimeout(timer); parent.removeEventListener('abort', onAbort); },
   };
 }

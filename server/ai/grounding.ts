@@ -6,7 +6,7 @@
 // General text ("a Bo3 can end 2-1") names no team and is not checked. Used by the pipeline to stop
 // a model answer before an unsupported sentence reaches a viewer, and by the evals.
 import type { BracketDraft, Match } from '../../src/lib/types.ts';
-import { getStandings } from '../../src/lib/standings.ts';
+import { completedSeries, getStandings } from '../../src/lib/standings.ts';
 import { bracketTeams } from '../../src/lib/data/tournamentDocs.ts';
 
 export interface GroundingFacts {
@@ -38,8 +38,21 @@ export function groundingFacts(brackets: BracketDraft[]): GroundingFacts {
       const scored = m.status !== 'upcoming' && [m.score?.team1Score, m.score?.team2Score].every(Number.isFinite);
       if (scored) for (const t of [one, two]) if (t) addScore(t, m.score.team1Score, m.score.team2Score);
     }
-    if (!b.placement) for (const row of getStandings(b.matches)) addScore(row.team.name.toLowerCase(), row.gameWins, row.gameLosses);
+    if (!b.placement) for (const row of getStandings(b.matches)) {
+      addScore(row.team.name.toLowerCase(), row.gameWins, row.gameLosses);
+      // A series record ("1-0 in series") is as real as a match score.
+      addScore(row.team.name.toLowerCase(), row.wins, row.losses);
+    }
   }
+  // Head-to-head records across every tournament ("leads the head-to-head 1-0").
+  const meetings = new Map<string, { a: string; b: string; winsA: number; winsB: number }>();
+  for (const b of brackets) if (!b.placement) for (const { winner, team1, team2 } of completedSeries(b.matches)) {
+    const one = team1.name.toLowerCase(), two = team2.name.toLowerCase(), pair = key(one, two);
+    const record = meetings.get(pair) || { a: one, b: two, winsA: 0, winsB: 0 };
+    if ((winner === team1.id ? one : two) === record.a) record.winsA++; else record.winsB++;
+    meetings.set(pair, record);
+  }
+  for (const { a, b, winsA, winsB } of meetings.values()) { addScore(a, winsA, winsB); addScore(b, winsB, winsA); }
   return { teams: [...teams].filter(t => t.length >= 3).sort((a, b) => b.length - a.length), pairs, scores, colleges };
 }
 
@@ -60,6 +73,8 @@ function teamsIn(sentence: string, facts: GroundingFacts) {
 function resolve(name: string, facts: GroundingFacts): string | null {
   const lower = name.toLowerCase().replace(/^the\s+/, '').replace(/[.,;:!?'’]+$/, '').trim();
   if (PLACEHOLDERS.some(p => lower.includes(p)) || /^(?:awaiting|winner|loser|tbd|team \d+)\b/.test(lower)) return '';
+  // "1-0 against Azure Hawks": the number is the end of a score, not a team.
+  if (/^\d+$/.test(lower)) return '';
   // A college code, a game or a round is not a claimed opponent.
   if (facts.colleges.has(lower) || /^(?:mlbb|dota|codm|game \d+|round \d+|semifinals?|finals?|grand final|upper|lower)\b/.test(lower)) return '';
   return facts.teams.find(t => lower === t || lower.endsWith(` ${t}`) || lower.startsWith(`${t} `)) ?? null;

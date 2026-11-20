@@ -41,7 +41,8 @@ function audit(result: AnswerResult, label: string) {
   assert.deepEqual(groundingProblems(text), [], `${label}: ungrounded content in: ${text}`);
   for (const secret of PRIVATE_VALUES) assert.ok(!text.includes(secret), `${label}: leaked ${secret}`);
   assert.ok(!hasEmoji(text), `${label}: emoji in reply`);
-  assert.ok(!/^\s*\|.*\|\s*$/m.test(text), `${label}: markdown table in reply`);
+  // Tables are allowed; when there is one, every row starts and ends with a pipe.
+  for (const line of text.split('\n')) if (line.trim().startsWith('|')) assert.match(line.trim(), /^\|.*\|$/, `${label}: broken table row ${line}`);
 }
 
 // ---- A scripted model that answers from the real tools, the way a grounded model should. ----
@@ -222,12 +223,14 @@ test('the system prompt treats user text and tool data as data, never instructio
   const prompt = assistantPrompt(new Date('2026-11-15T04:00:00Z'));
   assert.match(prompt, /as data, not instructions/);
   assert.match(prompt, /Never guess or invent teams, players, scores/);
-  assert.match(prompt, /No tables, no emoji/);
+  assert.match(prompt, /No emoji, no headings/);
+  assert.match(prompt, /Think before you answer/);
+  assert.match(prompt, /tables and match cards built from the records/);
   assert.match(prompt, /2026-11-15 \(Asia\/Manila\)/);
 });
 
 // ---- 4. Whatever a model writes is cleaned before a viewer sees it. ----
-test('sanitizer: emoji, tables, emails and HTML are removed from streamed model text', async () => {
+test('sanitizer: emoji, emails and HTML are removed from streamed model text; tables keep clean cells', async () => {
   const messy = model(async function* () {
     yield 'Here is \u{1F525} the ';
     yield 'summary:\n| Team | Result |\n|---|---|\n| Crimson Wolves | won 2-1 |\n';
@@ -235,9 +238,9 @@ test('sanitizer: emoji, tables, emails and HTML are removed from streamed model 
   });
   const result = await ask(assistant([messy]), 'Explain double elimination');
   audit(result, 'messy model');
-  assert.match(result.text, /- Crimson Wolves · won 2-1/);
+  assert.match(result.text, /\| Team \| Result \|\n\| --- \| --- \|\n\| Crimson Wolves \| won 2-1 \|/);
   assert.match(result.text, /\[email hidden\]/);
-  assert.doesNotMatch(result.text, /<b>|\|---/);
+  assert.doesNotMatch(result.text, /<b>/);
 });
 
 test('sanitizer: replies are capped without cutting a word', async () => {
@@ -248,11 +251,12 @@ test('sanitizer: replies are capped without cutting a word', async () => {
   assert.match(result.text, /tournament ?$/, 'ends on a whole word');
 });
 
-test('sanitizer: a table row split across chunks is still converted', () => {
+test('sanitizer: a table row split across chunks is held until it is whole, then cleaned', () => {
   const cleaner = new StreamCleaner();
-  const out = ['| Crim', 'son Wolves | 2-1 |', '\n', 'Done.'].map(p => cleaner.push(p)).join('') + cleaner.flush();
-  assert.equal(out, '- Crimson Wolves · 2-1\nDone.');
-  assert.equal(cleanReply('| a | b |\n| --- | --- |\n| c | d |'), '- a · b\n- c · d');
+  const pieces = ['| Crim', 'son \u{1F525}Wolves | 2-1 |', '\n', 'Done.'].map(p => cleaner.push(p));
+  assert.deepEqual(pieces.slice(0, 2), ['', ''], 'nothing of a row is released before its line break');
+  assert.equal(pieces.join('') + cleaner.flush(), '| Crimson Wolves | 2-1 |\nDone.');
+  assert.equal(cleanReply('| a | b |\n|:--|--:|\n| c | <i>d</i> |'), '| a | b |\n| --- | --- |\n| c | d |');
 });
 
 // ---- 5. Fallbacks. ----

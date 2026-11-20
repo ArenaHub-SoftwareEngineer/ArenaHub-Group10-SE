@@ -40,10 +40,44 @@ test('Arena AI page streams an answer from the server and measures time to first
   console.log(`[${testInfo.project.name}] Arena AI time to first token: ${firstToken} ms, complete answer: ${total} ms`);
   expect(firstToken).toBeLessThan(total);
 
-  // A live-records question is answered by the engine, labelled as such, with the records it checked.
+  // Think (the default) shows what it did before answering, then a table built from the records it read.
+  await expect(reply.locator('.chat-mode-tag')).toHaveText('Think');
+  await expect(reply.locator('.thinking-toggle')).toContainText(/Thought for .+ 1 check/);
+  await reply.locator('.thinking-toggle').click();
+  await expect(reply.locator('.thinking-steps li')).toHaveText(['Listing tournaments']);
+  await expect(reply.locator('.answer-block figcaption')).toContainText('Tournaments');
+  // The allowance meter reports what the answer used, and when the 5-hour window refreshes.
+  await expect(page.getByRole('meter', { name: 'Arena AI allowance used' })).toHaveAttribute('aria-valuetext', /% used · refreshes/, { timeout: 10_000 });
+
+  // Quick: a live-records question is answered by the engine at once, labelled as such.
+  await page.getByRole('button', { name: 'Think' }).click();
+  await page.getByText('Quick', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Quick' })).toBeVisible();
   await composer.fill('Who plays next?');
   await page.getByRole('button', { name: 'Send message' }).click();
-  await expect(page.locator('article.chat-message.from-assistant').last().locator('.chat-response-actions small')).toHaveText('Live records', { timeout: 20_000 });
+  const quick = page.locator('article.chat-message.from-assistant').last();
+  await expect(quick.locator('.chat-response-actions small')).toHaveText('Live records', { timeout: 20_000 });
+  await expect(quick.locator('.thinking-panel')).toHaveCount(0);
+  await page.screenshot({ path: `test-results/arena-ai-${testInfo.project.name}.png`, fullPage: true });
+  expect(ours(errors)).toEqual([]);
+});
+
+test('Arena AI in Think mode reasons with the live records and shows match cards', async ({ browser }, testInfo) => {
+  test.setTimeout(90_000);
+  const { page, errors } = await open(browser, STUDENT, testInfo.project.name === 'mobile-375' ? { width: 375, height: 812 } : undefined);
+  await page.evaluate(() => { window.location.hash = '#/arena/ai-assistant'; });
+  await page.getByLabel('Message Arena AI').fill('What is the live score right now?');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  const reply = page.locator('article.chat-message.from-assistant').last();
+  // While it works, the panel says so and lists each lookup as it happens.
+  await expect(reply.locator('.thinking-panel.is-working')).toBeVisible({ timeout: 20_000 });
+  await expect(reply.locator('.chat-response-actions small')).toHaveText('Arena AI', { timeout: 30_000 });
+  await expect(reply.locator('.chat-assistant-text')).toContainText(/Live now|No match is live/);
+  await reply.locator('.thinking-toggle').click();
+  await expect(reply.locator('.thinking-steps li')).toHaveText(['Checking live matches', 'Checking the schedule']);
+  await expect(reply.locator('.thinking-text')).toContainText('Live scores are not final');
+  await expect(reply.locator('.answer-match').first()).toBeVisible();
+  await page.screenshot({ path: `test-results/arena-ai-think-${testInfo.project.name}.png`, fullPage: true });
   expect(ours(errors)).toEqual([]);
 });
 
@@ -61,6 +95,9 @@ test('Arena AI answers about the match the viewer came from and links back to it
   await expect(chip).toContainText(/Thinking about: .+ vs .+/, { timeout: 20_000 });
   const matchup = (await chip.locator('strong').textContent())!.trim();
 
+  // Quick answers about the focused match straight from the records.
+  await page.getByRole('button', { name: 'Think' }).click();
+  await page.getByText('Quick', { exact: true }).click();
   await page.getByLabel('Message Arena AI').fill("Who's winning?");
   await page.getByRole('button', { name: 'Send message' }).click();
   const reply = page.locator('article.chat-message.from-assistant').last();
