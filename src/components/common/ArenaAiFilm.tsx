@@ -83,6 +83,21 @@ function useCount(t: MotionValue<number>, read: (time: number) => number) {
   return value;
 }
 
+const CAMERA = [3.3, 4.9, 5.7, 6.15, 6.16];
+/**
+ * The camera: push in on the composer while the question types, then fly through it into the answer.
+ * `zoom` softens the move on narrow films so the question stays readable. Back at rest from 6.16 s.
+ */
+function useCamera(t: MotionValue<number>, zoom: MotionValue<number>) {
+  const rawScale = useAt(t, CAMERA, [1, 1.34, 1.34, 2.3, 1]);
+  const rawX = useAt(t, CAMERA, [0, -2.5, -2.5, -9, 0]);
+  const rawY = useAt(t, CAMERA, [0, -3, -3, -5, 0]);
+  const scale = useTransform(() => 1 + (rawScale.get() - 1) * zoom.get());
+  const x = useMotionTemplate`${useTransform(() => rawX.get() * zoom.get())}cqw`;
+  const y = useMotionTemplate`${useTransform(() => rawY.get() * zoom.get())}cqw`;
+  return { scale, x, y };
+}
+
 const progress = (time: number, [from, to]: number[], total: number) => Math.max(0, Math.min(total, Math.floor(((time - from) / (to - from)) * total + (time >= to ? 1 : 0))));
 
 export function ArenaAiFilm({ className = '', questions = FILM_QUESTIONS, onThinking }: {
@@ -107,6 +122,15 @@ export function ArenaAiFilm({ className = '', questions = FILM_QUESTIONS, onThin
     document.addEventListener('visibilitychange', onVisibility);
     return () => { io.disconnect(); document.removeEventListener('visibilitychange', onVisibility); };
   }, []);
+  // Narrow films (the 4:5 phone frame) get a gentler camera.
+  const zoom = useMotionValue(1);
+  useEffect(() => {
+    const node = host.current;
+    if (!node) return;
+    const ro = new ResizeObserver(([entry]) => zoom.set(entry.contentRect.width <= 560 ? 0.35 : 1));
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [zoom]);
   useEffect(() => { if (calm) t.set(STILL_AT); }, [calm, t]);
 
   useAnimationFrame((_, delta) => {
@@ -127,9 +151,9 @@ export function ArenaAiFilm({ className = '', questions = FILM_QUESTIONS, onThin
     <p className="aif-sr" aria-live="off">{`Question: ${item.ask} Arena AI: ${item.answer}`}</p>
     <div className="aif-screen" aria-hidden="true">
       <Backdrop t={t} />
-      <Camera t={t} item={item} />
+      <Camera t={t} zoom={zoom} item={item} />
       <Answer t={t} item={item} index={index} />
-      <Lockup t={t} />
+      <Lockup t={t} zoom={zoom} />
       <span className="aif-vignette" />
     </div>
     <div className="aif-controls">
@@ -152,7 +176,7 @@ function Backdrop({ t }: { t: MotionValue<number> }) {
 }
 
 /** The mark and the wordmark beside it: "Arena AI" in the opening, "ArenaHub" in the closing. */
-function Lockup({ t }: { t: MotionValue<number> }) {
+function Lockup({ t, zoom }: { t: MotionValue<number>; zoom: MotionValue<number> }) {
   const closing = useCount(t, time => time >= 9.9 ? 1 : 0) === 1;
   const word = closing ? 'ArenaHub' : 'Arena AI';
   const shown = useCount(t, time => closing ? progress(time, BRAND_TYPE, 8) : progress(time, [2.25, 2.85], 8));
@@ -163,14 +187,11 @@ function Lockup({ t }: { t: MotionValue<number> }) {
   const font = useAt(t, [0, 9.89, 9.9], [5.4, 5.4, 8.6]);
   const gap = useAt(t, [0, 2.2, 2.6, 9.89, 9.9, 10.6, 10.9], [0, 0, 1.6, 1.6, 0, 0, 2]);
   const opacity = useAt(t, [0, 0.15, 5.75, 6.15, 9.9, 10.05, 12.25, 12.75], [0, 1, 1, 0, 0, 1, 1, 0]);
-  const blur = useAt(t, [3.3, 4.6, 5.75, 6.15], [0, 2.5, 2.5, 10]);
+  const blur = useAt(t, [3.3, 4.6, 5.75, 6.15, 9.89, 9.9, 10.45], [0, 2.5, 2.5, 10, 10, 7, 0]);
   const wordFrac = useAt(t, [0, 2.2, 2.9, 9.89, 9.9, BRAND_TYPE[0], BRAND_TYPE[1]], [0, 0, 1, 1, 0, 0, 1], x => x);
 
   // The camera's push-in also moves the opening lockup (it sits in the same "world" as the composer).
-  // After the fly-through (6.16 s) the camera is back at rest, so the closing lockup is unaffected.
-  const scale = useAt(t, [3.3, 4.9, 5.7, 6.15, 6.16], [1, 1.42, 1.42, 2.3, 1]);
-  const x = useMotionTemplate`${useAt(t, [3.3, 4.9, 5.7, 6.15, 6.16], [0, -7, -7, -12, 0])}cqw`;
-  const y = useMotionTemplate`${useAt(t, [3.3, 4.9, 5.7, 6.15, 6.16], [0, -4, -4, -6, 0])}cqw`;
+  const { scale, x, y } = useCamera(t, zoom);
 
   const measure = useRef<HTMLSpanElement>(null);
   const [wordW, setWordW] = useState(0);
@@ -232,10 +253,8 @@ const CHIPS = [
 ];
 
 /** The composer, its chips and the cursor: everything the camera pushes into. */
-function Camera({ t, item }: { t: MotionValue<number>; item: FilmQuestion }) {
-  const scale = useAt(t, [3.3, 4.9, 5.7, 6.15, 6.16], [1, 1.42, 1.42, 2.3, 1]);
-  const x = useAt(t, [3.3, 4.9, 5.7, 6.15, 6.16], [0, -7, -7, -12, 0]);
-  const y = useAt(t, [3.3, 4.9, 5.7, 6.15, 6.16], [0, -4, -4, -6, 0]);
+function Camera({ t, zoom, item }: { t: MotionValue<number>; zoom: MotionValue<number>; item: FilmQuestion }) {
+  const { scale, x, y } = useCamera(t, zoom);
   const opacity = useAt(t, [2.65, 3.25, 5.75, 6.1], [0, 1, 1, 0]);
   const blur = useAt(t, [2.65, 3.3, 5.75, 6.1], [12, 0, 0, 16]);
   const lift = useAt(t, [2.65, 3.3], [3, 0], easeOut);
@@ -244,7 +263,7 @@ function Camera({ t, item }: { t: MotionValue<number>; item: FilmQuestion }) {
   const pressed = useCount(t, time => time >= 5.42 && time < 5.6 ? 1 : 0) === 1;
   const sent = useCount(t, time => time >= 5.5 ? 1 : 0) === 1;
 
-  return <motion.div className="aif-world" style={{ scale, x: useMotionTemplate`${x}cqw`, y: useMotionTemplate`${y}cqw` }}>
+  return <motion.div className="aif-world" style={{ scale, x, y }}>
     <motion.div className="aif-composer-wrap" style={{ opacity, filter: useMotionTemplate`blur(${blur}px)`, y: useMotionTemplate`${lift}cqw` }}>
       <div className="aif-composer">
         <p className="aif-ask">

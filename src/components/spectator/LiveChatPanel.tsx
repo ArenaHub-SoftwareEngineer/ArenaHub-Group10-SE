@@ -13,7 +13,7 @@ import { reportLiveMessage } from '../../lib/communityReports';
 import { useToast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { Modal } from '../ui/Modal';
-import { Clock, Flag, Pin, Send, Shield, Sparkles, X } from '../ui/Icons';
+import { Clock, Flag, Pin, Send, Settings2, Shield, Sparkles, X } from '../ui/Icons';
 import { aliasOf, rerollAlias, sessionAlias } from '../../lib/anonAlias';
 import { AnonAvatar } from '../ui/AnonAvatar';
 
@@ -59,6 +59,8 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [kickTarget, setKickTarget] = useState<LiveChatMessage | null>(null);
   const [showMutes, setShowMutes] = useState(false);
+  // Staff chat settings (slow mode, muted list) stay folded away so the message list keeps the room.
+  const [showTools, setShowTools] = useState(false);
   // Mute-with-reason dialog
   const [muteTarget, setMuteTarget] = useState<{ message: LiveChatMessage; minutes: number } | null>(null);
   const [muteReason, setMuteReason] = useState('');
@@ -173,12 +175,15 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
   return <section className="watch-chat" aria-label="Match chat">
     <header>
       <h2>Live chat</h2>
-      <small>{state.slowModeSec ? <span className="watch-chat-slow"><Clock size={12} />Slow mode {slowModeLabel(state.slowModeSec)}</span>
+      <small>{staff && state.slowModeSec ? <span className="watch-chat-slow"><Clock size={12} />Slow mode {slowModeLabel(state.slowModeSec)}</span>
         : messages.length ? `${messages.length} messages` : 'Visible to viewers of this match'}</small>
+      {staff && <button type="button" className="watch-chat-tools-toggle" aria-expanded={showTools} aria-label={showTools ? 'Hide chat settings' : 'Chat settings'} title="Chat settings" onClick={() => setShowTools(value => !value)}>
+        <Settings2 size={16} />{mutes.length > 0 && <b>{mutes.length}</b>}
+      </button>}
     </header>
 
-    {/* Staff controls: only shown to admin/staff */}
-    {staff && <div className="watch-chat-staffbar">
+    {/* Staff controls: only shown to admin/staff, behind the settings button */}
+    {staff && showTools && <div className="watch-chat-staffbar">
       <label>Slow mode
         <select value={state.slowModeSec} onChange={event => { const seconds = Number(event.target.value); void run(() => setSlowMode(matchId, currentUser.id, seconds, state), seconds ? `Slow mode set to ${slowModeLabel(seconds)}.` : 'Slow mode is off.', 'Could not change slow mode.'); }}>
           {SLOW_MODE_OPTIONS.map(sec => <option key={sec} value={sec}>{slowModeLabel(sec)}</option>)}
@@ -188,7 +193,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
         <Shield size={14} />{mutes.length} muted
       </button>}
     </div>}
-    {staff && showMutes && mutes.length > 0 && <ul className="watch-chat-mutes" aria-label="Muted viewers">
+    {staff && showTools && showMutes && mutes.length > 0 && <ul className="watch-chat-mutes" aria-label="Muted viewers">
       {mutes.map(item => <li key={item.uid}>
         <span>{item.kind === 'kick' ? 'Removed' : 'Muted'}: <strong>{item.name || 'Viewer'}</strong> · {formatCountdown(muteSecondsLeft(item.until, now))} left{item.reason ? ` · "${item.reason}"` : ''}</span>
         <button type="button" onClick={() => void run(() => unmuteChatUser(matchId, currentUser.id, item.uid), 'Viewer can post again.', 'Could not lift the mute.')}>Lift</button>

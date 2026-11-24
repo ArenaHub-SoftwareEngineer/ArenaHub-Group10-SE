@@ -398,9 +398,13 @@
 
 @media (min-width: 1181px) {
   .shell-page:has(> .watch-page), .shell-page:has(> * > .watch-page) { padding-bottom: 16px; }
-  .watch-page { height: calc(100dvh - var(--topbar-h) - 40px); min-height: 560px; align-items: stretch; grid-template-columns: minmax(0, 1fr) 380px; }
-  /* The player shrinks with short screens so the score bar and next match stay in view; long rosters scroll in place. */
-  .watch-primary { width: 100%; max-width: calc((100dvh - var(--topbar-h) - 380px) * 16 / 9 + 2px); min-width: min(100%, 520px); justify-self: center; overflow-y: auto; scrollbar-width: thin; }
+  .watch-page { height: calc(100dvh - var(--topbar-h) - 40px); min-height: 480px; align-items: stretch; grid-template-columns: minmax(0, 1fr) 380px; }
+  /* Video-site layout: the player spans the whole column and takes the height the score bar leaves, letterboxed in
+     black on short screens instead of shrinking into a centred box with empty gutters. Long rosters scroll in place. */
+  .watch-primary { container-type: inline-size; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+  .watch-primary .broadcast-player-shell { flex: 1 1 auto; min-height: 280px; max-height: calc(100cqw * 9 / 16 + 46px); }
+  .watch-primary .broadcast-video { height: 100%; }
+  .watch-primary .watch-matchbar { flex: none; }
   .watch-secondary { position: static; max-height: none; height: 100%; overflow: hidden; gap: 16px; }
   .watch-secondary .watch-chat { flex: 1 1 auto; height: auto; min-height: 240px; }
   .watch-secondary .watch-upnext { flex: 0 1 auto; max-height: 42%; min-height: 0; display: flex; flex-direction: column; }
@@ -410,7 +414,18 @@
 
 @media (max-width: 1180px) {
   .watch-page { gap: 16px; }
+  /* Stacked layout: the video never gets so tall that the score bar drops below the fold (tablets, phones in landscape). */
+  .watch-primary .broadcast-video { max-height: max(180px, calc(100dvh - var(--topbar-h) - 260px)); }
 }
+
+/* Player chrome on the watch page: Reload sits in the brand bar instead of its own footer row, and the black stage
+   letterboxes the stream like a video site. */
+.watch-primary .broadcast-player-shell { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+.watch-primary .ah-player-bar { grid-column: 1; grid-row: 1; }
+.watch-primary .broadcast-video { grid-column: 1 / -1; grid-row: 2; width: 100%; aspect-ratio: 16 / 9; min-height: 0; background: #000; }
+.watch-primary .broadcast-player-footer { grid-column: 2; grid-row: 1; padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.watch-primary .broadcast-player-footer p { display: none; }
+@media (min-width: 1181px) { .watch-primary .broadcast-video { aspect-ratio: auto; } }
 
 @media (max-width: 767px) {
   .shell-page:has(> .watch-page), .shell-page:has(> * > .watch-page) { padding-top: 8px; padding-bottom: calc(12px + var(--tabbar-h)); }
@@ -438,4 +453,33 @@
   /* Chat takes the rest of the phone screen (video is 56.25vw tall), never less than a usable box. */
   .watch-secondary { gap: 16px; }
   .watch-secondary .watch-chat { height: max(240px, calc(100dvh - var(--topbar-h) - var(--tabbar-h) - 56.25vw - 248px)); }
+}
+@media (max-width: 767px) {
+  /* Phones hide the brand bar, so Reload goes back under the video as a slim row. */
+  .watch-primary .broadcast-player-footer { grid-column: 1 / -1; grid-row: 3; padding: 4px 10px; border-bottom: 0; }
+  .watch-primary .broadcast-video { max-height: max(180px, calc(100dvh - var(--topbar-h) - var(--tabbar-h) - 210px)); }
+}
+
+/* Chat header: staff get a settings button for slow mode and mutes; viewers never see those controls. */
+.watch-chat header { align-items: center; }
+.watch-chat header small { margin-left: auto; }
+.watch-chat-tools-toggle {
+  position: relative; flex: none; width: 32px; height: 32px; margin: -6px -8px -6px 0; display: grid; place-items: center;
+  border-radius: 50%; color: var(--text-secondary); cursor: pointer;
+}
+.watch-chat-tools-toggle:hover, .watch-chat-tools-toggle[aria-expanded=true] { background: var(--surface-elevated); color: var(--text-primary); }
+.watch-chat-tools-toggle b {
+  position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
+  display: grid; place-items: center; background: var(--danger); color: #fff; font-size: 10px; font-weight: 700; line-height: 1;
+}
+
+/* Phones: the video sticks under the top bar while you scroll, and chat fills the screen below it,
+   so you can read a busy chat and keep watching. */
+@media (max-width: 767px) {
+  .watch-primary { display: contents; }
+  .watch-primary .broadcast-player-shell { position: sticky; top: var(--topbar-h); z-index: 6; box-shadow: 0 -10px 0 var(--bg-base), 0 6px 16px rgb(0 0 0 / .35); }
+  .watch-primary .watch-matchbar { margin-top: 0; }
+  .watch-secondary .watch-chat {
+    height: max(320px, calc(100dvh - var(--topbar-h) - var(--tabbar-h) - (100vw - 2 * clamp(12px, 4vw, 20px)) * 9 / 16 - 52px));
+  }
 }

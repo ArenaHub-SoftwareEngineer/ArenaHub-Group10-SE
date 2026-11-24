@@ -44,6 +44,8 @@ service cloud.firestore {
     function registeredStudent() {
       return campusStudent() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('spectatorInviteApproved', false) == true;
     }
+    // Who may issue a guest invitation: an approved student, or a campus admin (who approves students and need not approve themselves).
+    function inviteIssuer() { return registeredStudent() || (campusStudent() && isAdmin()); }
     function personalSpectator() {
       return activeAccount() && !campusStudent()
         && request.auth.token.firebase.sign_in_provider in ['google.com', 'password'];
@@ -54,7 +56,7 @@ service cloud.firestore {
       return token.matches('[a-f0-9]{48}') && slot.token == token
         && invite.createdAt == slot.createdAt
         && request.time < invite.createdAt + duration.value(20, 'm')
-        && issuer.status == 'active' && issuer.get('spectatorInviteApproved', false) == true
+        && issuer.status == 'active' && (issuer.get('spectatorInviteApproved', false) == true || issuer.get('role', '') == 'admin')
         && issuer.emailVerified == true && institutionalEmail(issuer.email);
     }
     function activeSpectator() {
@@ -62,8 +64,8 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/spectatorAdmissions/$(request.auth.uid)).data.email == request.auth.token.email;
     }
     match /studentInviteSlots/{uid} {
-      allow get: if ownsProfile(uid) && registeredStudent();
-      allow create, update: if ownsProfile(uid) && registeredStudent()
+      allow get: if ownsProfile(uid) && inviteIssuer();
+      allow create, update: if ownsProfile(uid) && inviteIssuer()
         && (resource == null || request.time >= resource.data.createdAt + duration.value(20, 'm'))
         && request.resource.data.keys().hasOnly(['token', 'createdAt'])
         && request.resource.data.token is string && request.resource.data.token.matches('[a-f0-9]{48}')
@@ -73,12 +75,12 @@ service cloud.firestore {
     }
     match /campusInvites/{token} {
       allow get: if validInvite(token, resource.data);
-      allow create: if registeredStudent() && token.matches('[a-f0-9]{48}')
+      allow create: if inviteIssuer() && token.matches('[a-f0-9]{48}')
         && request.resource.data.keys().hasOnly(['issuer', 'createdAt'])
         && request.resource.data.issuer == request.auth.uid && request.resource.data.createdAt == request.time
         && getAfter(/databases/$(database)/documents/studentInviteSlots/$(request.auth.uid)).data.token == token
         && getAfter(/databases/$(database)/documents/studentInviteSlots/$(request.auth.uid)).data.createdAt == request.time;
-      allow delete: if registeredStudent() && resource.data.issuer == request.auth.uid
+      allow delete: if inviteIssuer() && resource.data.issuer == request.auth.uid
         && request.time >= resource.data.createdAt + duration.value(20, 'm');
     }
     match /spectatorAdmissions/{uid} {

@@ -4,7 +4,8 @@ import { Match, BracketDraft } from '../../lib/types';
 import { ArrowRight, CalendarDays, Eye, Radio, ShieldCheck, Sparkles } from '../ui/Icons';
 import { publicationGameKey } from '../../lib/bracketPublication';
 import { GAME_ARTWORK } from '../common/GameArtworkTiles';
-import { bracketScheduleLabel } from '../../lib/calendar';
+import { bracketScheduleLabel, manilaToday, scheduleDate, timeOrder } from '../../lib/calendar';
+import { scheduleTimeLabel } from '../../lib/matchTiming';
 import { upcomingOrder, watchGames, type WatchCard } from '../../lib/watchCards';
 import { formatViewers, useViewerCounts } from '../../lib/presence';
 import { CAMPUS_SHORT_NAME } from '../../lib/institution';
@@ -30,6 +31,17 @@ const code = (team?: { collegeCode?: string; name?: string }) => team?.collegeCo
 const GAME_SHORT: Record<string, string> = { mlbb: 'MLBB', dota2: 'Dota 2', 'codm-mp': 'CODM', 'codm-br': 'CODM BR' };
 const PHOTO_CREDIT = 'Photos: Alexandros Giannakakis, Raman Shaunia and Alef Morais on Unsplash.';
 
+/** "Today · 2:00 PM", "Tomorrow · 7:30 PM" or "Nov 28 · 3:00 PM"; the plain schedule label when the date or time is unclear. */
+function whenLabel(match: Match) {
+  const day = scheduleDate(match.scheduledDate?.trim() || '');
+  if (!day || timeOrder(match.scheduledTime || '') === 9999) return bracketScheduleLabel(match);
+  const today = manilaToday();
+  const tomorrow = manilaToday(new Date(Date.now() + 86_400_000));
+  const date = day === today ? 'Today' : day === tomorrow ? 'Tomorrow'
+    : new Date(`${day}T12:00:00+08:00`).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', timeZone: 'Asia/Manila' });
+  return `${date} · ${scheduleTimeLabel(match)}`;
+}
+
 /** The hero title for the featured match, as poster lines. */
 function heroLines(featured?: WatchCard): Line[] {
   if (!featured) return [{ text: 'Every campus', tone: 'thin' }, { text: 'match,' }, { text: 'live.', tone: 'brand' }];
@@ -38,13 +50,17 @@ function heroLines(featured?: WatchCard): Line[] {
   return [{ text: short(match.team1?.name) }, { text: 'vs', tone: 'thin' }, { text: short(match.team2?.name), tone: 'brand' }];
 }
 
-/** A line that rises out of its mask, once, when it scrolls into view. */
+const RISE = { hidden: { y: '108%', rotate: 6 }, shown: { y: '0%', rotate: 0 } };
+
+/**
+ * A line that rises out of its mask, once, when it scrolls into view. The mask watches the viewport: the line
+ * itself starts clipped away by the mask, so it would never count as visible.
+ */
 function RiseLine({ line, i, calm }: { line: Line; i: number; calm: boolean }) {
-  return <span className="hp-mask">
-    <motion.span className={`hp-line${line.tone ? ` is-${line.tone}` : ''}`}
-      initial={calm ? false : { y: '108%', rotate: 6 }} whileInView={{ y: '0%', rotate: 0 }} viewport={{ once: true, amount: 0.6 }}
+  return <motion.span className="hp-mask" initial={calm ? false : 'hidden'} whileInView="shown" viewport={{ once: true, amount: 0.5 }}>
+    <motion.span className={`hp-line${line.tone ? ` is-${line.tone}` : ''}`} variants={RISE}
       transition={{ type: 'spring', stiffness: 90, damping: 18, delay: 0.08 + i * 0.09 }}>{line.text}</motion.span>
-  </span>;
+  </motion.span>;
 }
 
 /** Section heading in the poster style: a numbered label, then the title in heavy display type. */
@@ -162,7 +178,7 @@ function Hero({ featured, counts, ticker, calm, onOpen, onNavigateTab }: {
     <motion.div className="hp-hero-copy" style={{ y: lift, opacity: fade }}>
       <p className={`hp-kicker${featuredLive ? ' is-live' : ''}`}>
         {featuredLive ? <><span className="ah-live-tag">Live</span>{typeof viewers === 'number' && viewers > 0 ? formatViewers(viewers) : featured!.gameLabel}</>
-          : featured ? <><CalendarDays size={16} aria-hidden="true" />{featured.state === 'waiting' ? 'Starting soon' : `Next up · ${bracketScheduleLabel(featured.match)}`}</>
+          : featured ? <><CalendarDays size={16} aria-hidden="true" />{featured.state === 'waiting' ? 'Starting soon' : `Next up · ${whenLabel(featured.match)}`}</>
           : <>{CAMPUS_SHORT_NAME} esports</>}
       </p>
       <h1 id="home-hero-title" className={`hp-title ${size}`}>
@@ -191,7 +207,7 @@ function Hero({ featured, counts, ticker, calm, onOpen, onNavigateTab }: {
         {[0, 1].map(k => <span key={k}>{ticker.map(card => <React.Fragment key={card.match.id}>
           {card.state === 'live' && <b>Live</b>}
           {GAME_SHORT[card.gameId] || card.gameLabel} · {card.match.lobby ? `${short(card.bracket.title)}, ${card.match.roundName}` : `${code(card.match.team1)} ${card.state === 'live' ? `${card.match.score.team1Score}–${card.match.score.team2Score}` : 'vs'} ${code(card.match.team2)}`}
-          {card.state !== 'live' && ` · ${card.state === 'waiting' ? 'starting soon' : bracketScheduleLabel(card.match)}`}<i />
+          {card.state !== 'live' && ` · ${card.state === 'waiting' ? 'starting soon' : whenLabel(card.match)}`}<i />
         </React.Fragment>)}</span>)}
       </div>
     </div>}
@@ -227,10 +243,9 @@ function HeroPoster({ card, live, viewers, calm, progress }: { card: WatchCard; 
         <motion.span className="hp-poster-glare" style={{ background: glare }} />
       </span>
       <span className="hp-poster-badges">
-        {live ? <span className="hp-badge-live"><i />Live</span> : <span className="hp-badge-time"><CalendarDays size={14} />{card.state === 'waiting' ? 'Starting soon' : bracketScheduleLabel(match)}</span>}
+        {live ? <span className="hp-badge-live"><i />Live</span> : <span className="hp-badge-time"><CalendarDays size={14} />{card.state === 'waiting' ? 'Starting soon' : whenLabel(match)}</span>}
         {live && typeof viewers === 'number' && viewers > 0 && <span className="hp-badge-viewers"><Eye size={14} />{formatViewers(viewers)}</span>}
       </span>
-      <span className="hp-poster-game">{GAME_SHORT[card.gameId] || card.gameLabel}</span>
       {!match.lobby && <span className="hp-scorebug">
         <span><CollegeLogo code={code(match.team1)} size="sm" />{code(match.team1)}</span>
         {live || match.status === 'completed' ? <><b>{match.score.team1Score}</b><i>–</i><b>{match.score.team2Score}</b></> : <i>vs</i>}

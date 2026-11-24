@@ -42,7 +42,7 @@ function countdown(at: number | null, now: number) {
 }
 
 /** The watch page: player, title and actions, a description box with the score, then chat and Up next. */
-export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, gameImage, currentUser, onBack, readOnly = false, upNext = [], onOpenCard, onOpenArenaAI }) => {
+export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, gameImage, currentUser, readOnly = false, upNext = [], onOpenCard, onOpenArenaAI }) => {
   const { showToast } = useToast();
   const statusLabel = ({ live: 'Live', completed: 'Completed', upcoming: 'Upcoming', 'pre-match': 'Pre-match', alert: 'Needs review' } as Record<string, string>)[match.status] || match.status;
   const [more, setMore] = useState(false);
@@ -61,7 +61,6 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
 
   return <div className="watch-page">
     <div className="watch-primary">
-      <nav className="watch-crumbs" aria-label="Breadcrumb"><button type="button" onClick={onBack}>Match center</button><span aria-hidden="true">/</span><span>{gameName || 'Live match'}</span></nav>
       <BroadcastPlayer match={match} />
 
       {/* One aligned bar: both colleges and the score, then status, schedule, viewers and the next match's start time. */}
@@ -91,7 +90,7 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
       </section>
     </div>
 
-    <ShareMatchDialog open={sharing} onClose={() => setSharing(false)} match={match} gameName={gameName} canInvite={canPost} />
+    <ShareMatchDialog open={sharing} onClose={() => setSharing(false)} match={match} gameName={gameName} canInvite={canPost && (currentUser.role === 'admin' || currentUser.spectatorInviteApproved === true)} />
 
     <aside className="watch-secondary">
       <LiveChatPanel matchId={match.id} currentUser={currentUser} readOnly={readOnly} canPost={canPost} onOpenArenaAI={onOpenArenaAI} />

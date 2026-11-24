@@ -55,7 +55,12 @@ export function ShareMatchDialog({ open, onClose, match, gameName, canInvite }: 
     currentStudentInvite(user).then(invite => {
       const token = new URL(invite.url).searchParams.get('spectatorInvite') || '';
       if (active) setGuest({ url: withInvite(token), expiresAt: invite.expiresAt });
-    }).catch(() => { if (active) setGuestError(`Could not create an invitation. Check your connection and ${CAMPUS_SHORT_NAME} account, then try again.`); });
+    }).catch((error: { code?: string }) => {
+      if (!active) return;
+      setGuestError(error?.code === 'permission-denied'
+        ? 'Your account is not approved to invite guests yet. Ask an organizer to approve student QR access for you.'
+        : `Could not create an invitation. Check your connection and ${CAMPUS_SHORT_NAME} account, then try again.`);
+    });
     return () => { active = false; };
   }, [open, mode, guest, expired]);
 

@@ -19,7 +19,7 @@
 .aif-vignette { position: absolute; inset: 0; z-index: 5; pointer-events: none; background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 55%, rgb(0 0 0 / .7)); }
 
 /* The "world": composer and the opening lockup share one camera. */
-.aif-world { position: absolute; inset: 0; z-index: 2; transform-origin: 62% 62%; will-change: transform; }
+.aif-world { position: absolute; inset: 0; z-index: 2; transform-origin: 50% 60%; will-change: transform; }
 
 /* ---------- Mark and wordmark ---------- */
 .aif-lockup {

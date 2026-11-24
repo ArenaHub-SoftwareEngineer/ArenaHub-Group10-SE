@@ -65,7 +65,8 @@
 .app-shell .hp-title.is-long { font-size: clamp(40px, 4.8vw, 84px); line-height: .9; }
 .app-shell .hp-title .hp-mask { display: block; }
 .app-shell .hp-title .hp-line { transform-origin: 50% 100%; }
-.app-shell .hp-title .hp-line.is-thin { font-size: .52em; letter-spacing: -.03em; text-transform: none; line-height: 1.15; color: var(--text-secondary); }
+.app-shell .hp-title .hp-mask:has(> .is-thin) { font-size: .52em; }
+.app-shell .hp-title .hp-line.is-thin { letter-spacing: -.03em; text-transform: none; line-height: 1.15; color: var(--text-secondary); }
 .app-shell .hp-sub { margin: 0; max-width: 46ch; color: var(--text-secondary); font-size: clamp(16px, 1.25vw, 19px); line-height: 1.55; }
 .app-shell .hp-score { display: inline-flex; align-items: baseline; gap: 14px; font-variant-numeric: tabular-nums; }
 .app-shell .hp-score b { font-size: clamp(56px, 6vw, 96px); font-weight: 1000; line-height: .9; letter-spacing: -.04em; color: var(--text-primary); }
@@ -90,10 +91,6 @@
 .app-shell .hp-badge-live { background: var(--live); color: #fff; text-transform: uppercase; }
 .app-shell .hp-badge-live i { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: hp-beat 1.4s ease-in-out infinite; }
 .app-shell :is(.hp-badge-viewers, .hp-badge-time) { background: rgb(0 0 0 / .66); color: #fff; font-variant-numeric: tabular-nums; }
-.app-shell .hp-poster-game {
-  position: absolute; left: 24px; right: 24px; bottom: 84px; transform: translateZ(40px); pointer-events: none;
-  font-size: clamp(48px, 6vw, 104px); font-weight: 1000; line-height: .84; letter-spacing: -.06em; text-transform: uppercase; color: #fff;
-}
 .app-shell .hp-scorebug {
   position: absolute; left: 50%; bottom: 22px; translate: -50% 0; transform: translateZ(90px);
   display: inline-flex; align-items: center; gap: 14px; padding: 10px 20px; border-radius: 16px; white-space: nowrap;
@@ -117,7 +114,7 @@
 @keyframes hp-marquee { to { transform: translateX(-50%); } }
 
 /* ---------- Games ---------- */
-.app-shell .hp-games { overflow: visible; }
+.app-shell .hp-games { overflow-x: clip; overflow-clip-margin: var(--hp-bleed); }
 .app-shell .hp-marquee {
   margin: 0 calc(var(--hp-bleed) * -1); white-space: nowrap; width: max-content; pointer-events: none;
   font-size: clamp(64px, 10vw, 180px); font-weight: 1000; line-height: .86; letter-spacing: -.055em; text-transform: uppercase;
@@ -182,7 +179,6 @@
   .app-shell .hp-hero-visual { order: -1; height: auto; aspect-ratio: 4 / 3; }
   .app-shell .hp-poster { height: 100%; }
   .app-shell .hp-poster-inset { display: none; }
-  .app-shell .hp-poster-game { bottom: 74px; font-size: clamp(40px, 13vw, 72px); }
   .app-shell .hp-scorebug { padding: 8px 14px; gap: 10px; font-size: var(--fs-sm); }
   .app-shell .hp-hero-stage { inset: 0; }
   .app-shell .hp-title { font-size: clamp(48px, 15vw, 96px); }
