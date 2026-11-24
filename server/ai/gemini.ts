@@ -54,10 +54,17 @@ export function geminiProvider(apiKey: string, model: string): Provider {
       }
     },
     async json(request) {
+      const budget = request.thinkingBudget ?? 0;
       const result = await client.models.generateContent({
         model,
         contents: [{ role: 'user', parts: [{ text: request.prompt }] }],
-        config: { systemInstruction: request.system, temperature: 0, maxOutputTokens: 2000, responseMimeType: 'application/json', responseJsonSchema: request.schema, abortSignal: request.signal, httpOptions: { timeout: 30_000 } },
+        config: {
+          systemInstruction: request.system, temperature: request.temperature ?? 0,
+          maxOutputTokens: (request.maxOutputTokens ?? 2000) + budget,
+          ...(budget > 0 && /^gemini-(?:3|2\.5)/i.test(model) && { thinkingConfig: { thinkingBudget: budget } }),
+          responseMimeType: 'application/json', responseJsonSchema: request.schema,
+          abortSignal: request.signal, httpOptions: { timeout: 30_000 },
+        },
       });
       return JSON.parse(result.text || 'null');
     },

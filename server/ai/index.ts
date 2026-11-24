@@ -166,20 +166,27 @@ export function createAssistant(deps: AssistantDeps) {
       const tool = buildTools(toolContext).find(t => t.name === 'getPlayerLeaderboard')!;
       return parseBlocks(blocksFor('getPlayerLeaderboard', args, (await tool.run(args)).data));
     };
-    const recordsAnswer = async (extra: Partial<AnswerResult> = {}): Promise<AnswerResult> => ({
-      source: 'Live records', text: cleanReply(records.text, MAX_REPLY), references: records.references, mode: modeName, blocks: await recordBlocks(), ...extra,
-    });
+    // Think and Deep show how the records engine read the question; Quick stays an instant answer.
+    const recordSteps = (why?: string) => modeName === 'quick' ? undefined
+      : [...(why ? [why] : []), ...('steps' in records && records.steps ? records.steps : ['Understood the question as: the player leaderboard'])];
+    const recordsAnswer = async (extra: Partial<AnswerResult> = {}, why?: string): Promise<AnswerResult> => {
+      const steps = recordSteps(why);
+      return { source: 'Live records', text: cleanReply(records.text, MAX_REPLY), references: records.references, mode: modeName, blocks: await recordBlocks(), ...(steps ? { steps } : {}), ...extra };
+    };
     // The allowance belongs to the asker, so it is never part of a cached answer.
     const remember = (result: AnswerResult) => { if (cacheable) { const { allowance: _mine, ...shared } = result; cache.set(key, shared); } return result; };
 
-    if ((mode.recordsFirst && !records.needsModel) || !mode.providers.length) return emit(events, remember(await recordsAnswer({ allowance: await allowanceFor(input.caller) })));
+    if ((mode.recordsFirst && !records.needsModel) || !mode.providers.length) {
+      const why = mode.providers.length ? undefined : 'No AI model is set up on this server, so the answer comes straight from the published records';
+      return emit(events, remember(await recordsAnswer({ allowance: await allowanceFor(input.caller) }, why)));
+    }
 
     const before = await allowanceFor(input.caller);
-    if (before?.exhausted) return emit(events, await recordsAnswer({ limited: true, allowanceUsed: true, allowance: before }));
+    if (before?.exhausted) return emit(events, await recordsAnswer({ limited: true, allowanceUsed: true, allowance: before }, 'Your AI allowance is used up for now, so the answer comes straight from the published records'));
 
     const allowed = await deps.rate.hit(`user_${input.caller.uid}`, deps.config.userPerMinute, 60)
       && await globalRate.hit('global', deps.config.globalPerMinute, 60);
-    if (!allowed) return emit(events, await recordsAnswer({ limited: true, allowance: before }));
+    if (!allowed) return emit(events, await recordsAnswer({ limited: true, allowance: before }, 'Too many questions this minute, so the answer comes straight from the published records'));
 
     const references: KnowledgeReference[] = [];
     const steps: string[] = [];
@@ -260,7 +267,7 @@ export function createAssistant(deps: AssistantDeps) {
       } finally { attempt.done(); }
     }
     // Every model failed: the records answer, with any tables the lookups already built. The steps were shown live.
-    return emit(events, await recordsAnswer({ allowance: before, ...(found.length ? { blocks: chosenBlocks() } : {}) }));
+    return emit(events, await recordsAnswer({ allowance: before, ...(found.length ? { blocks: chosenBlocks() } : {}) }, 'The AI model did not respond, so the answer comes straight from the published records'));
   }
 
   return { answer };

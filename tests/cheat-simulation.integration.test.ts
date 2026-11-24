@@ -75,7 +75,7 @@ test('hidden cheat files are found by content, with real Windows signature check
   assert.equal(status, 'complete');
   const got = findings.map(f => `${f.name} :: ${f.reason}`).sort();
   assert.deepEqual(got, [
-    'cache.bin :: Unsigned program that is wrapped in VMProtect, which cheat sellers use to hide code',
+    'cache.bin :: Unsigned program that is wrapped in VMProtect',
     'chrome_updater.exe :: Renamed copy of a listed tool (its internal name is "cheatengine-x86_64.exe")',
     'helper.dll :: Unsigned program that targets dota2.exe',
     'holiday.mp4 :: Unsigned program that targets dota2.exe, contains DLL-injection functions',

@@ -1,26 +1,18 @@
 // Local storage for the Match Integrity Monitor. Everything here stays on the event laptop:
 // raw device reports and recordings never go to Firestore or Firebase Storage, which keeps
 // ArenaHub on the free Spark plan and keeps monitoring data off the public internet.
+// The hosted API uses FirestoreIntegrityStore instead (see server/monitorStore.ts).
 import { DatabaseSync } from 'node:sqlite';
-import { createHash, randomBytes, randomInt } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, PAIRING_ALPHABET, scoreSignals, type MonitorConfig, type MonitorGame, type MonitorPlatform, type Signal, type SignalId, type Severity } from '../src/lib/integrityRisk.ts';
-import { preMatchScan } from '../src/lib/preMatchScan.ts';
+import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, PAIRING_ALPHABET, type MonitorConfig, type MonitorPlatform, type Signal } from '../src/lib/integrityRisk.ts';
 import { IOS_CLEARANCE_MS, foundIndicators, iosReviewSchema, type IosReviewInput, type IosClearance } from '../src/lib/iosAntiCheat.ts';
+import { HEARTBEAT_SECONDS, LOST_AFTER_MS, PAIRING_TTL_MS, RETENTION_MS, RoomError, WrongDeviceError, claimingPlatform, connectionOf, liveSignalsOf, lostGapSignal, policyVersionOf, riskOf, roomOpen, scanOf, sha256, slotBlocked,
+  type MediaItem, type MonitorStore, type Pairing, type PairingInput, type RoomInput, type RoomRow, type SessionRow, type StoredSignal } from './monitorStore.ts';
 
-export const HEARTBEAT_SECONDS = 15;
-export const LOST_AFTER_MS = 45_000;
-export const PAIRING_TTL_MS = 5 * 60_000;
-export const RETENTION_MS = 30 * 24 * 3600_000;
-
-export interface SessionRow {
-  id: string; match_id: string; match_label: string; game: MonitorGame; platform: MonitorPlatform; player_name: string;
-  expected_steam_id: string; created_by: string; created_at: number; expires_at: number; code_hash: string | null; code_expires_at: number;
-  token_hash: string | null; gsi_token_hash: string | null; claimed_at: number | null; device: string | null; status: 'pending' | 'active' | 'ended' | 'declined'; ended_at: number | null;
-  team: string; player_key: string; scan_challenge: string; roster_version: string; record: number; last_seen: number | null; last_facts: string | null; gsi: string | null; review_note: string; hold: number; media_bytes: number;
-}
-export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+export { HEARTBEAT_SECONDS, LOST_AFTER_MS, PAIRING_TTL_MS, RETENTION_MS, WrongDeviceError, claimingPlatform, sha256, type SessionRow };
+const idOf = (row: SessionRow | string) => typeof row === 'string' ? row : row.id;
 
 // Node 24's recursive rmSync fails silently on Windows paths with non-ASCII characters
 // (this project folder has an em dash), so folders are removed file by file.
@@ -30,9 +22,13 @@ function removeTree(path: string) {
   else unlinkSync(path);
 }
 
-export class IntegrityStore {
+export class IntegrityStore implements MonitorStore {
   readonly db: DatabaseSync;
   readonly mediaRoot: string;
+  readonly heartbeatSeconds = HEARTBEAT_SECONDS;
+  readonly lostAfterMs = LOST_AFTER_MS;
+  readonly recordings = true;
+  readonly gsiMinGapMs = 0;
   constructor(dataDir: string, readonly now: () => number = Date.now) {
     const root = resolve(dataDir);
     mkdirSync(root, { recursive: true });
@@ -60,7 +56,14 @@ export class IntegrityStore {
     if (!columns.some(c => c.name === 'player_key')) this.db.exec("ALTER TABLE sessions ADD COLUMN player_key TEXT NOT NULL DEFAULT ''");
     if (!columns.some(c => c.name === 'scan_challenge')) this.db.exec("ALTER TABLE sessions ADD COLUMN scan_challenge TEXT NOT NULL DEFAULT ''");
     if (!columns.some(c => c.name === 'roster_version')) this.db.exec("ALTER TABLE sessions ADD COLUMN roster_version TEXT NOT NULL DEFAULT ''");
+    // 1: staff did not choose a device; the app or page that claims the code decides it (any phone for MLBB/CODM).
+    if (!columns.some(c => c.name === 'platform_flexible')) this.db.exec('ALTER TABLE sessions ADD COLUMN platform_flexible INTEGER NOT NULL DEFAULT 0');
+    if (!columns.some(c => c.name === 'room_id')) this.db.exec("ALTER TABLE sessions ADD COLUMN room_id TEXT NOT NULL DEFAULT ''");
+    for (const column of ['email', 'college', 'email_check']) if (!columns.some(c => c.name === column)) this.db.exec(`ALTER TABLE sessions ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+    if (!columns.some(c => c.name === 'passed_at')) this.db.exec('ALTER TABLE sessions ADD COLUMN passed_at INTEGER');
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS sessions_gsi_token ON sessions(gsi_token_hash)');
+    this.db.exec('CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL)');
+    this.db.exec('CREATE TABLE IF NOT EXISTS screen_staff (screen_key TEXT PRIMARY KEY, emails TEXT NOT NULL, updated_at INTEGER NOT NULL)');
   }
 
   config(): MonitorConfig {
@@ -79,14 +82,14 @@ export class IntegrityStore {
     this.db.prepare('INSERT INTO audit (at, actor, action, session_id, note) VALUES (?, ?, ?, ?, ?)').run(this.now(), actor, action, sessionId, note.slice(0, 500));
   }
 
-  createPairing(input: { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; playerName: string; team?: string; playerKey?: string; rosterVersion?: string; record?: boolean; expectedSteamId: string; hours: number }, actor: string) {
+  createPairing(input: PairingInput, actor: string): Pairing {
     const id = randomBytes(12).toString('base64url');
     const code = Array.from({ length: 8 }, () => PAIRING_ALPHABET[randomInt(PAIRING_ALPHABET.length)]).join('');
     const now = this.now();
     this.db.prepare(`INSERT INTO sessions (id, match_id, match_label, game, platform, player_name, team, record, expected_steam_id, created_by, created_at, expires_at, code_hash, code_expires_at, status)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`).run(id, input.matchId, input.matchLabel, input.game, input.platform, input.playerName, input.team || '', input.record === false ? 0 : 1, input.expectedSteamId, actor, now, now + input.hours * 3600_000, sha256(code), now + PAIRING_TTL_MS);
-    this.audit(actor, 'pairing-created', id, `${input.playerName} on ${input.platform} for ${input.matchLabel}`);
-    this.db.prepare('UPDATE sessions SET player_key = ?, scan_challenge = ?, roster_version = ? WHERE id = ?').run(input.playerKey || '', randomBytes(24).toString('hex'), input.rosterVersion || '', id);
+    this.audit(actor, 'pairing-created', id, `${input.playerName} on ${input.flexible ? 'any phone' : input.platform} for ${input.matchLabel}`);
+    this.db.prepare('UPDATE sessions SET player_key = ?, scan_challenge = ?, roster_version = ?, platform_flexible = ?, room_id = ?, email = ?, college = ?, email_check = ? WHERE id = ?').run(input.playerKey || '', randomBytes(24).toString('hex'), input.rosterVersion || '', input.flexible ? 1 : 0, input.roomId || '', input.email || '', input.college || '', input.emailCheck || '', id);
     return { id, code, codeExpiresAt: now + PAIRING_TTL_MS };
   }
   /** A pending pairing for a valid, unexpired code, without using the code up. */
@@ -104,11 +107,20 @@ export class IntegrityStore {
     this.audit('player', 'player-declined', row.id, 'The player declined monitoring for this match');
     return this.session(row.id);
   }
-  /** Single use: the code is erased the moment a device claims it. */
-  claim(code: string, device: Record<string, string>) {
+  /**
+   * Single use: the code is erased the moment a device claims it. An any-phone code takes the platform of
+   * the app or page claiming it; a device that cannot play this game is refused and the code stays usable.
+   */
+  claim(code: string, device: Record<string, string>, allowed?: MonitorPlatform[]) {
     const now = this.now();
-    const row = this.db.prepare(`SELECT * FROM sessions WHERE code_hash = ? AND status = 'pending'`).get(sha256(code.trim().toUpperCase())) as SessionRow | undefined;
+    let row = this.db.prepare(`SELECT * FROM sessions WHERE code_hash = ? AND status = 'pending'`).get(sha256(code.trim().toUpperCase())) as SessionRow | undefined;
     if (!row || row.code_expires_at < now || row.expires_at < now) return null;
+    if (row.platform_flexible === 1) {
+      const platform = claimingPlatform(device.agent);
+      if (!platform || (allowed && !allowed.includes(platform))) throw new WrongDeviceError();
+      this.db.prepare('UPDATE sessions SET platform = ?, platform_flexible = 0 WHERE id = ?').run(platform, row.id);
+      row = { ...row, platform, platform_flexible: 0 };
+    }
     const token = randomBytes(32).toString('base64url');
     const gsiToken = row.game === 'dota2' && row.platform === 'pc' ? randomBytes(32).toString('base64url') : undefined;
     this.db.prepare(`UPDATE sessions SET code_hash = NULL, token_hash = ?, gsi_token_hash = ?, claimed_at = ?, device = ?, status = 'active', last_seen = ? WHERE id = ?`).run(sha256(token), gsiToken ? sha256(gsiToken) : null, now, JSON.stringify(device), now, row.id);
@@ -119,13 +131,10 @@ export class IntegrityStore {
     this.expire();
     return this.db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
   }
-  policyVersion() { return sha256(JSON.stringify(this.config())); }
-  scan(row: SessionRow) {
-    const clearance = this.iosClearance(row.id);
-    return preMatchScan({ platform: row.platform, game: row.game, status: row.status, lastSeen: row.last_seen, expiresAt: row.expires_at, facts: row.last_facts ? JSON.parse(row.last_facts) : null, challenge: row.scan_challenge, policyVersion: this.policyVersion(), config: this.config(), now: this.now(), iosClearance: clearance?.rosterVersion === row.roster_version ? clearance : null });
-  }
-  iosClearance(id: string): IosClearance | null {
-    const row = this.db.prepare('SELECT value FROM ios_clearances WHERE session_id = ?').get(id) as { value: string } | undefined;
+  policyVersion() { return policyVersionOf(this.config()); }
+  scan(row: SessionRow) { return scanOf(row, this.config(), this.iosClearance(row.id), this.now()); }
+  iosClearance(session: SessionRow | string): IosClearance | null {
+    const row = this.db.prepare('SELECT value FROM ios_clearances WHERE session_id = ?').get(idOf(session)) as { value: string } | undefined;
     return row ? JSON.parse(row.value) : null;
   }
   reviewIos(id: string, actor: string, value: IosReviewInput) {
@@ -162,7 +171,7 @@ export class IntegrityStore {
 
   heartbeat(row: SessionRow, facts: unknown, signals: Signal[]) {
     const now = this.now();
-    if (row.last_seen && now - row.last_seen > LOST_AFTER_MS) signals = [...signals, { id: 'heartbeat-lost', severity: 'medium', evidence: `No report for ${Math.round((now - row.last_seen) / 1000)} s` }];
+    signals = [...signals, ...lostGapSignal(row, now, this.lostAfterMs)];
     this.db.prepare('UPDATE sessions SET last_seen = ?, last_facts = ? WHERE id = ?').run(now, JSON.stringify(facts), row.id);
     this.recordSignals(row.id, signals);
   }
@@ -177,28 +186,13 @@ export class IntegrityStore {
     this.db.prepare('UPDATE sessions SET gsi = ? WHERE id = ?').run(JSON.stringify(gsi), row.id);
     this.recordSignals(row.id, signals);
   }
-  signals(sessionId: string) {
-    return this.db.prepare('SELECT signal_id AS id, severity, evidence, first_seen AS firstSeen, last_seen AS lastSeen, count FROM signals WHERE session_id = ? ORDER BY last_seen DESC').all(sessionId) as unknown as { id: SignalId; severity: Severity; evidence: string; firstSeen: number; lastSeen: number; count: number }[];
+  signals(session: SessionRow | string) {
+    return this.db.prepare('SELECT signal_id AS id, severity, evidence, first_seen AS firstSeen, last_seen AS lastSeen, count FROM signals WHERE session_id = ? ORDER BY last_seen DESC').all(idOf(session)) as unknown as StoredSignal[];
   }
-  /**
-   * Live risk: stored signals, plus a lost-contact signal while an active device is silent.
-   * An iPhone cannot report in the background, so it is judged on whether a recording arrived instead.
-   */
-  liveSignals(row: SessionRow): Pick<Signal, 'id' | 'severity'>[] {
-    // iPhones are recorded by the referee from an observer slot, so a silent iPhone is normal.
-    if (row.platform === 'ios') return [];
-    return row.status === 'active' && row.last_seen && this.now() - row.last_seen > LOST_AFTER_MS ? [{ id: 'heartbeat-lost', severity: 'medium' }] : [];
-  }
-  risk(row: SessionRow) {
-    return scoreSignals([...this.signals(row.id), ...this.liveSignals(row)], this.config().thresholds);
-  }
-  connection(row: SessionRow): 'waiting' | 'online' | 'paired' | 'lost' | 'ended' | 'declined' {
-    if (row.status === 'declined') return 'declined';
-    if (row.status === 'ended') return 'ended';
-    if (row.status === 'pending') return 'waiting';
-    if (row.platform === 'ios') return 'paired';
-    return row.last_seen && this.now() - row.last_seen > LOST_AFTER_MS ? 'lost' : 'online';
-  }
+  /** Live risk: stored signals, plus a lost-contact signal while an active device is silent. */
+  liveSignals(row: SessionRow) { return liveSignalsOf(row, this.now(), this.lostAfterMs); }
+  risk(row: SessionRow) { return riskOf(this.signals(row.id), row, this.config(), this.now(), this.lostAfterMs); }
+  connection(row: SessionRow) { return connectionOf(row, this.now(), this.lostAfterMs); }
 
   addMedia(row: SessionRow, kind: 'video' | 'image', data: Buffer) {
     const dir = join(this.mediaRoot, row.id);
@@ -228,8 +222,8 @@ export class IntegrityStore {
     return Number(info.lastInsertRowid);
   }
   abortUpload(row: SessionRow, file: string) { try { unlinkSync(join(this.mediaRoot, row.id, `${file}.part`)); } catch {} }
-  media(sessionId: string) {
-    return this.db.prepare('SELECT id, kind, bytes, created_at AS createdAt FROM media WHERE session_id = ? ORDER BY created_at').all(sessionId) as unknown as { id: number; kind: string; bytes: number; createdAt: number }[];
+  media(session: SessionRow | string) {
+    return this.db.prepare('SELECT id, kind, bytes, created_at AS createdAt FROM media WHERE session_id = ? ORDER BY created_at').all(idOf(session)) as unknown as MediaItem[];
   }
   mediaFile(sessionId: string, mediaId: number) {
     const row = this.db.prepare('SELECT kind, file FROM media WHERE session_id = ? AND id = ?').get(sessionId, mediaId) as { kind: string; file: string } | undefined;
@@ -243,6 +237,8 @@ export class IntegrityStore {
     this.audit(actor, hold ? 'evidence-held' : 'reviewed', id, note);
   }
 
+  markPassed(row: SessionRow, at: number) { this.db.prepare('UPDATE sessions SET passed_at = ? WHERE id = ? AND passed_at IS NULL').run(at, row.id); }
+
   /** 30-day retention. Sessions a referee marked "hold" (attached to a case) are kept. */
   cleanup() {
     this.expire();
@@ -255,6 +251,61 @@ export class IntegrityStore {
       this.audit('system', 'retention-deleted', id, 'Recordings and signals deleted after 30 days');
     }
     return old.length;
+  }
+
+  // ---------- Rooms ----------
+  createRoom(input: RoomInput, actor: string): RoomRow {
+    const now = this.now();
+    const room: RoomRow = { id: randomBytes(9).toString('base64url'), label: input.label, match_id: input.matchId, game: input.game, roster_version: input.rosterVersion, players: input.players,
+      secret: randomBytes(32).toString('base64url'), record: input.record ? 1 : 0, hours: input.hours, created_by: actor, created_at: now, expires_at: now + input.hours * 3600_000, closed_at: null, joined: {}, ...(input.testRoom ? { test_room: true } : {}), ...(input.verifiedCheckIn ? { verified_checkin: true } : {}) };
+    this.db.prepare('INSERT INTO rooms (id, value, created_at) VALUES (?, ?, ?)').run(room.id, JSON.stringify(room), now);
+    this.audit(actor, 'room-opened', '', `${input.label} (${input.players.length || 'typed'} players)`);
+    return room;
+  }
+  room(id: string): RoomRow | undefined {
+    const row = this.db.prepare('SELECT value FROM rooms WHERE id = ?').get(id) as { value: string } | undefined;
+    return row ? JSON.parse(row.value) : undefined;
+  }
+  rooms(): RoomRow[] {
+    return (this.db.prepare('SELECT value FROM rooms WHERE created_at > ? ORDER BY created_at DESC LIMIT 50').all(this.now() - 2 * 24 * 3600_000) as { value: string }[]).map(r => JSON.parse(r.value));
+  }
+  private saveRoom(room: RoomRow) { this.db.prepare('UPDATE rooms SET value = ? WHERE id = ?').run(JSON.stringify(room), room.id); }
+  screenStaff(): Record<string, string[]> {
+    const rows = this.db.prepare('SELECT screen_key, emails FROM screen_staff').all() as { screen_key: string; emails: string }[];
+    return Object.fromEntries(rows.map(row => [row.screen_key, JSON.parse(row.emails)]));
+  }
+  setScreenStaff(key: string, emails: string[], actor: string) {
+    if (emails.length) this.db.prepare('INSERT INTO screen_staff (screen_key, emails, updated_at) VALUES (?, ?, ?) ON CONFLICT(screen_key) DO UPDATE SET emails = excluded.emails, updated_at = excluded.updated_at').run(key, JSON.stringify(emails), this.now());
+    else this.db.prepare('DELETE FROM screen_staff WHERE screen_key = ?').run(key);
+    this.audit(actor, 'screen-facilitator', '', key + ' · ' + (emails.join(', ') || 'removed'));
+  }
+  closeRoom(id: string, actor: string) {
+    const room = this.room(id);
+    if (!room || room.closed_at) return false;
+    this.saveRoom({ ...room, closed_at: this.now() });
+    this.audit(actor, 'room-closed', '', room.label);
+    return true;
+  }
+  joinRoom(roomId: string, slot: string, pairing: PairingInput): Pairing {
+    // node:sqlite is synchronous, so nothing else runs between this check and the write.
+    const room = this.room(roomId);
+    if (!room || !roomOpen(room, this.now())) throw new RoomError(404, 'This room is closed. Ask the referee.');
+    const held = room.joined[slot];
+    const blocked = slotBlocked(held ? this.session(held.sessionId) : undefined, this.now());
+    if (blocked) throw new RoomError(409, blocked);
+    const issued = this.createPairing({ ...pairing, roomId }, 'room');
+    this.saveRoom({ ...room, joined: { ...room.joined, [slot]: { sessionId: issued.id, at: this.now() } } });
+    return issued;
+  }
+  resetRoomSlot(roomId: string, slot: string, actor: string) {
+    const room = this.room(roomId), held = room?.joined[slot];
+    if (!room || !held) return false;
+    this.end(held.sessionId, actor, 'Staff reset this player in the room so they can join again');
+    const { [slot]: _removed, ...rest } = room.joined;
+    const name = this.session(held.sessionId)?.player_name || slot;
+    this.saveRoom({ ...room, joined: rest, resets: [...(room.resets || []), { slot, name, sessionId: held.sessionId, by: actor, at: this.now() }].slice(-200) });
+    this.audit(actor, 'room-slot-reset', held.sessionId, `${room.label}: ${slot}`);
+    return true;
   }
   close() { this.db.close(); }
 }

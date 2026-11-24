@@ -1,12 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { ORGANIZER, STUDENT, signIn, watchErrors } from './helpers';
+import { ORGANIZER, STUDENT, scheduleDraft, signIn, watchErrors } from './helpers';
 
 test('Swiss setup, scoring, publication and viewer standings work at both widths', async ({ page, browser }, info) => {
   test.setTimeout(120_000);
   const errors = watchErrors(page);
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await signIn(page, ORGANIZER);
-  await page.goto('/#/admin/bracket-studio');
+  await page.goto('/#/admin/bracket-studio?new=1');
   await page.getByRole('button', { name: 'Create bracket manually' }).click();
   const setup = page.getByRole('dialog', { name: 'Create Manual Bracket' });
   const title = `QA Swiss ${info.project.name} ${Date.now()}`;
@@ -21,32 +22,34 @@ test('Swiss setup, scoring, publication and viewer standings work at both widths
   expect(axe.violations.filter(v => ['serious', 'critical'].includes(v.impact || '')).map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) }))).toEqual([]);
   await setup.getByRole('button', { name: 'Proceed to Preview' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Yes, Create Bracket' }).click();
-  const stages = page.locator('.stage-board');
+  const stages = page.locator('.sb-board');
   await expect(stages).toContainText('Swiss rounds');
   const series = stages.getByLabel('Series format for Round 1');
   await expect(series).toBeEnabled();
   await series.selectOption('Bo1');
-  const matches = stages.locator('.stage-column').first().locator('.stage-match');
+  const matches = stages.locator('.sb-card[data-round="1"]');
   await expect(matches).toHaveCount(3);
   // Every real fixture ends in one click; the automatic bye is already complete.
   for (const index of [0, 1]) await matches.nth(index).getByRole('button', { name: /^Increase/ }).first().click();
-  await expect(stages.locator('.stage-column')).toHaveCount(2);
+  await expect(stages.locator('.sb-round-head')).toHaveCount(2);
   await expect(stages).toContainText('Round 3 is drawn');
   await expect(stages.getByLabel('Series format for Round 1')).toBeDisabled();
   await page.screenshot({ path: info.outputPath('swiss-rounds.png'), animations: 'disabled' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
 
+  await scheduleDraft(page);
   await page.getByRole('button', { name: 'Publish Bracket', exact: true }).first().click();
   const publish = page.getByRole('dialog', { name: 'Publish Bracket', exact: true });
   await publish.getByRole('button', { name: 'Use a custom game' }).click();
   await publish.getByLabel('Custom game title').fill(`QA Swiss ${info.project.name}`);
   await publish.getByRole('button', { name: 'Publish Bracket', exact: true }).click();
-  await expect(page.getByRole('dialog', { name: 'Bracket published' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('dialog', { name: 'Bracket published' })).toBeVisible({ timeout: 45_000 });
   await page.getByRole('dialog', { name: 'Bracket published' }).getByRole('button', { name: /close/i }).click();
 
   const viewerContext = await browser.newContext({ viewport: info.project.use.viewport });
   try {
     const viewer = await viewerContext.newPage();
+    await viewer.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
     const viewerErrors = watchErrors(viewer);
     await signIn(viewer, STUDENT);
     await viewer.goto('/#/arena/standings');

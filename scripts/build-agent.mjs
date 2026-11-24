@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const out = resolve('dist-agent');
+const out = resolve(process.env.ARENAHUB_AGENT_OUT_DIR || 'dist-agent');
 mkdirSync(out, { recursive: true });
 const cjs = join(out, 'arenahub-agent.cjs');
 await build({ entryPoints: ['tools/integrity-agent/agent.ts'], bundle: true, platform: 'node', format: 'cjs', target: 'node20', outfile: cjs, legalComments: 'none', logLevel: 'warning' });

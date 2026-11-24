@@ -5,7 +5,7 @@
 // The project is copied to a plain-ASCII folder first: the Android build tools fail on Windows
 // when the project path contains non-ASCII characters, and this repo's folder has an em dash.
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const local = process.env.LOCALAPPDATA;
@@ -26,6 +26,8 @@ function copy(from, to) {
   }
 }
 const work = join(tools, 'companion');
+// Mirror the sources: a file deleted from the repo must not linger in the build copy and still compile.
+rmSync(join(work, 'app', 'src'), { recursive: true, force: true });
 copy(resolve('companion', 'android'), work);
 writeFileSync(join(work, 'local.properties'), `sdk.dir=${slash(sdk)}\n`);
 

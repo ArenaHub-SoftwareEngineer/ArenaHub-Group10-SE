@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
-import { Shield, ShieldAlert, Sparkles, LayoutDashboard, Users as UsersIcon, Gamepad2, AlertTriangle, Star, GitBranch, ClipboardList, Radio, Swords, Trophy, Settings2, HelpCircle } from '../ui/Icons';
+import { ShieldAlert, Sparkles, LayoutDashboard, Users as UsersIcon, Gamepad2, AlertTriangle, CalendarDays, GitBranch, ClipboardList, Radio, Settings2, HelpCircle, History } from '../ui/Icons';
 import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
 import { ProfileMenu, type AccountPanel } from '../common/ProfileMenu';
 import { NotificationBell } from '../common/NotificationBell';
@@ -28,19 +28,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       { id: 'overview', label: 'Overview', icon: LayoutDashboard, keywords: 'home dashboard schedule' },
       { id: 'operations', label: 'Desk', title: 'Tournament desk', icon: ClipboardList, keywords: 'registration roster check-in policy' },
       { id: 'bracket-studio', label: 'Brackets', title: 'Bracket Studio', icon: GitBranch, keywords: 'create publish tournament' },
-      { id: 'battle-royale', label: 'Lobbies', title: 'Battle Royale', icon: Trophy, keywords: 'codm br lobby placement points' },
-      { id: 'match-data', label: 'Stats', title: 'Match stats', icon: Swords, keywords: 'matches player data entry kda score' },
+      { id: 'schedule', label: 'Schedule', title: 'Match schedule', icon: CalendarDays, keywords: 'schedule calendar dates match times' },
     ] },
     { label: 'Media', items: [
       { id: 'live-stream', label: 'Broadcast', title: 'Broadcast desk', icon: Radio, keywords: 'stream youtube facebook live' },
-      { id: 'featured', label: 'Spotlight', icon: Star, keywords: 'featured highlights posts' },
     ] },
     { label: 'Manage', items: [
       { id: 'users', label: 'Users', icon: UsersIcon, keywords: 'people accounts roles' },
       { id: 'games', label: 'Games', title: 'Game catalog', icon: Gamepad2, keywords: 'categories titles' },
-      { id: 'reports', label: 'Reports', title: 'Community reports', icon: AlertTriangle, badge: { kind: 'count', value: openReportsCount }, keywords: 'issues flags' },
-      { id: 'integrity', label: 'Cases', title: 'Fair play', icon: Shield, keywords: 'cheating cases appeals evidence' },
-      { id: 'match-monitor', label: 'Monitor', title: 'Anti-cheat', icon: ShieldAlert, keywords: 'anti-cheat device pairing qr phone' },
+      { id: 'reports', label: 'Reports', title: 'Community reports', icon: AlertTriangle, badge: { kind: 'count', value: openReportsCount }, keywords: 'issues flags match cases appeals evidence' },
+      { id: 'logs', label: 'Logs', title: 'System log', icon: History, keywords: 'activity audit history events what happened' },
+      { id: 'match-monitor', label: 'Monitor', title: 'Anti-cheat', icon: ShieldAlert, keywords: 'live player screens anti-cheat device scan pairing qr phone cheating' },
     ] },
     { label: 'Account', items: [
       { id: 'ai-assistant', label: 'Assistant', title: 'Arena AI', icon: Sparkles, keywords: 'assistant ask' },
@@ -53,8 +51,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     onSwitch={onExitToSpectator} switchLabel="Viewer" onLogout={onLogout} />;
 
   return <AppShell workspace="admin" context="Admin" groups={groups} live={live} navLabel="Admin navigation" isActive={id => id === activeTab} onNavigate={onTabChange}
-    mobileTabs={['overview', 'bracket-studio', 'live-stream', 'match-data']} pageKey={activeTab}
-    routeKey={routeKey} pageTitle={(item => item?.title || item?.label)(groups.flatMap(group => group.items).find(item => item.id === activeTab)) || 'Overview'} fullBleed={activeTab === 'ai-assistant'}
+    mobileTabs={['overview', 'bracket-studio', 'live-stream', 'schedule']} pageKey={activeTab}
+    routeKey={routeKey} pageTitle={(item => item?.title || item?.label)(groups.flatMap(group => group.items).find(item => item.id === activeTab)) || 'Overview'}
+    fullBleed={activeTab === 'ai-assistant'} widePage={['schedule', 'bracket-studio', 'live-stream'].includes(activeTab)}
     actions={<><NotificationBell staff onNavigate={onNotificationNavigate || onTabChange} />{profile('below')}</>}>
     {children}
   </AppShell>;

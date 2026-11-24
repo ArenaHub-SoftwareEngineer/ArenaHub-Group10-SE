@@ -16,7 +16,15 @@ export interface ProviderRequest {
   /** Tokens the API reports for one model call (prompt, output, thinking and tool results). Called once per call. */
   onUsage?(tokens: number): void;
 }
-export interface JsonRequest { system: string; prompt: string; schema: Record<string, unknown>; signal: AbortSignal }
+export interface JsonRequest {
+  system: string;
+  prompt: string;
+  schema: Record<string, unknown>;
+  signal: AbortSignal;
+  temperature?: number;
+  maxOutputTokens?: number;
+  thinkingBudget?: number;
+}
 
 export interface Provider {
   id: 'gemini' | 'groq' | 'fake' | 'mock';

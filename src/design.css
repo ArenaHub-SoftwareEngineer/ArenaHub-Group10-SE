@@ -59,7 +59,7 @@
 }
 
 /* ---------- Stages: one step deeper (brackets, stream player, 3D arena, hero) ---------- */
-.stage, .stage-board, .dashboard-media, .studio-board, .viewer-bracket-board, .broadcast-player-shell, .monitor3d, .multi-video-grid {
+.stage, .stage-board, .dashboard-media, .studio-board, .viewer-bracket-board, .broadcast-player-shell, .multi-video-grid {
   color-scheme: dark;
   --bg-base: #08080a;
   --surface: #0f0f12;
@@ -145,8 +145,7 @@
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-.app-shell :is(input, select, textarea):focus,
-.app-shell :is(input, select, textarea):focus-visible {
+.app-shell :is(input, select, textarea):focus:not(.bw-url > input) {
   border-color: var(--focus) !important;
   box-shadow: 0 0 0 1px var(--focus) !important;
   outline: none !important;

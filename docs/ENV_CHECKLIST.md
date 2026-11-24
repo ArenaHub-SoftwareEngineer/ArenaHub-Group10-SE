@@ -28,6 +28,10 @@ ArenaHub runs in three places, and each reads its own settings. "Public" values 
 | `AI_BURST_PER_MINUTE` | | optional | optional | no | Requests of any kind per user per minute before a 429 (default 30) |
 | `AI_CHAT_USER_INTERVAL_SEC` | | optional | optional | no | Seconds between one viewer's `@Arena` questions (default 30) |
 | `AI_CHAT_MATCH_PER_MINUTE` | | optional | optional | no | Model replies per match per minute in live chat (default 6). Over it, the match record answers |
+| `LIVEKIT_URL` | | for live screens | for live screens | no | LiveKit address players and staff connect to: `wss://<project>.livekit.cloud`, or `ws://<laptop Wi-Fi IP>:7880` for a self-hosted server. Without the three LiveKit values, the Monitor page says live screens are off. See docs/LIVE_SCREENS.md |
+| `LIVEKIT_API_KEY` | **never** | for live screens | for live screens | no | From the LiveKit project (Settings, Keys) |
+| `LIVEKIT_API_SECRET` | **never** | for live screens | for live screens | **yes** | Signs the short-lived player and staff tokens |
+| `LIVEKIT_API_URL` | | optional | optional | no | Only when this server reaches LiveKit at a different address than players do |
 | `GEMINI_VIDEO_MODEL` | | optional | optional | no | Vision model for video review. Defaults to `gemini-3.6-flash` (image analysis on it not yet verified) |
 | `CORS_ORIGINS` | | required with a separate API host | | no | The website origins, comma-separated, https only |
 | `HOST`, `PORT` | | | optional | no | `HOST=0.0.0.0` opens the laptop to the event Wi-Fi; port defaults to 3210 |

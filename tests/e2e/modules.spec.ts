@@ -1,7 +1,7 @@
-// Phase 2 modules in a real browser: Battle Royale placement scoring and live chat moderation.
+// Organizer brackets and live chat in a real browser.
 // Runs against the demo-arenahub emulators only (npm run test:e2e).
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
-import { ORGANIZER, QA_PASSWORD, STUDENT, watchErrors } from './helpers';
+import { ORGANIZER, QA_PASSWORD, STUDENT, scheduleDraft, signIn, watchErrors } from './helpers';
 
 // Every context a test opens is closed after it; leaked signed-in pages keep live listeners and slow later tests.
 const contexts: BrowserContext[] = [];
@@ -11,6 +11,7 @@ async function open(browser: Browser, email: string, viewport = { width: 1440, h
   const context = await browser.newContext({ viewport });
   contexts.push(context);
   const page = await context.newPage();
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   const errors = watchErrors(page);
   await page.goto('/');
   await page.getByRole('button', { name: /sign in to arenahub/i }).first().click();
@@ -23,105 +24,26 @@ async function open(browser: Browser, email: string, viewport = { width: 1440, h
 // The YouTube embed reports a permissions-policy message that is not an ArenaHub error.
 const ours = (errors: string[]) => errors.filter(e => !/Permissions policy violation/.test(e));
 
-test('organizer runs a Battle Royale lobby and viewers see placement standings', async ({ browser }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop-1440', 'One run covers both widths: the viewer checks 375 px itself.');
-  test.setTimeout(120_000);
-  const title = `E2E BR ${Date.now().toString(36)}`;
-  const { page: admin, errors: adminErrors } = await open(browser, ORGANIZER);
-  await admin.evaluate(() => { window.location.hash = '#/admin/battle-royale'; });
-  await expect(admin.getByRole('heading', { name: /^battle royale$/i })).toBeVisible({ timeout: 20_000 });
-  // Wait until published events have loaded: then either the create form is open (no events) or New event is offered.
-  await expect(admin.getByText('Loading published events…')).toHaveCount(0, { timeout: 20_000 });
-  const newEvent = admin.getByRole('button', { name: 'New event' });
-  if (await newEvent.count()) await newEvent.click();
-  await admin.getByLabel(/Event title/).fill(title);
-  await admin.getByLabel(/Squads, one per line/).fill(['Byte Brigade, CCS', 'Circuit Breakers, COE', 'Night Owls, CN', 'Chalk Dust, CED'].join('\n'));
-  await admin.locator('label', { hasText: /^Games/ }).locator('select').selectOption('3');
-  await admin.getByRole('button', { name: /review and publish/i }).click();
-  await admin.getByRole('dialog').getByRole('button', { name: 'Publish event' }).click();
-  // The page behind a modal dialog is inert until publishing finishes and the dialog closes.
-  await expect(admin.getByText('Battle Royale event published.').first()).toBeVisible({ timeout: 20_000 });
-  await expect(admin.getByRole('heading', { name: `${title}: results`, exact: true })).toBeVisible({ timeout: 20_000 });
-  await expect(admin.getByRole('heading', { name: `${title}: results` })).toBeVisible();
-
-  const enter = async (rows: Array<[string, number, number]>) => {
-    for (const [team, place, kills] of rows) {
-      await admin.getByLabel(`${team} placement`).fill(String(place));
-      await admin.getByLabel(`${team} eliminations`).fill(String(kills));
-      await expect(admin.getByLabel(`${team} placement`)).toHaveValue(String(place));
-      await expect(admin.getByLabel(`${team} eliminations`)).toHaveValue(String(kills));
-    }
-    await admin.locator('label', { hasText: /^Status/ }).locator('select').selectOption('completed');
-  };
-  await enter([['Byte Brigade', 2, 7], ['Circuit Breakers', 1, 3], ['Night Owls', 3, 2], ['Chalk Dust', 4, 0]]);
-  await admin.getByRole('button', { name: 'Save Game 1' }).click();
-  await expect(admin.getByText('Game 1 saved and standings updated.')).toBeVisible({ timeout: 20_000 });
-
-  // Two squads cannot share a placement.
-  await enter([['Byte Brigade', 1, 4], ['Circuit Breakers', 1, 2], ['Night Owls', 4, 1], ['Chalk Dust', 3, 5]]);
-  await admin.getByRole('button', { name: 'Save Game 2' }).click();
-  await expect(admin.locator('.module-error')).toHaveText('Two squads cannot both finish #1.');
-  await admin.getByLabel('Circuit Breakers placement').fill('2');
-  await admin.getByRole('button', { name: 'Save Game 2' }).click();
-  await expect(admin.getByText('Game 2 saved and standings updated.')).toBeVisible({ timeout: 20_000 });
-
-  // 2nd (6) + 1st (10) placement points plus 11 eliminations = 27.
-  const leader = admin.locator('.placement-table tbody tr').first();
-  await expect(leader).toContainText('Byte Brigade');
-  await expect(leader.locator('.total')).toHaveText('27');
-
-  const { page: viewer, errors: viewerErrors } = await open(browser, STUDENT, { width: 375, height: 812 });
-  await viewer.evaluate(() => { window.location.hash = '#/arena/choose-tournament'; });
-  await viewer.locator('button.stream-game-card').filter({ hasText: title }).click();
-  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible({ timeout: 20_000 });
-  await expect(viewer.locator('.placement-table tbody tr').first().locator('.total')).toHaveText('27');
-  expect(await viewer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
-
-  // Schedule Game 3; lobby games appear in Match center and the game schedule like any match.
-  const entry = admin.locator('form.placement-admin-entry');
-  await expect(entry.locator('label', { hasText: /^Game/ }).first().locator('select')).toHaveValue(/-G3$/);
-  await entry.getByLabel('Date').fill('2026-12-01');
-  await entry.getByLabel('Time').fill('15:00');
-  await admin.getByRole('button', { name: 'Save Game 3' }).click();
-  await expect(admin.getByText('Game 3 saved.')).toBeVisible({ timeout: 20_000 });
-  await viewer.evaluate(() => { window.location.hash = '#/arena/current-live'; });
-  const lobbyCard = viewer.locator('.watch-card').filter({ hasText: 'Game 3: 4-squad lobby' }).filter({ hasText: title });
-  await expect(lobbyCard.first()).toBeVisible({ timeout: 20_000 });
-  // The schedule reaches open viewers through the live listener; allow for a slow emulator.
-  await expect(lobbyCard.first()).toContainText('2026-12-01 · 15:00', { timeout: 20_000 });
-  await lobbyCard.first().click();
-  await expect(viewer.getByRole('dialog')).toContainText('Battle Royale standings update after each game');
-  await viewer.getByRole('dialog').getByRole('button', { name: 'Close dialog' }).click();
-  await expect(viewer.getByRole('dialog')).toHaveCount(0);
-  await viewer.evaluate(() => { window.location.hash = '#/arena/choose-tournament'; });
-  await viewer.locator('button.stream-game-card').filter({ hasText: title }).click();
-  await viewer.getByRole('button', { name: /Game schedule/ }).click();
-  const calendar = viewer.getByRole('dialog');
-  await expect(calendar).toContainText('December 2026');
-  await expect(calendar).toContainText('Game 3 · 4-squad lobby');
-  await expect(calendar).toContainText('Battle Royale lobby');
-  await calendar.getByRole('button', { name: 'Close dialog' }).click();
-
-  // The main Standings page uses lobby points for Battle Royale and keeps the chosen event on refresh.
-  await viewer.goto('/#/arena/standings');
-  const eventOption = viewer.getByLabel('Published bracket').locator('option').filter({ hasText: title });
-  await viewer.getByLabel('Published bracket').selectOption(await eventOption.getAttribute('value') as string);
-  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible();
-  await viewer.reload();
-  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toBeVisible();
-
-  // Unpublish from Bracket Studio: the event leaves the published list only after the cloud write succeeds.
-  await admin.evaluate(() => { window.location.hash = '#/admin/bracket-studio'; });
-  const library = admin.getByRole('complementary', { name: 'Bracket library' });
-  await library.getByRole('tab', { name: /^Live/ }).click();
-  const row = library.locator('.studio-bracket-library-row').filter({ hasText: title });
-  await row.getByRole('button', { name: 'Unpublish' }).click();
-  await admin.getByRole('dialog').getByRole('button', { name: 'Unpublish Bracket' }).click();
-  await expect(admin.getByText(`Bracket "${title}" unpublished.`)).toBeVisible({ timeout: 20_000 });
-  await expect(row).toHaveCount(0);
-  await expect(viewer.getByRole('heading', { name: 'Overall standings' })).toHaveCount(0, { timeout: 20_000 });
-  expect(ours(adminErrors)).toEqual([]);
-  expect(ours(viewerErrors)).toEqual([]);
+test('Bracket Studio redraws the same named teams into different slots', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-1440', 'Bracket Studio is an organizer desktop tool.');
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
+  await signIn(page, ORGANIZER);
+  await page.goto('/#/admin/bracket-studio?new=1');
+  await page.getByRole('button', { name: 'Prompt', exact: true }).click();
+  await page.getByLabel(/Tournament prompt/).fill('Please shuffle a bracket for Iron Owls and Storm Bears.');
+  await page.getByRole('button', { name: 'Generate bracket' }).click();
+  const settings = page.getByRole('region', { name: 'Check the bracket settings' });
+  await expect(settings).toContainText('Iron Owls, Storm Bears');
+  await expect(settings).toContainText('Choose when publishing');
+  await settings.getByRole('button', { name: 'Build bracket' }).click();
+  const slots = page.getByRole('region', { name: 'Bracket editor' }).locator('input.sb-name');
+  await expect(slots).toHaveCount(2);
+  const sides = await slots.evaluateAll(inputs => inputs.map(input => (input as HTMLInputElement).value));
+  const builder = page.locator('details.studio-build');
+  if (!await builder.evaluate(el => (el as HTMLDetailsElement).open)) await builder.locator('summary').click();
+  await page.getByRole('button', { name: 'Draw again' }).click();
+  await expect(slots.nth(0)).toHaveValue(sides[1]);
+  await expect(slots.nth(1)).toHaveValue(sides[0]);
 });
 
 test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and publish dialog', async ({ browser }, testInfo) => {
@@ -140,8 +62,8 @@ test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and pu
   // No game named: Arena AI asks instead of silently choosing one, and builds nothing yet.
   await expect(page.getByText(/Which game is this bracket for/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('heading', { name: /Single elimination/ })).toHaveCount(0);
-  await page.getByLabel(/Your answer/).fill('MLBB');
-  await page.getByRole('button', { name: 'Send answer' }).click();
+  // One-click answers are offered for the missing game.
+  await page.getByRole('group', { name: 'Quick answers' }).getByRole('button', { name: 'Mobile Legends: Bang Bang' }).click();
   // The organizer checks the parsed settings, defaults marked, before building.
   const settings = page.getByRole('region', { name: 'Check the bracket settings' });
   await expect(settings).toContainText('Mobile Legends: Bang Bang', { timeout: 30_000 });
@@ -150,7 +72,7 @@ test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and pu
   await settings.getByRole('button', { name: 'Build bracket' }).click();
   await expect(page.getByRole('heading', { name: /Single elimination/ })).toBeVisible({ timeout: 30_000 });
   await openBuilder();
-  await expect(page.getByText('Thinking complete')).toBeVisible();
+  await expect(page.getByText('Opened it on the canvas below')).toBeVisible();
   await expect(page.getByText('Bracket assistant')).toBeVisible();
 
   // The conversation lives in BracketAIDraft and survives switching build modes.
@@ -163,14 +85,96 @@ test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and pu
   await expect(page.getByText('Bracket assistant')).toBeVisible();
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Save bracket image' }).click();
+  await page.getByRole('button', { name: 'Save image' }).click();
   expect((await download).suggestedFilename()).toMatch(/\.png$/);
 
+  await page.getByRole('button', { name: 'Publish Bracket' }).first().click();
+  await expect(page.getByText(/remaining matches before publishing/)).toBeVisible();
+  await scheduleDraft(page);
   await page.getByRole('button', { name: 'Publish Bracket' }).first().click();
   await expect(page.getByRole('dialog', { name: 'Publish Bracket' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).or(page.getByRole('dialog').getByRole('button', { name: 'Cancel' })).first().click();
   await expect(page.getByRole('dialog', { name: 'Publish Bracket' })).toHaveCount(0);
   expect(ours(errors)).toEqual([]);
+});
+
+test('staff can create and publish a new bracket while matches are live', async ({ browser }, testInfo) => {
+  test.setTimeout(180_000);
+  const viewport = testInfo.project.use.viewport ?? undefined;
+  const { page: admin } = await open(browser, ORGANIZER, viewport);
+  const game = `QA Brackets ${testInfo.project.name} ${Date.now()}`;
+  const liveTitle = `${game} Live`;
+  const nextTitle = `${game} Next`;
+  const create = async (title: string) => {
+    await admin.getByRole('button', { name: 'Create bracket manually' }).click();
+    const setup = admin.getByRole('dialog', { name: 'Create Manual Bracket' });
+    await setup.getByLabel('Bracket Name').fill(title);
+    await setup.getByLabel('Number of Teams').fill('4');
+    await setup.getByRole('button', { name: 'Proceed to Preview' }).click();
+    await admin.getByRole('dialog').getByRole('button', { name: 'Yes, Create Bracket' }).click();
+  };
+  const review = async () => {
+    await admin.getByRole('button', { name: 'Publish Bracket', exact: true }).first().click();
+    const dialog = admin.getByRole('dialog', { name: 'Publish Bracket', exact: true });
+    await dialog.getByRole('button', { name: 'Use a custom game' }).click();
+    await dialog.getByLabel('Custom game title').fill(game);
+    return dialog;
+  };
+  const publish = async () => {
+    await admin.getByRole('dialog', { name: 'Publish Bracket', exact: true })
+      .getByRole('button', { name: 'Publish Bracket', exact: true }).click();
+    const success = admin.getByRole('dialog', { name: 'Bracket published' });
+    await expect(success).toBeVisible({ timeout: 45_000 });
+    await success.getByRole('button', { name: 'Done', exact: true }).click();
+  };
+
+  await admin.goto('/#/arena/choose-tournament');
+  await admin.getByRole('button', { name: 'Create bracket', exact: true }).click();
+  await create(liveTitle);
+  await scheduleDraft(admin);
+  await admin.locator('.sb-board').getByRole('button', { name: /^Increase/ }).first().click();
+  await review();
+  await publish();
+
+  const { page: viewer } = await open(browser, STUDENT, viewport);
+  await viewer.goto('/#/arena/choose-tournament');
+  await expect(viewer.getByRole('button', { name: 'Create bracket', exact: true })).toHaveCount(0);
+  await viewer.locator('.stream-game-card').filter({ hasText: liveTitle }).click();
+  await expect(viewer.getByRole('button', { name: 'Watch live' })).toBeVisible();
+  await expect(viewer.getByRole('button', { name: 'Create bracket', exact: true })).toHaveCount(0);
+
+  await admin.goto(viewer.url());
+  await expect(admin.getByRole('button', { name: 'Watch live' })).toBeVisible();
+  await admin.getByRole('button', { name: 'Create bracket', exact: true }).click();
+  await create(nextTitle);
+  await scheduleDraft(admin);
+  const reviewDialog = await review();
+  await expect(reviewDialog.getByText(`Publishing will replace “${liveTitle}”`, { exact: false })).toBeVisible();
+  await expect(viewer.getByRole('button', { name: 'Watch live' })).toBeVisible();
+  await publish();
+
+  await viewer.goto('/#/arena/choose-tournament');
+  await expect(viewer.locator('.stream-game-card').filter({ hasText: liveTitle })).toHaveCount(0);
+  await viewer.locator('.stream-game-card').filter({ hasText: nextTitle }).click();
+  await expect(viewer.getByRole('heading', { name: nextTitle, exact: true })).toBeVisible();
+  const library = admin.getByRole('complementary', { name: 'Bracket library' });
+  await library.getByRole('tab', { name: /^Versions/ }).click();
+  await expect(library.getByText(liveTitle, { exact: true })).toBeVisible();
+
+  await admin.goto(viewer.url());
+  await admin.getByRole('button', { name: 'Match schedule' }).click();
+  await admin.getByRole('dialog').getByRole('button', { name: 'Manage schedule' }).click();
+  const staffCalendar = admin.getByRole('region', { name: 'Manage match schedule' });
+  await staffCalendar.getByRole('button', { name: /, \d+ scheduled$/ }).first().click();
+  const removeFirst = admin.getByRole('button', { name: 'Remove schedule for Match 1' });
+  await removeFirst.click();
+  await expect(removeFirst).toHaveCount(0, { timeout: 45_000 });
+  await expect(admin.getByRole('button', { name: 'Remove schedule for Match 2' })).toBeVisible();
+  await viewer.getByRole('button', { name: 'Match schedule' }).click();
+  await viewer.getByRole('dialog', { name: 'Match schedule' }).getByRole('button', { name: /, \d+ scheduled$/ }).first().click();
+  const agenda = viewer.getByRole('dialog').getByRole('region', { name: 'Scheduled matches' });
+  await expect(agenda.getByText(/^Match 1 ?/)).toHaveCount(0);
+  await expect(agenda.getByText(/^Match 2 ?/)).toBeVisible();
 });
 
 test('staff pin, slow mode, mute and unmute in live chat', async ({ browser }, testInfo) => {
@@ -222,68 +226,4 @@ test('staff pin, slow mode, mute and unmute in live chat', async ({ browser }, t
   await expect(student.locator('.watch-chat-pinned')).toHaveCount(0, { timeout: 10_000 });
   expect(ours(studentErrors)).toEqual([]);
   expect(ours(staffErrors)).toEqual([]);
-});
-
-test('organizer records a timeline and MVP; viewers see them on the watch page', async ({ browser }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop-1440', 'Two signed-in browsers; one width is enough.');
-  test.setTimeout(120_000);
-  const { page: student, errors: studentErrors } = await open(browser, STUDENT);
-  await student.evaluate(() => { window.location.hash = '#/arena/current-live'; });
-  await student.locator('.watch-card.is-live').first().click();
-  await expect(student.getByRole('heading', { name: 'Live chat' })).toBeVisible({ timeout: 20_000 });
-  const matchId = new URLSearchParams((await student.evaluate(() => window.location.hash)).split('?')[1]).get('match')!;
-
-  const { page: admin, errors: adminErrors } = await open(browser, ORGANIZER);
-  await admin.evaluate(() => { window.location.hash = '#/admin/match-data'; });
-  await admin.getByLabel('Select match').selectOption(matchId);
-  const editor = admin.locator('.highlights-editor');
-  await expect(editor).toBeVisible({ timeout: 20_000 });
-  const addEvent = async (time: string, type: string, text: string) => {
-    await editor.getByLabel('Game time').fill(time);
-    await editor.getByLabel('What happened').selectOption(type);
-    await editor.getByLabel('Description').fill(text);
-    await editor.getByRole('button', { name: 'Add event' }).click();
-  };
-  await addEvent('18:10', 'lord', 'E2E Lord taken after a fight at mid');
-  await addEvent('2:15', 'first-blood', 'E2E first blood in the jungle');
-  await addEvent('soon', 'ace', 'Invalid time is refused');
-  await expect(editor.locator('.module-error')).toContainText('minutes:seconds');
-  await expect(editor.getByRole('list', { name: 'Recorded events' }).locator('time')).toHaveText(['2:15', '18:10']);
-  await editor.getByLabel('Match MVP').selectOption({ index: 1 });
-  const mvpName = (await editor.getByLabel('Match MVP').locator('option:checked').innerText()).split(' · ')[0];
-  await editor.getByLabel(/MVP highlight/).fill('E2E clutch in the final fight');
-  await editor.getByRole('button', { name: 'Save timeline and MVP' }).click();
-  await expect(admin.getByText('Timeline and MVP saved to the published match.')).toBeVisible({ timeout: 20_000 });
-
-  await expect(student.getByText('Match MVP')).toBeVisible({ timeout: 20_000 });
-  await expect(student.locator('h4', { hasText: mvpName })).toBeVisible();
-  await student.getByRole('button', { name: 'Timeline, rosters and player stats' }).click();
-  const timeline = student.locator('.match-timeline');
-  await expect(timeline.locator('li')).toHaveCount(2);
-  await expect(timeline.locator('li').first()).toContainText('E2E first blood in the jungle');
-
-  // Clean up the shared demo match.
-  for (let i = 0; i < 2; i++) await editor.getByRole('button', { name: /^Remove / }).first().click();
-  await editor.getByLabel('Match MVP').selectOption('');
-  await editor.getByRole('button', { name: 'Save timeline and MVP' }).click();
-  await expect(student.getByText('Match MVP')).toHaveCount(0, { timeout: 20_000 });
-
-  // A finished match keeps showing what was recorded on its 'Match has ended' page.
-  const select = admin.getByLabel('Select match');
-  const finished = await select.locator('option', { hasText: 'COMPLETED' }).first().getAttribute('value');
-  await select.selectOption(finished!);
-  await addEvent('9:40', 'ace', 'E2E ace that decided the series');
-  await editor.getByLabel('Match MVP').selectOption({ index: 1 });
-  await editor.getByRole('button', { name: 'Save timeline and MVP' }).click();
-  await expect(admin.getByText('Timeline and MVP saved to the published match.').last()).toBeVisible({ timeout: 20_000 });
-  await student.evaluate(id => { window.location.hash = '#/arena/live?match=' + id; }, finished!);
-  await expect(student.getByRole('heading', { name: 'Match has ended' })).toBeVisible({ timeout: 20_000 });
-  await expect(student.getByText('Match MVP')).toBeVisible({ timeout: 20_000 });
-  await expect(student.locator('.match-timeline')).toContainText('E2E ace that decided the series');
-  await editor.getByRole('button', { name: /^Remove / }).first().click();
-  await editor.getByLabel('Match MVP').selectOption('');
-  await editor.getByRole('button', { name: 'Save timeline and MVP' }).click();
-  await expect(student.locator('.match-timeline')).toHaveCount(0, { timeout: 20_000 });
-  expect(ours(studentErrors)).toEqual([]);
-  expect(ours(adminErrors)).toEqual([]);
 });

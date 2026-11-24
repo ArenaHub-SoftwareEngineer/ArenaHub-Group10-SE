@@ -138,6 +138,7 @@
 .watch-chat-message:hover .watch-chat-report, .watch-chat-report:focus-visible { opacity: 1; }
 .watch-chat-report:hover { background: var(--surface-elevated); color: var(--danger); }
 .watch-chat-form { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+/* Legacy selector kept for safety; new code uses .watch-chat-input-wrap which has its own rules */
 .watch-chat-form input[type=text] { height: 36px; border: 0; border-bottom: 1px solid var(--border-strong); background: transparent; padding: 0 2px; font-size: var(--fs-sm); color: var(--text-primary); }
 .app-shell .watch-chat-form input[type=text]:focus { box-shadow: none !important; border-color: var(--focus) !important; border-bottom-width: 2px; }
 .watch-chat-anon { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); color: var(--text-muted); }
@@ -202,9 +203,6 @@
 .ah-player-brand span { color: var(--brand-ink); font-weight: 600; }
 .ah-player-live { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; background: var(--live); color: #fff; font-size: var(--fs-xs); font-weight: 700; }
 .ah-player-live i { width: 6px; height: 6px; border-radius: 50%; background: #fff; animation: watch-blink 1.4s ease-in-out infinite; }
-.ah-player-sources { margin-left: auto; display: inline-flex; padding: 2px; border-radius: 999px; background: var(--surface-soft); }
-.ah-player-sources button { height: 28px; padding: 0 12px; border-radius: 999px; font-size: var(--fs-xs); font-weight: 600; color: var(--text-secondary); cursor: pointer; }
-.ah-player-sources button[aria-pressed=true] { background: var(--surface-elevated); color: var(--text-primary); }
 .broadcast-player-footer a { display: inline-flex; align-items: center; gap: 4px; }
 
 /* ---------- Featured carousel (Match center top) ---------- */
@@ -267,13 +265,46 @@
 .watch-chat-alias button { color: var(--brand-ink); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
 .watch-chat-alias button:hover { text-decoration: underline; text-underline-offset: 2px; }
 
+/* Chat input wrapper: holds the text input + /arenaai pop-over */
+.watch-chat-input-wrap { position: relative; flex: 1; min-width: 0; }
+.watch-chat-input-wrap input[type=text] { width: 100%; height: 36px; border: 0; border-bottom: 1px solid var(--border-strong); background: transparent; padding: 0 2px; font-size: var(--fs-sm); color: var(--text-primary); }
+.app-shell .watch-chat-input-wrap input[type=text]:focus { box-shadow: none !important; border-color: var(--focus) !important; border-bottom-width: 2px; }
+
+/* /arenaai slash-command pop-over */
+.watch-chat-ai-popover { position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; z-index: 10; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-elevated); box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
+.watch-chat-ai-popover-btn { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border-radius: 7px; text-align: left; cursor: pointer; transition: background var(--dur-1) var(--ease-out); }
+.watch-chat-ai-popover-btn:hover { background: var(--surface-hover); }
+.watch-chat-ai-popover-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--brand-soft); color: var(--brand-ink); flex: none; }
+.watch-chat-ai-popover-btn span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.watch-chat-ai-popover-btn strong { font-size: var(--fs-sm); font-weight: 600; color: var(--text-primary); }
+.watch-chat-ai-popover-btn small { font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* Mute-with-reason dialog body */
+.watch-chat-mute-reason { display: grid; gap: var(--sp-4); }
+.watch-chat-mute-reason label { display: grid; gap: 6px; font-size: var(--fs-sm); font-weight: 600; color: var(--text-primary); }
+.watch-chat-mute-reason label small { font-weight: 400; color: var(--text-muted); }
+.watch-chat-mute-reason label input { height: 44px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg-base); color: var(--text-primary); font-size: var(--fs-sm); }
+
+/* Admin broadcast monitor: broadcast player + live chat side-by-side */
+.bw-monitor { margin-top: var(--sp-6); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+.bw-monitor-title { padding: 12px 16px; font-size: var(--fs-sm); font-weight: 700; border-bottom: 1px solid var(--border); color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+.bw-monitor-title::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: shell-live 1.8s var(--ease) infinite; }
+.bw-monitor-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) 360px; align-items: start; }
+.bw-monitor-player { background: #000; }
+.bw-monitor-chat { border-left: 1px solid var(--border); height: 480px; display: flex; flex-direction: column; overflow: hidden; }
+.bw-monitor-chat .watch-chat { border: none; border-radius: 0; height: 100%; }
+@media (max-width: 900px) {
+  .bw-monitor-grid { grid-template-columns: 1fr; }
+  .bw-monitor-chat { border-left: none; border-top: 1px solid var(--border); height: 400px; }
+}
+
 /* ---------- Share dialog ---------- */
 .arena-dialog.share-dialog { max-width: 620px; }
 .share-body { display: flex; flex-direction: column; gap: var(--sp-4); }
 .share-modes { align-self: flex-start; display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--bg-base); border: 1px solid var(--border); }
 .share-modes > button { position: relative; isolation: isolate; min-height: 36px; padding: 0 var(--sp-4); border-radius: 999px; color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; cursor: pointer; transition: color var(--dur-2) var(--ease-out); }
 .share-modes > button[aria-selected=true], .share-modes > button:hover { color: var(--text-primary); }
-.share-modes .fd-segment-pill { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--surface-elevated); }
+.share-mode-pill { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--surface-elevated); }
 .share-who { display: flex; align-items: flex-start; gap: var(--sp-2); margin: 0; color: var(--text-secondary); font-size: var(--fs-sm); line-height: 1.5; }
 .share-who svg { flex: none; margin-top: 2px; color: var(--brand-ink); }
 .share-main { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
@@ -324,7 +355,6 @@
 .bracket-switch-card:focus-visible .bracket-switch-art { box-shadow: 0 0 0 2px var(--focus); }
 
 /* ---------- Bracket canvas: lanes, the reset final and the champion ---------- */
-.bracket-canvas-viewport { background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / .055) 1px, transparent 0); background-size: 22px 22px; }
 .bracket-lane-label { position: absolute; padding: 2px 10px; border-radius: 999px; background: var(--surface-elevated); color: var(--text-secondary); font-size: var(--fs-xs); font-weight: 700; }
 .viewer-bracket-match.is-if-needed { border-style: dashed; opacity: .7; }
 .bracket-champion {
@@ -338,3 +368,74 @@
 .bracket-champion-name { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 100%; color: var(--text-primary); font-size: var(--fs-md); font-weight: 700; }
 .bracket-champion-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bracket-champion-tbd { color: var(--text-secondary); font-size: var(--fs-sm); }
+
+/* ---------- Watch page on one screen (advisor review, Nov 24) ----------
+   Desktop: player, the aligned score bar, the match time and the next match all fit above the fold,
+   with chat and Up next filling the right column. Phone: player, score bar, then chat sized to what is left. */
+.watch-matchbar { margin-top: 12px; padding: 10px 16px 12px; border-radius: 12px; background: var(--surface-soft); display: flex; flex-direction: column; gap: 8px; }
+.watch-matchbar .watch-scoreboard { padding: 4px 0; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.watch-matchbar .watch-scoreboard > div:first-child { justify-content: flex-start; }
+.watch-matchbar .watch-score { min-width: 112px; justify-content: center; }
+.watch-matchbar-meta { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-secondary); }
+.watch-matchbar-game { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.watch-matchbar-game img { width: 20px; height: 20px; border-radius: 5px; object-fit: cover; flex: none; }
+.watch-matchbar-time, .watch-next-time { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+.watch-matchbar-meta .watch-viewers-inline { margin-left: 0; }
+.watch-matchbar-meta .watch-viewers-inline::before { content: none; }
+.watch-matchbar-actions { display: flex; gap: 6px; margin-left: auto; }
+.watch-matchbar-actions .watch-action { height: 32px; padding: 0 12px; gap: 6px; background: var(--surface-elevated); }
+.watch-matchbar-actions .watch-action:hover { background: var(--surface-hover); }
+.watch-matchbar-actions .watch-action-icon { display: none; }
+.watch-matchbar-actions svg { transition: transform var(--dur-2) var(--ease); }
+.watch-next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); text-align: left; font-size: var(--fs-sm); color: var(--text-primary); cursor: pointer; }
+.watch-next:hover:not(:disabled) { border-color: var(--border-strong); }
+.watch-next:disabled { cursor: default; }
+.watch-next-label { font-size: var(--fs-xs); font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.watch-next strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-next-time b { margin-left: 4px; padding: 0 8px; border-radius: 999px; line-height: 22px; background: var(--brand-soft); color: var(--brand-ink); font-size: var(--fs-xs); font-weight: 600; }
+.watch-matchbar .watch-rosters { margin-top: 4px; }
+.watch-secondary .watch-upnext h2 { margin-bottom: 4px; }
+
+@media (min-width: 1181px) {
+  .shell-page:has(> .watch-page), .shell-page:has(> * > .watch-page) { padding-bottom: 16px; }
+  .watch-page { height: calc(100dvh - var(--topbar-h) - 40px); min-height: 560px; align-items: stretch; grid-template-columns: minmax(0, 1fr) 380px; }
+  /* The player shrinks with short screens so the score bar and next match stay in view; long rosters scroll in place. */
+  .watch-primary { width: 100%; max-width: calc((100dvh - var(--topbar-h) - 380px) * 16 / 9 + 2px); min-width: min(100%, 520px); justify-self: center; overflow-y: auto; scrollbar-width: thin; }
+  .watch-secondary { position: static; max-height: none; height: 100%; overflow: hidden; gap: 16px; }
+  .watch-secondary .watch-chat { flex: 1 1 auto; height: auto; min-height: 240px; }
+  .watch-secondary .watch-upnext { flex: 0 1 auto; max-height: 42%; min-height: 0; display: flex; flex-direction: column; }
+  .watch-secondary .watch-upnext-list { overflow-y: auto; scrollbar-width: thin; }
+  .watch-secondary .watch-card-row .watch-thumb { width: 128px; }
+}
+
+@media (max-width: 1180px) {
+  .watch-page { gap: 16px; }
+}
+
+@media (max-width: 767px) {
+  .shell-page:has(> .watch-page), .shell-page:has(> * > .watch-page) { padding-top: 8px; padding-bottom: calc(12px + var(--tabbar-h)); }
+  .watch-page { gap: 10px; }
+  .watch-crumbs { display: none; }
+  /* The red status pill under the video already says Live, so the player bar is dropped to give chat the room. */
+  .watch-primary .ah-player-bar { display: none; }
+  .watch-primary .broadcast-player-shell { border-radius: 10px; }
+  .watch-primary .broadcast-player-footer { flex-direction: row; align-items: center; justify-content: flex-end; padding: 4px 10px; }
+  .watch-primary .broadcast-player-footer p { display: none; }
+  .watch-matchbar { margin-top: 8px; padding: 8px 10px; gap: 6px; }
+  .watch-matchbar .watch-scoreboard { gap: 8px; padding: 0; }
+  .watch-matchbar .watch-scoreboard small { display: none; }
+  .watch-matchbar .watch-score { min-width: 72px; }
+  .watch-matchbar-meta { gap: 6px 8px; font-size: var(--fs-xs); }
+  .watch-matchbar-game { flex: 1 1 calc(100% - 90px); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .watch-matchbar-game img { display: none; }
+  /* Icon-only actions so time, viewers, Share and Rosters share one row. */
+  .watch-matchbar-actions .watch-action { height: 28px; padding: 0 8px; gap: 2px; font-size: var(--fs-xs); }
+  .watch-matchbar-actions .watch-action-label { display: none; }
+  .watch-matchbar-actions .watch-action-icon { display: block; }
+  .watch-next { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; padding: 6px 10px; font-size: var(--fs-xs); }
+  .watch-next-time { margin-left: auto; }
+  .watch-next strong { order: 3; flex: 1 1 100%; }
+  /* Chat takes the rest of the phone screen (video is 56.25vw tall), never less than a usable box. */
+  .watch-secondary { gap: 16px; }
+  .watch-secondary .watch-chat { height: max(240px, calc(100dvh - var(--topbar-h) - var(--tabbar-h) - 56.25vw - 248px)); }
+}

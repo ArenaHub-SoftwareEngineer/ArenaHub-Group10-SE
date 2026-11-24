@@ -8,9 +8,19 @@ const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 const TABLE_RULE = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/;
 const TABLE_ROW = /^\s*\|(.+)\|\s*$/;
 
+/**
+ * Hash marks read as noise to a viewer: heading markers ("## Results") and lone hashes go, a hashtag keeps
+ * its word ("#ArenaHub" becomes "ArenaHub") and "#1" becomes "number 1". Links such as "#/arena/..." are
+ * untouched because the hash is not followed by a letter or digit.
+ */
+const hashes = (text: string) => text
+  .replace(/(^|[\s(])#{1,6}(?=\s|$)/g, '$1')
+  .replace(/(^|[\s(])#(\d{1,4})(?!\w)/g, '$1number $2')
+  .replace(/(^|[\s(])#([A-Za-z][\w-]*)/g, '$1$2');
+
 /** Character-level cleaning, safe on any fragment that ends at whitespace. */
 export function cleanText(text: string): string {
-  return stripEmoji(text).replace(EMAIL, '[email hidden]').replace(/<\/?[a-z][^>]*>/gi, '');
+  return hashes(stripEmoji(text).replace(EMAIL, '[email hidden]').replace(/<\/?[a-z][^>]*>/gi, ''));
 }
 
 /** One complete line. A table row keeps its cells, each cleaned; the separator row is normalised. */

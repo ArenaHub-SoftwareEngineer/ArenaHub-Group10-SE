@@ -27,6 +27,7 @@ import {
   ArrowRight as ArrowRightVector,
   ArrowLeft as ArrowLeftVector,
   ArrowUp as ArrowUpVector,
+  ArrowDown as ArrowDownVector,
   ArrowUpRight as ArrowUpRightVector,
   ChevronRight as ChevronRightVector,
   ChevronLeft as ChevronLeftVector,
@@ -140,6 +141,7 @@ export const Minus = icon(MinusVector);
 export const ArrowRight = icon(ArrowRightVector);
 export const ArrowLeft = icon(ArrowLeftVector);
 export const ArrowUp = icon(ArrowUpVector);
+export const ArrowDown = icon(ArrowDownVector);
 export const ArrowUpRight = icon(ArrowUpRightVector);
 export const ChevronRight = icon(ChevronRightVector);
 export const ChevronLeft = icon(ChevronLeftVector);

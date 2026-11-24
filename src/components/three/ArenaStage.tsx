@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 508"><path fill="#ff6600" fill-rule="evenodd" d="
+export const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 424 508"><path fill="#ff6600" fill-rule="evenodd" d="
 M212 0 288 18V134L340 179V30L424 51V315C424 372 366 425 212 508C58 425 0 372 0 315V51L84 30V179L136 134V18Z
 M20 67 40 61V368Q20 343 20 315Z M384 61 404 67V315Q404 343 384 368Z
 M195 144H229Q239 144 244 156L276 234Q282 251 296 251H314Q329 251 332 267L346 338Q350 356 334 356H295Q282 356 278 343L262 305Q256 289 243 289H181
@@ -28,15 +28,16 @@ export interface ArenaStageProps {
   paused?: boolean;
   /** Called once the first frame is on screen, so the poster can fade out. */
   onReady?: () => void;
+  onContextLost?: () => void;
 }
 
 /** Shared interaction state, written by DOM pointer events and read every frame. */
 type Drive = { spin: number; velocity: number; dragging: boolean; lastX: number; moved: number; pulse: number; px: number; py: number };
 
-function useEmblemGeometry() {
+export function useEmblemGeometry() {
   return useMemo(() => {
     const data = new SVGLoader().parse(LOGO_SVG);
-    const shapes = data.paths.flatMap(path => SVGLoader.createShapes(path));
+    const shapes = data.paths.flatMap(path => path.toShapes());
     const geometry = new THREE.ExtrudeGeometry(shapes, { depth: 46, bevelEnabled: true, bevelThickness: 7, bevelSize: 4, bevelSegments: 5, curveSegments: 18 });
     geometry.center();
     // SVG y points down; flip it, then scale the 424 x 508 logo to about 2 units tall.
@@ -47,7 +48,7 @@ function useEmblemGeometry() {
   }, []);
 }
 
-function Environment() {
+export function Environment() {
   const { gl, scene } = useThree();
   useEffect(() => {
     const pmrem = new THREE.PMREMGenerator(gl);
@@ -212,7 +213,7 @@ function FirstFrame({ onReady }: { onReady?: () => void }) {
   return null;
 }
 
-export default function ArenaStage({ color = '#ff6600', still = false, lite = false, paused = false, onReady }: ArenaStageProps) {
+export default function ArenaStage({ color = '#ff6600', still = false, lite = false, paused = false, onReady, onContextLost }: ArenaStageProps) {
   const drive = useRef<Drive>({ spin: 0, velocity: 0, dragging: false, lastX: 0, moved: 0, pulse: 0, px: 0, py: 0 });
   const host = useRef<HTMLDivElement>(null);
 
@@ -256,6 +257,19 @@ export default function ArenaStage({ color = '#ff6600', still = false, lite = fa
       el.removeEventListener('pointerleave', leave);
     };
   }, []);
+
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const lost = () => onContextLost?.();
+    const restored = () => requestAnimationFrame(() => onReady?.());
+    el.addEventListener('webglcontextlost', lost, true);
+    el.addEventListener('webglcontextrestored', restored, true);
+    return () => {
+      el.removeEventListener('webglcontextlost', lost, true);
+      el.removeEventListener('webglcontextrestored', restored, true);
+    };
+  }, [onContextLost, onReady]);
 
   return <div ref={host} className="ah-stage-canvas">
     <Canvas

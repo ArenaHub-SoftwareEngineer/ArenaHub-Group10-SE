@@ -28,7 +28,9 @@ test('Fair Play evidence reaches staff, the decision reaches its reporter and th
 
     await signIn(staff, ORGANIZER);
     await staff.goto(`/#/admin/integrity?case=${encodeURIComponent(id)}`);
-    const review = staff.getByRole('dialog');
+    await expect(staff).toHaveURL(`/#/admin/reports?case=${encodeURIComponent(id)}`);
+    await expect(staff.getByRole('link', { name: 'Cases', exact: true })).toHaveCount(0);
+    const review = staff.getByRole('dialog', { name: 'Private evidence review' });
     await expect(review).toContainText(id, { timeout: 20_000 });
     await review.getByLabel('What did you establish?').fill('QA review completed. No violation established from the submitted clip.');
     await review.getByRole('button', { name: 'Dismiss concern' }).click();

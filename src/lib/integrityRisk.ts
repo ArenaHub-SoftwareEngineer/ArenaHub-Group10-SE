@@ -50,9 +50,9 @@ export const SIGNAL_CATALOG = {
   'dota-content-override': { severity: 'medium', title: 'Custom Dota 2 content folder', explain: 'A content pack (VPK) or search path that Valve does not ship was found in the Dota 2 folder. Visual mods and vision or particle changes are loaded this way. Remove the folder or file, verify the game files and rescan.' },
   'dota-launch-option': { severity: 'high', title: 'Restricted Dota 2 launch option', explain: '-insecure turns VAC off, sv_cheats unlocks cheat commands, and -language with a non-Valve name loads a custom content folder. Remove it under Steam > Dota 2 > Properties > Launch options and restart the game.' },
   'untrusted-game-module': { severity: 'high', title: 'Unsigned library from a user folder in Dota 2', explain: 'Dota 2 has loaded a library from outside Windows, Program Files and the game folder that has no valid digital signature. Injected cheats usually look like this. Some small overlay and hotkey tools do too: close the program that owns it and restart Dota 2.' },
-  'cheat-file-found': { severity: 'high', title: 'Cheat file found on this PC', explain: 'The optional folder check found a Cheat Engine table or AutoHotkey script that targets dota2.exe, a portable copy of a listed tool, or a file matching a staff fingerprint, in Desktop, Downloads, Documents or Temp. The file is present; using it is not established.' },
+  'cheat-file-found': { severity: 'high', title: 'File flagged for review', explain: 'The folder check found a file that matches a configured rule or a content indicator. Review the evidence and its severity.' },
   'hooking-framework': { severity: 'high', title: 'App-hooking framework on the phone', explain: 'Frida, Xposed/LSPosed, Zygisk, Riru or Substrate traces were found, or a Frida server answered on the phone. These frameworks change how other apps run, which is how most Android game mods and injectors work. Developers also use them.' },
-  'suspicious-program-running': { severity: 'critical', title: 'Renamed or cheat-like program running', explain: 'A program running from a user folder is a renamed copy of a listed tool (its internal name gives it away), or it is unsigned and targets dota2.exe, contains DLL-injection functions or is wrapped in a protector that cheat sellers use. Renaming a file does not change what is inside it.' },
+  'suspicious-program-running': { severity: 'critical', title: 'Running program flagged for review', explain: 'A running program matched a configured rule or a content indicator. General-purpose software can contain some of these indicators.' },
   'virtual-container': { severity: 'high', title: 'Companion running inside a cloned or virtual space', explain: 'The companion appears to run inside an app cloner or virtual phone (for example Parallel Space or VMOS). A game inside such a container can be modified without the real phone showing it.' },
 } as const satisfies Record<string, { severity: Severity; title: string; explain: string }>;
 export type SignalId = keyof typeof SIGNAL_CATALOG;
@@ -312,8 +312,10 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
     }
     for (const program of facts.suspiciousPrograms || []) {
       const entry = listedEntry(program.listedAs);
-      if (program.listedAs && !entry) continue;
-      out.push(signal('suspicious-program-running', withHash(`${program.name}: ${entry ? `${program.reason}: ${entry.label}` : program.reason}`, program.sha256),entry ? entry.severity : program.severity === 'high' ? 'critical' : program.severity === 'medium' ? 'high' : 'medium'));
+      const hash = program.sha256 ? config.pc.blockedFileHashes?.find(entry => entry.sha256 === program.sha256) : undefined;
+      if (program.listedAs && !entry && !hash) continue;
+      const severity = hash?.severity ?? entry?.severity ?? (program.severity === 'high' ? 'critical' : program.severity);
+      out.push(signal('suspicious-program-running', withHash(`${program.name}: ${hash?.label ?? (entry ? `${program.reason}: ${entry.label}` : program.reason)}`, program.sha256), severity));
     }
     if (facts.checks && Object.values(facts.checks).some(status => status === 'failed' || status === 'partial')) out.push(signal('checks-incomplete', Object.entries(facts.checks).filter(([, state]) => state === 'failed' || state === 'partial').map(([name, state]) => `${name}: ${state}`).join(', ')));
     if (game === 'dota2' && !facts.gameRunning) out.push(signal('dota-not-running', 'dota2.exe was not running'));
@@ -327,7 +329,8 @@ export function evaluateFacts(facts: DeviceFacts, config: MonitorConfig, game: M
     if (entry) out.push(signal('blocked-app-certificate', `${entry.label}: ${match.packageName} certificate SHA-256 ${match.sha256}`, entry.severity));
   }
   const installed = facts.games.filter(g => identity.packages.includes(g.packageName));
-  if (!installed.length) out.push(signal('game-not-installed', `None of ${identity.packages.join(', ')} found`));
+  // Players read this on their phone, so it names the game first and the package for staff after.
+  if (!installed.length && facts.checks?.installedApps !== false && facts.checks?.gameSignatures !== false) out.push(signal('game-not-installed', `${game === 'mlbb' ? 'Mobile Legends' : 'Call of Duty: Mobile'} is not installed on this phone (looked for ${identity.packages.join(', ')})`));
   for (const app of installed) {
     const label = `${app.packageName}${app.versionName ? ` ${app.versionName}` : ''}`;
     if (!app.certSha256.length) out.push(signal('checks-incomplete', `${label}: no signing certificate reported`));

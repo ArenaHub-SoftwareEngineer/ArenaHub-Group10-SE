@@ -12,6 +12,7 @@ interface ScanInput {
   platform: MonitorPlatform; game: MonitorGame; status: string; lastSeen: number | null; expiresAt: number;
   facts: unknown; challenge: string; policyVersion: string; config: MonitorConfig; now: number;
   iosClearance?: IosClearance | null;
+  mode?: 'practice';
 }
 const BLOCKING = new Set(['blocked-process', 'blocked-module', 'blocked-application-installed', 'blocked-file-hash', 'blocked-app-certificate', 'cheat-tool-installed', 'game-signature-mismatch', 'game-not-installed',
   'dota-file-modified', 'dota-unlisted-binary', 'dota-content-override', 'dota-launch-option', 'untrusted-game-module', 'cheat-file-found', 'suspicious-program-running', 'hooking-framework', 'virtual-container']);
@@ -37,17 +38,24 @@ export function preMatchScan(input: ScanInput): ScanReadiness {
   if (!parsed.success || parsed.data.platform !== input.platform) return result('incomplete', 'Scan incomplete', 'The companion did not provide a valid device scan.');
   const facts = parsed.data;
   if (!input.challenge || facts.scan?.challenge !== input.challenge || facts.scan?.policyVersion !== input.policyVersion) return result('scanning', 'Updated scan required', 'Use the current companion and wait for it to scan with the latest tournament rules.');
+  const practice = input.mode === 'practice';
   const signals = evaluateFacts(facts, input.config, input.game, { recordingRequired: false });
-  const blockers = signals.filter(signal => BLOCKING.has(signal.id) && (signal.id === 'game-not-installed' || SEVERITY_POINTS[signal.severity] >= SEVERITY_POINTS.medium)).map(signal => signal.evidence);
+  const blockers = signals.filter(signal => BLOCKING.has(signal.id) && (signal.id === 'game-not-installed' ? !practice : SEVERITY_POINTS[signal.severity] >= SEVERITY_POINTS.medium)).map(signal => signal.evidence);
   const warnings = signals.filter(signal => !BLOCKING.has(signal.id) && !['dota-not-running', 'checks-incomplete', 'game-signature-unverified'].includes(signal.id)).map(signal => signal.evidence);
+  if (practice && signals.some(signal => signal.id === 'game-not-installed')) warnings.push('Game app not found. The game check was skipped.');
   // Low-severity listed packages (for example Termux) stay visible as warnings instead of blocking.
   for (const signal of signals) if (BLOCKING.has(signal.id) && signal.id !== 'game-not-installed' && SEVERITY_POINTS[signal.severity] < SEVERITY_POINTS.medium) warnings.push(signal.evidence);
-  if (blockers.length) return result('blocked', 'Action required', 'Close or remove the listed restricted tools, then rescan. Restart the game if a restricted library is still loaded. For Dota 2 file findings, run Steam\'s Verify integrity first.', blockers, warnings);
+  if (blockers.length) return result('blocked', 'Action required', facts.platform === 'pc'
+    ? 'Review the listed findings, then scan again. For Dota 2 file findings, use Steam’s Verify integrity option.'
+    : 'Review the listed apps or game verification findings, then scan again.', blockers, warnings);
   if (facts.platform === 'pc') {
     if (input.game === 'dota2') {
       if (!facts.dota || !facts.checks?.dotaFiles) return result('incomplete', 'Dota 2 file check missing', 'Update the Windows agent to version 3.2 or later. It checks the Dota 2 install against Valve\'s file list.', [], warnings);
-      if (!facts.dota.found) return result('incomplete', 'Dota 2 install not found', 'The agent could not find Dota 2 in this PC\'s Steam libraries. Open Dota 2 and keep the agent open: it finds the game from the running dota2.exe on its next check.', [], warnings);
-      if (facts.checks.dotaFiles !== 'complete') return result('incomplete', 'Dota 2 file check incomplete', 'The agent could not read every Dota 2 file. Close other programs that lock the game folder and keep the agent open until it rescans.', [], warnings);
+      if (practice && !facts.dota.found && !facts.gameRunning) warnings.push('Dota 2 is not installed. The game-file check was skipped.');
+      else {
+        if (!facts.dota.found) return result('incomplete', 'Dota 2 install not found', 'The agent could not find Dota 2 in this PC\'s Steam libraries. Open Dota 2 and keep the agent open: it finds the game from the running dota2.exe on its next check.', [], warnings);
+        if (facts.checks.dotaFiles !== 'complete') return result('incomplete', 'Dota 2 file check incomplete', 'The agent could not read every Dota 2 file. Close other programs that lock the game folder and keep the agent open until it rescans.', [], warnings);
+      }
       if (facts.gameRunning && facts.checks.moduleSigners && !['complete', 'not-configured'].includes(facts.checks.moduleSigners)) return result('incomplete', 'Game library signatures incomplete', 'The agent could not check the signatures of every library loaded from user folders. Keep it open until it rescans.', [], warnings);
     }
     if (facts.checks?.programContent === 'failed') return result('incomplete', 'Program check incomplete', 'The agent could not check running programs. Keep it open until it rescans.', [], warnings);
@@ -60,7 +68,10 @@ export function preMatchScan(input: ScanInput): ScanReadiness {
     if (facts.checks?.processes !== 'complete' || facts.checks?.installedApplications !== 'complete' || ((input.config.pc.blockedFileHashes || []).length > 0 && facts.checks?.fileHashes !== 'complete')) return result('incomplete', 'Scan incomplete', 'Required process, installed-software or configured fingerprint checks did not finish.', [], warnings);
   } else {
     const key = input.game === 'mlbb' ? 'mlbb' : 'codm';
-    if (!input.config.android.games[key].trustedCertSha256.length) return result('incomplete', 'Game verification needed', 'Staff must configure the official regional game signing certificate before admitting Android players.');
+    if (!input.config.android.games[key].trustedCertSha256.length) {
+      if (!practice) return result('incomplete', 'Game verification needed', 'Staff must configure the official regional game signing certificate before admitting Android players.');
+      if (facts.games.length > 0) warnings.push('The tournament has not configured a game-signing certificate. The installed game could not be verified.');
+    }
     if (facts.games.some(game => input.config.android.games[key].packages.includes(game.packageName) && !game.certSha256.length)) return result('incomplete', 'Game certificate missing', 'The companion could not read the installed game signing certificate. Rescan before joining.', [], warnings);
     if (!facts.checks?.installedApps || !facts.checks?.gameSignatures || ((input.config.android.blockedCertificates || []).length > 0 && !facts.checks?.certificates)) return result('incomplete', 'Scan incomplete', 'Installed-app or required certificate checks did not finish.', [], warnings);
     if (!facts.checks.overlays) warnings.push('Overlay inspection was unavailable; this basic scan covers visible packages and required signatures.');

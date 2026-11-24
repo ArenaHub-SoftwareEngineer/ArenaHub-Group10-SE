@@ -8,6 +8,7 @@ import { createFairPlayRouter } from './server/fairPlay.ts';
 import { createIntegrityRouter } from './server/integrity.ts';
 import { createPresenceRouter } from './server/presence.ts';
 import { securityHeaders, publicErrorHandler } from './server/securityHeaders';
+import { publicAccessGuard } from './server/publicAccess.ts';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
           const api = express();
           api.disable('x-powered-by');
           api.use(securityHeaders({ development: true }));
+          api.use(publicAccessGuard(env));
           // Test mode never calls a real model: browser tests use the scripted provider (emulators only).
           api.use('/api/ai', createAiRouter(mode === 'test' ? { ...env, ARENA_AI_PROVIDER: 'fake', GEMINI_API_KEY: '', GROQ_API_KEY: '' } : env));
           api.use('/api/presence', createPresenceRouter());

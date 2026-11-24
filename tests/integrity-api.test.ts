@@ -221,7 +221,7 @@ test('join page info, decline, and the per-match recording switch', async t => {
   const pair = await (await call('/pairings', { token: 'staff', body: { ...pairing, record: false } })).json() as any;
   const info = await call(`/device/pairing/${pair.code}`);
   assert.equal(info.status, 200);
-  assert.deepEqual(await info.json(), { platform: 'android', game: 'mlbb', gameLabel: 'Mobile Legends', playerName: 'Ace', matchLabel: pairing.matchLabel, record: false, codeExpiresAt: pair.codeExpiresAt });
+  assert.deepEqual(await info.json(), { platform: 'android', platforms: ['android', 'ios'], game: 'mlbb', gameLabel: 'Mobile Legends', playerName: 'Ace', matchLabel: pairing.matchLabel, record: false, codeExpiresAt: pair.codeExpiresAt });
   assert.equal(store.session(pair.id)!.status, 'pending', 'reading the info does not use the code');
   assert.equal((await call('/device/pairing/short')).status, 404, 'malformed codes are not looked up');
   assert.equal((await call('/device/pairing/ZZZZZZZZ')).status, 404);
@@ -363,7 +363,7 @@ test('a referee turns a confirmed cheat file into a PC fingerprint', async t => 
   assert.deepEqual(nextClaim.monitor.blockedFileHashes, [loader]);
 });
 
-test('practice scan: no code, same rules as the official scan, nothing stored', async t => {
+test('practice scan returns findings without creating a match session', async t => {
   const { call, store } = await setup(t);
   const policy = await (await call('/practice/policy', { body: { game: 'mlbb' } })).json() as any;
   assert.equal(policy.platform, 'android');
@@ -377,7 +377,7 @@ test('practice scan: no code, same rules as the official scan, nothing stored', 
   const config = store.config(); config.android.games.mlbb.trustedCertSha256 = [OFFICIAL]; store.saveConfig(config, 'staff');
   const check = (facts: unknown, game = 'mlbb') => call('/practice/check', { body: { game, facts } });
   const clean = await (await check({ ...facts(), checks: { installedApps: true, gameSignatures: true, overlays: true, certificates: true } })).json() as any;
-  assert.equal(clean.status, 'ready'); assert.equal(clean.label, 'No cheats found'); assert.match(clean.note, /does not clear you/);
+  assert.equal(clean.status, 'ready'); assert.equal(clean.label, 'Practice scan complete'); assert.match(clean.note, /does not clear you/);
   await pause(3100);
   const flagged = await (await check({ ...facts({ installedFlagged: ['com.topjohnwu.magisk'] }), checks: { installedApps: true, gameSignatures: true, overlays: true, certificates: true } })).json() as any;
   assert.equal(flagged.status, 'blocked'); assert.ok(flagged.blockers.some((b: string) => /magisk/i.test(b)));
@@ -400,4 +400,62 @@ test('one-click PC scan: the code lookup states the folder check and the downloa
   assert.match(await named(`?code=${pair.code.toLowerCase()}`), new RegExp(`filename="arenahub-scan-${pair.code}\.exe"`));
   assert.match(await named('?code=../../x'), /filename="arenahub-agent\.exe"/, 'anything but a code keeps the normal name');
   assert.match(await named(''), /filename="arenahub-agent\.exe"/);
+});
+
+test('one-click codes: no device or address needed; the phone that claims decides, and a PC cannot take a phone code', async t => {
+  const { call } = await setup(t);
+  // Only the match, game and player: the server picks its own address and leaves the device open.
+  const created = await call('/pairings', { token: 'staff', body: { matchId: 'm-quick', matchLabel: 'Quick pair', game: 'mlbb', playerName: 'Ace', platform: 'any', record: false } });
+  assert.equal(created.status, 201);
+  const pair = await created.json() as any;
+  assert.equal(pair.platform, 'any');
+  assert.match(pair.link, /^http:\/\/127\.0\.0\.1:\d+\/join\.html\?c=[A-Z2-9]{8}$/, 'falls back to the address staff are using');
+  const lookup = await (await call(`/device/pairing/${pair.code}`)).json() as any;
+  assert.equal(lookup.platform, 'any');
+  assert.deepEqual(lookup.platforms, ['android', 'ios']);
+  const pending = (await (await call('/sessions', { token: 'staff' })).json() as any[]).find(s => s.id === pair.id);
+  assert.equal(pending.anyDevice, true);
+
+  // A PC agent is refused and the code stays usable for the player's phone.
+  const wrong = await call('/device/claim', { body: { code: pair.code, device: { model: 'Desktop', agent: 'pc-agent 3.3.0' } } });
+  assert.equal(wrong.status, 409);
+  assert.match((await wrong.json() as any).error, /phone you will play on/);
+  await pause();
+  const iphone = await (await call('/device/claim', { body: { code: pair.code, device: { model: 'iPhone', agent: 'web 2.1.0' } } })).json() as any;
+  assert.equal(iphone.platform, 'ios', 'Safari check-in makes it an iPhone session');
+  const claimedView = (await (await call('/sessions', { token: 'staff' })).json() as any[]).find(s => s.id === pair.id);
+  assert.equal(claimedView.platform, 'ios');
+  assert.equal(claimedView.anyDevice, false);
+
+  // The Android app claims an any-phone code as Android.
+  const second = await (await call('/pairings', { token: 'staff', body: { matchId: 'm-quick', matchLabel: 'Quick pair', game: 'codm-mp', playerName: 'Bolt', platform: 'any' } })).json() as any;
+  await pause();
+  assert.equal((await (await call('/device/claim', { body: { code: second.code, device: { agent: 'android 3.3.0' } } })).json() as any).platform, 'android');
+
+  // Dota 2 is PC only, so "any" simply means PC; a configured address still wins.
+  const dota = await (await call('/pairings', { token: 'staff', body: { matchId: 'm-dota', matchLabel: 'Dota quick', game: 'dota2', playerName: 'Cid', platform: 'any', serverUrl: 'http://192.168.1.5:3000' } })).json() as any;
+  assert.equal(dota.platform, 'pc');
+  assert.equal(dota.link, `http://192.168.1.5:3000/join.html?c=${dota.code}`);
+  assert.equal((await (await call(`/device/pairing/${dota.code}`)).json() as any).platform, 'pc');
+  // A typed address that is not valid is still an error, not silently replaced.
+  assert.equal((await call('/pairings', { token: 'staff', body: { matchId: 'm', matchLabel: 'x', game: 'mlbb', playerName: 'D', platform: 'any', serverUrl: 'not a url' } })).status, 400);
+});
+
+test('a dev server started with --host puts the Wi-Fi address in the QR, not localhost', async t => {
+  // Vite runs the router without HOST set. Before this fix the QR said localhost, which a phone resolves to itself.
+  const lan = Object.entries((await import('node:os')).networkInterfaces()).flatMap(([name, list]) => (list || []).filter(n => n.family === 'IPv4' && !n.internal && /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(n.address)).map(n => ({ name, ...n })));
+  if (!lan.length) { t.skip('this machine has no private network address'); return; }
+  const dir = mkdtempSync(join(tmpdir(), 'arenahub-integrity-'));
+  const store = new IntegrityStore(dir);
+  const app = express(); app.use('/api/integrity', createIntegrityRouter({}, { store, verifyStaff: async () => 'staff-uid' }));
+  const server = app.listen(0, '0.0.0.0'); await new Promise<void>(r => server.on('listening', r));
+  t.after(async () => { await new Promise<void>(r => server.close(() => r())); store.close(); removeTree(dir); });
+  const port = (server.address() as AddressInfo).port;
+  const res = await fetch(`http://localhost:${port}/api/integrity/pairings`, { method: 'POST', headers: { Authorization: 'Bearer staff', 'Content-Type': 'application/json' }, body: JSON.stringify({ matchId: 'quick', matchLabel: 'Quick', game: 'mlbb', playerName: 'Test device', platform: 'any' }) });
+  assert.equal(res.status, 201);
+  const { link } = await res.json();
+  assert.ok(lan.some(n => link.startsWith(`http://${n.address}:${port}/join.html?c=`)), `expected a Wi-Fi address, got ${link}`);
+  // A VPN tunnel address is never first when a real adapter exists.
+  const real = lan.filter(n => !/vpn|proton|wireguard|nordlynx|tap-|tun|zerotier|virtual|vmware|vethernet|wsl|hyper-v/i.test(n.name) && !n.address.startsWith('192.168.56.') && n.mac !== '00:00:00:00:00:00' && !/^(0a:00:27|08:00:27|00:50:56|00:0c:29|00:15:5d)/i.test(n.mac));
+  if (real.length) assert.ok(real.some(n => link.startsWith(`http://${n.address}:`)), `expected a real adapter, got ${link}`);
 });

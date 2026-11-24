@@ -69,3 +69,58 @@ test('Dota 2 is found from the running game when Steam does not list it (compute
   assert.equal(dotaGameDirFromExe(String.raw`C:\Users\p\Downloads\dota2.exe`), undefined, 'a dota2.exe outside a game install is not a game folder');
   assert.equal(dotaGameDirFromExe(undefined), undefined);
 });
+
+test('agent window: only its own tab can read it or answer, and answers are validated', async () => {
+  const { startAgentWindow, readAction } = await import('../tools/integrity-agent/agentWindow');
+  assert.deepEqual(readAction({ type: 'choose', mode: 'official', code: 'abcd2345', server: 'https://x.test' }), { type: 'choose', mode: 'official', code: 'ABCD2345', server: 'https://x.test' });
+  assert.equal(readAction({ type: 'choose', mode: 'official', code: 'ABCD1', server: 'https://x.test' }), null, 'codes are 8 characters without 0, 1, O or I');
+  assert.equal(readAction({ type: 'consent', answer: 'maybe' }), null);
+  assert.equal(readAction({ type: 'format-disk' }), null);
+  const win = await startAgentWindow({ mode: 'official', phase: 'consent', steps: [] }, { open: false });
+  try {
+    const url = new URL(win.url);
+    assert.equal(url.hostname, '127.0.0.1');
+    assert.ok(url.pathname.length > 30, 'a long random secret path');
+    const page = await fetch(win.url);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('content-security-policy') || '', /connect-src 'self'/);
+    assert.match(await page.text(), /ArenaHub Anti-cheat/);
+    assert.equal((await fetch(`${url.origin}/state`)).status, 404, 'no secret, no state');
+    assert.equal((await fetch(`${url.origin}/wrong-secret/state`)).status, 404);
+    // DNS rebinding: a page on another name that resolves to 127.0.0.1 still sends its own Host.
+    const { request } = await import('node:http');
+    const rebound = await new Promise<number>(resolve => request(win.url, { headers: { Host: `evil.test:${url.port}` } }, res => resolve(res.statusCode || 0)).end());
+    assert.equal(rebound, 404);
+    const state = await (await fetch(`${win.url}state`)).json();
+    assert.equal(state.phase, 'consent');
+    const answered = win.next('consent');
+    const post = (body: unknown, headers: Record<string, string> = { 'X-ArenaHub': '1' }) => fetch(`${win.url}action`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+    assert.equal((await post({ type: 'consent', answer: 'yes' }, {})).status, 404, 'a plain cross-site form post has no custom header');
+    assert.equal((await post({ type: 'consent', answer: 'yes' }, { 'X-ArenaHub': '1', Origin: 'https://evil.test' })).status, 404);
+    assert.equal((await post({ type: 'stop' })).status, 409, 'nothing is waiting for stop yet');
+    assert.equal((await post({ type: 'consent', answer: 'yes' })).status, 200);
+    assert.deepEqual(await answered, { type: 'consent', answer: 'yes' });
+    win.set({ phase: 'scanning' }); win.set({ steps: [{ key: 'programs', label: 'Programs', status: 'waiting' }] }); win.step('programs', { status: 'done', detail: 'ok' });
+    assert.deepEqual((await (await fetch(`${win.url}state`)).json()).steps, [{ key: 'programs', label: 'Programs', status: 'done', detail: 'ok' }]);
+  } finally { win.close(); }
+});
+
+test('agent window steps read plainly for each scan outcome', async () => {
+  const { scanSteps, programsStep, dotaStep, sweepStep } = await import('../tools/integrity-agent/agentSteps');
+  assert.deepEqual(scanSteps({ official: true, folders: false }).map(step => `${step.key}:${step.status}`), ['programs:waiting', 'dota:waiting', 'folders:skipped', 'report:waiting']);
+  assert.equal(scanSteps({ official: false, folders: true }).at(-1)?.key, 'judge');
+  const clean = { processes: [], installedApplications: [], loadedModules: [], untrustedModules: [], suspiciousPrograms: [], checks: { processes: 'complete', installedApplications: 'complete' } };
+  assert.equal(programsStep(clean).status, 'done');
+  assert.deepEqual(programsStep({ ...clean, processes: [{}], suspiciousPrograms: [{}] }), { status: 'warn', detail: '2 programs flagged. See the list above.' });
+  assert.equal(programsStep({ ...clean, checks: { processes: 'failed', installedApplications: 'failed' } }).status, 'failed');
+  const audit = { found: true, buildId: '26632873', modifiedFiles: [], missingFiles: [], unlistedBinaries: [], contentOverrides: [], launchFlags: [] };
+  assert.equal(dotaStep(audit, 'complete').detail, 'Build 26632873 matches the file list Valve ships.');
+  assert.equal(dotaStep({ ...audit, launchFlags: ['-insecure'] }, 'complete').status, 'warn');
+  assert.equal(dotaStep({ ...audit, found: false }, 'failed').status, 'failed');
+  assert.equal(dotaStep({ ...audit, found: false }, 'failed', true).status, 'skipped');
+  assert.equal(sweepStep('not-configured', 0).status, 'skipped');
+  assert.equal(sweepStep('not-running', 0, 12000).detail, '12,000 files read so far');
+  assert.deepEqual(sweepStep('complete', 0, 272509), { status: 'done', detail: '272,509 files read. No findings in those files.' });
+  assert.equal(sweepStep('complete', 1, 10).detail, '10 files read, 1 file listed for review. See the findings above.');
+  assert.equal(sweepStep('partial', 0, 10).status, 'warn');
+});

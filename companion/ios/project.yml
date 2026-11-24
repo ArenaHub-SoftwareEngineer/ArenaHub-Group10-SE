@@ -1,0 +1,59 @@
+name: ArenaHubPOV
+options:
+  bundleIdPrefix: ph.edu.wmsu.arenahub
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 1.0
+    POV_BUNDLE_ID: ph.edu.wmsu.arenahub.pov
+    POV_APP_GROUP: group.$(POV_BUNDLE_ID)
+    TARGETED_DEVICE_FAMILY: "1,2"
+# Live screen sharing through LiveKit (https://github.com/livekit/client-sdk-swift). The broadcast extension's
+# bundle ID is the app's plus ".broadcast", and both share the App Group group.<app bundle ID>, as the SDK expects.
+packages:
+  LiveKit:
+    url: https://github.com/livekit/client-sdk-swift
+    from: 2.20.0
+targets:
+  ArenaHubPOV:
+    type: application
+    platform: iOS
+    sources: [App]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(POV_BUNDLE_ID)
+        CODE_SIGN_ENTITLEMENTS: Shared.entitlements
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: ArenaHub POV
+        UILaunchScreen: {}
+        POVAppGroup: $(POV_APP_GROUP)
+    dependencies:
+      - target: ScreenBroadcast
+      - package: LiveKit
+  ScreenBroadcast:
+    type: app-extension
+    platform: iOS
+    sources: [Broadcast]
+    dependencies:
+      - package: LiveKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(POV_BUNDLE_ID).broadcast
+        APPLICATION_EXTENSION_API_ONLY: YES
+        CODE_SIGN_ENTITLEMENTS: Shared.entitlements
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: ArenaHub POV
+        POVAppGroup: $(POV_APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          NSExtensionAttributes:
+            RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+

@@ -1,23 +1,48 @@
 import { PageHeading } from '../ui/PageHeading';
-import React, { useState } from 'react';
-import { ContentReport } from '../../lib/types';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
+import type { ContentReport, Match } from '../../lib/types';
 import { firestoreService } from '../../lib/firestore';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Modal } from '../ui/Modal';
 import { useToast } from '../ui/Toast';
-import { Trash2, Ban, Check, ShieldCheck } from '../ui/Icons';
+import { Trash2, Ban, ShieldCheck, Search, Flag } from '../ui/Icons';
 import { errorMessage } from '../../lib/errors';
+import type { Tone } from '../../lib/adminInsights';
+import './adminOverview.css';
+
+const FairPlayCenter = lazy(() => import('../common/FairPlayCenter').then(module => ({ default: module.FairPlayCenter })));
 
 interface ReportsViewProps {
   reports: ContentReport[];
+  matches: Match[];
+  initialCaseId: string | null;
 }
 
-export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
+/** Each report type keeps one colour everywhere: the summary tile, the tag and the quoted message. */
+const TYPE_TONE: Record<ContentReport['type'], { tone: Tone; hint: string }> = {
+  HARASSMENT: { tone: 'danger', hint: 'Insults, threats or targeting a player' },
+  'SPAM / SCAM': { tone: 'warning', hint: 'Repeated posts, links or scams' },
+  'STOLEN CONTENT': { tone: 'violet', hint: 'Clips or art posted without credit' },
+  MISINFORMATION: { tone: 'info', hint: 'False results or schedules' },
+};
+const TYPE_LABEL: Record<ContentReport['type'], string> = {
+  HARASSMENT: 'Harassment', 'SPAM / SCAM': 'Spam or scam', 'STOLEN CONTENT': 'Stolen content', MISINFORMATION: 'Misinformation',
+};
+
+export const ReportsView: React.FC<ReportsViewProps> = ({ reports, matches, initialCaseId }) => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'open' | 'resolved'>('open');
+  const [type, setType] = useState<ContentReport['type'] | 'all'>('all');
+  const [search, setSearch] = useState('');
   const [selectedReport, setSelectedReport] = useState<ContentReport | null>(null);
   const [actionType, setActionType] = useState<'remove' | 'remove_and_ban' | 'dismiss' | null>(null);
+  const [evidenceOpen, setEvidenceOpen] = useState(Boolean(initialCaseId));
+  useEffect(() => setEvidenceOpen(Boolean(initialCaseId)), [initialCaseId]);
 
-  const filteredReports = reports.filter((r) => r.status === activeTab);
+  const open = reports.filter(report => report.status === 'open');
+  const needle = search.trim().toLowerCase();
+  const filteredReports = reports.filter(report => report.status === activeTab && (type === 'all' || report.type === type)
+    && (!needle || `${report.postedBy} ${report.contentSnippet}`.toLowerCase().includes(needle)));
 
   const handleConfirmAction = async () => {
     if (!selectedReport || !actionType) return;
@@ -26,153 +51,92 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ reports }) => {
     catch (error) { showToast(errorMessage(error, 'The action could not be completed.'), 'error'); throw error; }
 
     if (actionType === 'remove_and_ban') {
-      showToast(`Content removed and user ${selectedReport.postedBy} banned!`, 'error');
+      showToast(`Message removed and ${selectedReport.postedBy} banned.`, 'success');
     } else if (actionType === 'remove') {
-      showToast(`Content removed for report ${selectedReport.id}`, 'info');
+      showToast('Message removed from match chat.', 'success');
     } else {
-      showToast(`Report ${selectedReport.id} dismissed`, 'info');
+      showToast('Report dismissed. No action taken.', 'info');
     }
 
     setSelectedReport(null);
     setActionType(null);
   };
 
+  const act = (report: ContentReport, action: NonNullable<typeof actionType>) => { setSelectedReport(report); setActionType(action); };
+
   return (
-    <div className="space-y-6">
-      <PageHeading title="Community reports" description="Review flagged chat and keep track of moderation decisions." />
-      <div className="ah-chips" role="group" aria-label="Filter community reports">
-        <button type="button" className="ah-chip" aria-pressed={activeTab === 'open'} onClick={() => setActiveTab('open')}>
-          Open <span className="shell-badge-count">{reports.filter(report => report.status === 'open').length}</span>
-        </button>
-        <button type="button" className="ah-chip" aria-pressed={activeTab === 'resolved'} onClick={() => setActiveTab('resolved')}>Resolved</button>
+    <div className="ov-page">
+      <PageHeading title="Community reports" description="Review flagged chat messages."
+        actions={<button type="button" className="arena-outline" aria-haspopup="dialog" onClick={() => setEvidenceOpen(true)}>Match evidence</button>} />
+
+      <nav className="fb-summary" aria-label="Open reports by type">
+        {(Object.keys(TYPE_TONE) as ContentReport['type'][]).map(key => {
+          const count = open.filter(report => report.type === key).length;
+          return <button key={key} type="button" className={`ov-kpi is-link ov-tone is-${count ? TYPE_TONE[key].tone : 'neutral'}`} aria-pressed={type === key}
+            onClick={() => { setType(type === key ? 'all' : key); setActiveTab('open'); }}>
+            <span>{TYPE_LABEL[key]}</span><strong>{count}</strong><small>{TYPE_TONE[key].hint}</small>
+          </button>;
+        })}
+      </nav>
+
+      <div className="page-toolbar">
+        <div className="ah-chips" role="group" aria-label="Show open or resolved reports">
+          <button type="button" className="ah-chip" aria-pressed={activeTab === 'open'} onClick={() => setActiveTab('open')}>
+            Needs review <span className="ov-chip-count">{open.length}</span>
+          </button>
+          <button type="button" className="ah-chip" aria-pressed={activeTab === 'resolved'} onClick={() => setActiveTab('resolved')}>
+            Resolved <span className="ov-chip-count">{reports.length - open.length}</span>
+          </button>
+          {type !== 'all' && <button type="button" className="ah-chip" aria-pressed="true" onClick={() => setType('all')}>{TYPE_LABEL[type]} · clear</button>}
+        </div>
+        <label className="page-search">
+          <Search size={16} aria-hidden="true" />
+          <input type="search" aria-label="Search reports" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search author or message" />
+        </label>
       </div>
 
-      {/* Reports List */}
-      <div className="space-y-4">
-        {filteredReports.length === 0 ? (
-          <div className="p-12 text-center rounded-[4px] bg-(--surface-soft) border border-(--border) text-xs text-(--text-muted)">
-            <ShieldCheck className="w-8 h-8 text-(--success) mx-auto mb-2" />
-            No {activeTab} reports in the moderation queue.
-          </div>
-        ) : (
-          filteredReports.map((report) => (
-            <div
-              key={report.id}
-              className="page-panel p-4 sm:p-5 space-y-4"
-            >
-              {/* Header row: ID, Tag, Content Type, Timestamp */}
-              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-                <div className="flex items-center flex-wrap gap-2 min-w-0">
-                  <span className="tabular-nums font-medium text-(--text-muted) break-all">
-                    {report.id}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-[2px] text-xs font-bold ${
-                      report.type === 'HARASSMENT'
-                        ? 'bg-(--brand-soft) text-(--warning) border border-(--brand-border)'
-                        : report.type === 'SPAM / SCAM'
-                        ? 'bg-(--surface-soft) text-(--danger) border border-(--danger-border)'
-                        : 'bg-(--surface-elevated) text-(--text-secondary) border border-(--border-strong)'
-                    }`}
-                  >
-                    {report.type}
-                  </span>
-                  <span className="text-(--text-secondary) font-medium">
-                    {report.contentType}
-                  </span>
-                </div>
-
-                <div className="text-xs text-(--text-muted)">
-                  <span>{report.timeAgo}</span>
-                  <span className="mx-1.5">·</span>
-                  <span className="tabular-nums text-(--text-primary)">{report.flagCount} reports</span>
-                </div>
-              </div>
-
-              {/* Flagged Quote */}
-              <div className="p-3.5 rounded-[4px] bg-(--danger-soft) border border-(--danger-border) text-xs text-(--text-primary) font-medium">
-                "{report.contentSnippet}"
-              </div>
-
-              {/* Attribution & Actions */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                <div className="text-xs text-(--text-muted)">
-                  Posted by <strong className="text-(--text-primary) font-semibold">{report.postedBy}</strong>
-                  <span className="mx-1.5">·</span>
-                  flagged by <strong className="text-(--text-secondary)">{report.reportedBy}</strong>
-                </div>
-
-                {report.status === 'open' && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedReport(report);
-                        setActionType('remove');
-                      }}
-                      className="px-3 py-1.5 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-secondary) hover:text-(--text-primary) flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-(--danger)" />
-                      <span>Remove content</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setSelectedReport(report);
-                        setActionType('remove_and_ban');
-                      }}
-                      className="px-3 py-1.5 rounded-[3px] bg-(--surface-soft) hover:bg-(--danger-soft) border border-(--danger-border) text-xs font-semibold text-(--danger) flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Ban className="w-3.5 h-3.5" />
-                      <span>Remove & ban</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setSelectedReport(report);
-                        setActionType('dismiss');
-                      }}
-                      className="px-3 py-1.5 rounded-[3px] bg-(--surface) hover:bg-(--surface-soft) border border-(--border) text-xs font-semibold text-(--text-muted) hover:text-(--text-primary) transition-colors cursor-pointer"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                )}
-              </div>
+      {filteredReports.length === 0 ? (
+          <p className="ov-all-clear ov-tone is-success" role="status">
+            <ShieldCheck size={18} aria-hidden="true" />
+            {activeTab === 'open' && !needle && type === 'all' ? 'All clear. No reports are waiting for review.' : 'No reports match these filters.'}
+          </p>
+        ) : <div className="ov-page" role="list" aria-label={activeTab === 'open' ? 'Reports that need review' : 'Resolved reports'}>{filteredReports.map(report => {
+          const tone = report.status === 'open' ? TYPE_TONE[report.type]?.tone || 'neutral' : 'neutral';
+          return <article key={report.id} role="listitem" className={`fb-card ov-tone is-${tone}${report.status === 'resolved' ? ' is-resolved' : ''}`}>
+            <div className="fb-card-head">
+              <span className="fb-type"><Flag size={13} aria-hidden="true" />{TYPE_LABEL[report.type] || report.type}</span>
+              <span className="fb-meta">{report.contentType} · {report.timeAgo}{report.flagCount > 1 ? ` · ${report.flagCount} reports` : ''}</span>
             </div>
-          ))
-        )}
-      </div>
+            <blockquote className="fb-quote">“{report.contentSnippet}”</blockquote>
+            <div className="fb-card-head">
+              <p className="fb-meta">Posted by <strong>{report.postedBy}</strong> · flagged by {report.reportedBy}</p>
+              {report.status === 'open' ? <div className="fb-actions">
+                <button type="button" className="arena-outline arena-sm" onClick={() => act(report, 'dismiss')}>Dismiss</button>
+                <button type="button" className="arena-outline arena-sm" onClick={() => act(report, 'remove')}><Trash2 size={14} aria-hidden="true" /> Remove message</button>
+                <button type="button" className="arena-outline arena-sm arena-danger-text" onClick={() => act(report, 'remove_and_ban')}><Ban size={14} aria-hidden="true" /> Remove and ban</button>
+              </div> : <span className="status-pill is-success">Resolved</span>}
+            </div>
+          </article>;
+        })}</div>}
 
-      {/* Confirmation Modal */}
+      <Modal open={evidenceOpen} title="Match reports and appeals" onClose={() => setEvidenceOpen(false)} className="feature-dialog feature-dialog-wide">
+        {evidenceOpen && <Suspense fallback={<p role="status">Loading match reports…</p>}>
+          <FairPlayCenter matches={matches} staff initialCaseId={initialCaseId} />
+        </Suspense>}
+      </Modal>
+
       <ConfirmModal
         isOpen={!!selectedReport && !!actionType}
-        title={
-          actionType === 'remove_and_ban'
-            ? `Remove Content & Ban ${selectedReport?.postedBy}?`
-            : actionType === 'remove'
-            ? 'Remove Flagged Content?'
-            : 'Dismiss Report?'
-        }
-        description={
-          actionType === 'remove_and_ban'
-            ? `Are you sure you want to delete this flagged content and ban user ${selectedReport?.postedBy} from WMSU Palaro?`
-            : actionType === 'remove'
-            ? 'Are you sure you want to delete this content from public match chat / posts?'
-            : 'Are you sure you want to dismiss this report? No disciplinary action will be taken.'
-        }
-        confirmLabel={
-          actionType === 'remove_and_ban'
-            ? 'Remove & Ban User'
-            : actionType === 'remove'
-            ? 'Remove Content'
-            : 'Dismiss Report'
-        }
+        title={actionType === 'remove_and_ban' ? `Remove the message and ban ${selectedReport?.postedBy}?` : actionType === 'remove' ? 'Remove this message?' : 'Dismiss this report?'}
+        description={actionType === 'remove_and_ban'
+          ? `The message is deleted from match chat and ${selectedReport?.postedBy} loses access to ArenaHub. You can restore the account later from Users.`
+          : actionType === 'remove'
+          ? 'The message is deleted from match chat. The author keeps their account.'
+          : 'The report is closed and the message stays. No one is notified.'}
+        confirmLabel={actionType === 'remove_and_ban' ? 'Remove and ban' : actionType === 'remove' ? 'Remove message' : 'Dismiss report'}
         isDestructive={actionType === 'remove' || actionType === 'remove_and_ban'}
         onConfirm={handleConfirmAction}
-        onCancel={() => {
-          setSelectedReport(null);
-          setActionType(null);
-        }}
+        onCancel={() => { setSelectedReport(null); setActionType(null); }}
       />
     </div>
   );

@@ -2,15 +2,21 @@
 
 Updated 17 November 2026 for the confirmed public website/API deployment. This runbook describes implemented behavior, not proof that production is configured or that every cheat can be detected.
 
+## Live player screens
+
+Live screens run through LiveKit (WebRTC). Video goes from each player's device to LiveKit and on to the facilitators, never through the ArenaHub server, so it works on the event laptop and the hosted API alike. Setup, limits and the free-plan numbers are in [LIVE_SCREENS.md](LIVE_SCREENS.md).
+
+Staff open **Monitor → Live screens**, choose the game and then the match. Organizers assign up to four facilitators per match; facilitators see only their matches. Players pick their match during check-in, then choose **Open screen sharing**: PCs share from Chrome or Edge, Android phones through the companion, and iPhones through the ArenaHub POV app (needs a signed build). [Android setup](../companion/android/README.md) · [iPhone setup](../companion/ios/README.md)
+
 ## Required pre-match scans (3.1)
 
 The primary flow is now **Anti-cheat**, not filing a manual cheating report. In the player workspace, Anti-cheat opens the required companion scan; disputes and appeals are secondary. In the staff workspace, Anti-cheat lists every player in a published match and whether admission is locked.
 
 1. Publish complete rosters first. For CODM BR, captains can now register their squads through My team; staff approve/lock them, and all squad rosters are hydrated for each lobby game. A lobby scan covers every squad, not just two teams.
-2. In **Anti-cheat > Before players join**, choose the match. Press **Scan player** for each roster slot, then create that player's code. Roster selection uses stable team/player IDs, so duplicate IGNs do not clear the wrong slot. Screenshots/recording are off by default for this flow.
+2. Use **Monitor → Player check-in** for a shared scan across games. The QR verifies a player's school account and records the in-game name, team and college they enter. A shared check-in tracks scans independently of the published match roster. Use roster-linked pairings for official match readiness.
 3. Each player downloads the verified 3.1 Windows agent or Android companion and consents locally. It scans automatically. Restricted tools show **Action required**; close/remove them and let the app scan again. Old findings remain in history but do not permanently block a corrected current scan.
-4. Wait until every roster player shows **Scan passed**. The API checks current observations, essential inspection completion, the session challenge, latest policy and the published roster. Pairing, a stale connection, an old companion, a missing game trust reference or an iPhone check-in cannot pass. Required app scans must stay current within 45 seconds.
-5. The ordinary **Go live** / resume / live-stream connection actions call the admission API and wait for a confirmed cloud save. CODM BR transitions to live use the same check. A missing or blocked scan prevents the official live transition. Changing a roster invalidates prior clearance, including a replacement that reuses the same roster slot ID.
+4. Open the published match under **Broadcast → Match scan readiness** for roster-linked scan results. Android readiness requires a current report with the configured trusted publisher certificate. iPhone readiness requires a current referee inspection and supervised clearance.
+5. **Go live does not check scans** (changed 23 November 2026, Kerr's decision). The organizer confirms all players passed before match time, about 30 minutes ahead, using the panel above. Go live, resume and the live-stream controls only change the match state. The panel still shows who passed and still drops a player if their companion reports a restricted tool during the match.
 6. Keep every companion open during the match. Disconnects lose readiness. Use a supported organizer device if a player declines on their own device or only has an iPhone. This is an admission requirement, not an automatic cheating ban.
 
 The basic Android gate requires visible installed packages and trusted regional game certificates. Overlay inspection is best effort and its failure is shown as a warning; it is not mislabeled as a complete overlay scan. Windows requires completed process/registered-software checks and completed executable hash checks when staff configured hashes. Low-severity installed dual-use tools are not automatically treated as cheating.
@@ -59,7 +65,7 @@ The standard Android build requires HTTPS. For an isolated, staff-controlled LAN
 
 ## Configure detection policy
 
-Open **Admin > Match monitor > Blocklists and thresholds**. Review every starter entry against tournament rules. Editors, debuggers, virtual devices, accessibility services and macro tools have legitimate uses. Their presence alone does not establish cheating.
+Staff can review and update the scan rules through `GET /api/integrity/config` and `PUT /api/integrity/config`. Review every starter entry against tournament rules. Editors, debuggers, virtual devices, accessibility services and macro tools have legitimate uses. Their presence alone does not establish cheating.
 
 - Package/process/registered-software entries use `pattern | label | severity`. Only a trailing `*` is supported; otherwise names match exactly, ignoring case.
 - **PC installed software** checks registered display names in the current-user and machine Uninstall registry locations, including the 32-bit view. It can find listed registered software even when stopped. It does not discover every portable program or every Windows Store app.
@@ -71,9 +77,9 @@ No current cheat binary hashes are invented or bundled. Research does not supply
 
 ## Pair and monitor
 
-1. Select a match, game, player and platform. Choose recording on/off explicitly. The suggested address is the configured public API origin; verify it before creating a QR code.
-2. A pairing code expires after five minutes and can be claimed once. Keep it private to the intended player. Re-pair all players with the 3.1 companions before required admission: legacy reports do not contain the current scan metadata. Dota sessions also use a separate telemetry-only GSI token.
-3. Windows players download the verified agent, check its server address, then type YES to consent or NO to decline. Keep the window open. Restart Dota after pairing to load the GSI configuration. The agent does not read game memory or inject code; publisher compatibility still needs event validation.
+1. In **Player check-in**, select **Generate check-in QR** and share it or copy its link. Phones need a reachable HTTPS ArenaHub address. Windows players open the same link on their game PC.
+2. Players sign in and provide their game details. The server creates one active scan session per verified school account. Use **Reset** on a player who needs to start again.
+3. Windows players download the verified agent (or press Start my scan once it is installed). The agent opens its own window in the player's browser, served only to this PC on 127.0.0.1 behind a random secret address. The window shows whose scan it is, what is checked and the server address, and the player chooses Agree and start scan or Decline. It then shows each check as it runs and the live result (Scan passed, or Action required with the file or program names). Typing YES or NO in the console still works. Keep the agent open. Restart Dota after pairing to load the GSI configuration. The agent does not read game memory or inject code; publisher compatibility still needs event validation.
 4. Android players install the verified companion, review consent and agree or decline. Screen capture requires a separate OS prompt. The foreground notification stays visible. Package inventories refresh at most once a minute and on package changes.
 5. iPhone players use Safari to check in or decline. Nothing is installed or inspected. When recording is enabled for the session, they can upload their own recording if requested. A real iPhone test remains necessary.
 6. Staff see findings, their evidence, and **Detection coverage** in each session. GSI and media do not refresh scanner liveness. A scanner silent for more than 45 seconds becomes **Not reporting**. A zero score means no listed indicators were reported; it is not a clean-device certificate.
@@ -81,6 +87,8 @@ No current cheat binary hashes are invented or bundled. Research does not supply
 8. End the session after the match. Tokens are revoked when it ends/expires. If a case needs evidence, record the review note and enable the explicit evidence hold. Otherwise ended sessions older than 30 days are removed by cleanup. Held evidence needs a staff-managed release/deletion process.
 
 ## Test devices and release limits
+
+Use the **Player check-in** QR to exercise Android, Windows and iPhone handoff. The localhost demo QR opens on the computer running the demo. For a physical phone, use the ArenaHub HTTPS site or a production build served through the player-only tunnel with working campus sign-in.
 
 Windows process hashing and installed-software collection have native local tests using harmless matches. Automated tests also cover API decisions, Android fact validation, consent/decline flows, iPhone upload simulation and desktop/mobile layouts. The Windows registry test reads entries locally, writes no registry keys and uploads no full inventory.
 

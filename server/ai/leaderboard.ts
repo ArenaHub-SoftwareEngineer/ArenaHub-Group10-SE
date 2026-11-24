@@ -1,10 +1,11 @@
 // Records answer for player-leaderboard questions ("most kills in MLBB", "top players by KDA"), used when no
 // model answers. It reads the same leaderboard as the page and the getPlayerLeaderboard tool, so all three agree.
 import type { BracketDraft } from '../../src/lib/types.ts';
-import type { KnowledgeReference } from '../../src/lib/tournamentKnowledge.ts';
+import { ordinal, type KnowledgeReference } from '../../src/lib/tournamentKnowledge.ts';
 import { buildPlayerLeaderboards, formatKda, KDA_MIN_GAMES, LEADERBOARD_SORTS, rankLeaderboard, type LeaderboardRow, type LeaderboardSort } from '../../src/lib/playerLeaderboard.ts';
 
-const md = (value: string) => value.replace(/[\\`*_{}[\]<>#|]/g, '\\$&');
+/** Organizer-entered names as plain words: characters the chat would read as formatting are dropped. */
+const plain = (value: string) => value.replace(/[\\`*#]/g, '').replace(/\|/g, '/').replace(/\s+/g, ' ').trim();
 
 export function leaderboardSort(query: string): LeaderboardSort {
   const q = query.toLowerCase();
@@ -31,13 +32,14 @@ export function leaderboardAnswer(brackets: BracketDraft[], archived: BracketDra
   const references = boards.flatMap(board => board.tournaments.filter(t => t.current && t.countedMatches).map(t => ({ label: t.title, bracketId: t.id }))).slice(0, 12);
   const label = LEADERBOARD_SORTS.find(s => s.id === sort)!.label;
   const blocks = boards.map(board => {
-    if (!board.tracksPlayers) return `**${md(board.label)}**\n\nBattle Royale records squads, not individual players. See Standings for squad points.`;
+    if (!board.tracksPlayers) return `${plain(board.label)}: Battle Royale records squads, not individual players. See Standings for squad points.`;
     const rows = rankLeaderboard(board.rows, sort).filter(r => r.rank !== null).slice(0, 5);
-    if (!rows.length) return `**${md(board.label)}**\n\n${board.rows.length ? `No player has ${KDA_MIN_GAMES} games with stats yet, so there is no KDA ranking.` : 'No player stats are recorded yet.'}`;
-    return `**${md(board.label)}** (by ${label.toLowerCase()})\n\n${rows.map(r => `- #${r.rank} ${md(r.ign)} (${md(r.teamName)}${r.collegeCode ? `, ${md(r.collegeCode)}` : ''}): ${statFor(sort, r)}; ${r.kills}/${r.deaths}/${r.assists} over ${r.games} game${r.games === 1 ? '' : 's'}.`).join('\n')}`;
+    if (!rows.length) return `${plain(board.label)}: ${board.rows.length ? `no player has ${KDA_MIN_GAMES} games with stats yet, so there is no KDA ranking.` : 'no player stats are recorded yet.'}`;
+    // The direct answer first, then the top five.
+    return `Top of ${plain(board.label)} by ${label.toLowerCase()}: ${plain(rows[0].ign)} (${plain(rows[0].teamName)}), with ${statFor(sort, rows[0])}.\n\n${rows.map(r => `- ${ordinal(r.rank!)} ${plain(r.ign)} (${plain(r.teamName)}${r.collegeCode ? `, ${plain(r.collegeCode)}` : ''}): ${sort === 'kills' || sort === 'assists' ? '' : `${statFor(sort, r)}; `}${r.kills} kills, ${r.deaths} deaths, ${r.assists} assists over ${r.games} game${r.games === 1 ? '' : 's'}`).join('\n')}`;
   });
   const text = blocks.length
-    ? `${blocks.join('\n\n')}\n\nFinished series only, every game added up. Open Player leaderboard for the full table.`
+    ? `${blocks.join('\n\n')}\n\nThese count finished series only, with every game added up.`
     : 'No player stats are recorded yet. Players appear after a finished match has stats or an MVP.';
   return { text, references };
 }

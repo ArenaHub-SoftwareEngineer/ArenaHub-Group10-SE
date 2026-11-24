@@ -1,16 +1,16 @@
-// Local demo with one-click test accounts. Nothing here touches the real Firebase project.
+// Local testing with Firebase emulators.
 //
 //   npm run demo              players can join online (Cloudflare quick tunnel, like npm run online)
 //   npm run demo -- --local   this laptop only
 //
-// 1. Starts the Firebase emulators (Auth + Firestore) for the "demo-arenahub" test project.
-// 2. Creates the two test accounts and the clearly labelled DEMO tournaments.
+// 1. Starts the Firebase emulators (Auth, Firestore and Storage) for the "demo-arenahub" test project.
+// 2. Creates the two test accounts and local tournament fixtures.
 // 3. Builds the site in test mode into dist-demo/ (never dist/, which is what gets deployed).
-// 4. Starts ArenaHub on http://localhost:3210. The sign-in screen shows "Sign in as Admin / Player".
+// 4. Starts ArenaHub on http://localhost:3210. Use the email sign-in form.
 //
 // Test accounts (emulator only), password ArenaHub-QA-Only-27!
 //   Admin:  organizer@wmsu.edu.ph      Player: student@wmsu.edu.ph
-// Everything made during the demo is lost when it stops; the accounts and DEMO data come back next start.
+// The emulator recreates the accounts and fixtures each time the script starts.
 import { spawn, spawnSync } from 'node:child_process';
 import { createConnection } from 'node:net';
 import { readFileSync } from 'node:fs';
@@ -33,23 +33,24 @@ const run = (command, args, env = {}) => { const result = spawnSync(command, arg
 
 if (await open(3210)) { console.error('Port 3210 is in use. Stop the other ArenaHub window (Ctrl+C) first.'); process.exit(1); }
 
-const authUp = await open(9098), storeUp = await open(8085);
-if (authUp && storeUp) console.log('Firebase emulators are already running; using them.');
-else if (authUp || storeUp) { console.error('Only one Firebase emulator is running (ports 9098/8085). Close it and start again.'); process.exit(1); }
+const emulatorPorts = [9098, 8085, 9198];
+const emulatorsUp = await Promise.all(emulatorPorts.map(open));
+if (emulatorsUp.every(Boolean)) console.log('Firebase emulators are already running; using them.');
+else if (emulatorsUp.some(Boolean)) { console.error('Firebase Auth, Firestore and Storage must use ports 9098, 8085 and 9198. Stop the partial emulator session and try again.'); process.exit(1); }
 else {
   console.log('Starting the Firebase emulators (needs Java; first start can take a minute)...');
-  const emulators = spawn('npx', ['firebase', 'emulators:start', '--only', 'auth,firestore', '--project', 'demo-arenahub', '--config', 'firebase.test.json'], { stdio: ['ignore', 'pipe', 'inherit'], shell });
+  const emulators = spawn('npx', ['firebase', 'emulators:start', '--only', 'auth,firestore,storage', '--project', 'demo-arenahub', '--config', 'firebase.test.json'], { stdio: ['ignore', 'pipe', 'inherit'], shell });
   children.push(emulators);
   emulators.stdout.on('data', chunk => { if (/error/i.test(String(chunk))) process.stdout.write(chunk); });
   emulators.on('exit', code => { console.error(`\nThe Firebase emulators stopped (exit ${code}).`); stopAll(1); });
-  if (!(await waitFor(9098, 120)) || !(await waitFor(8085, 120))) { console.error('The emulators did not start within 2 minutes.'); stopAll(1); }
+  if (!(await Promise.all(emulatorPorts.map(port => waitFor(port, 120)))).every(Boolean)) { console.error('The emulators did not start within 2 minutes.'); stopAll(1); }
 }
 
-console.log('Creating the test accounts and DEMO tournaments...');
+console.log('Creating the local test accounts and tournaments...');
 run('node', ['tests/seed-emulators.mjs']);
 run('npx', ['tsx', 'scripts/seed-demo.ts'], { FIRESTORE_EMULATOR_HOST: '127.0.0.1:8085' });
 
-console.log('Building the demo site into dist-demo/ ...');
+console.log('Building the local test site into dist-demo/ ...');
 run('npx', ['vite', 'build', '--mode', 'test', '--outDir', 'dist-demo', '--emptyOutDir', '--logLevel', 'warn']);
 
 const env = {
@@ -58,7 +59,7 @@ const env = {
   // Match monitor sessions made during the demo stay apart from real event data.
   INTEGRITY_DATA_DIR: 'data/demo',
 };
-console.log(`\nDemo ready: open http://localhost:3210 and choose "Sign in as Admin" or "Sign in as Player".`);
+console.log(`\nLocal test site ready at http://localhost:3210. Use the email sign-in form with a seeded test account.`);
 const server = local
   ? spawn(process.execPath, ['node_modules/tsx/dist/cli.mjs', 'server/index.ts'], { stdio: 'inherit', env })
   : spawn(process.execPath, ['scripts/online.mjs'], { stdio: 'inherit', env });

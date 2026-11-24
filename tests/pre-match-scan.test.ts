@@ -98,13 +98,43 @@ test('Battle Royale public rosters survive storage hydration and include every s
   assert.throws(() => scanMatch({ brackets: [empty], revision: '1', checkedAt: '' }, event.placement!.games[0].id), /named players/);
 });
 
-test('practice verdict uses the official rules but never clears anyone', async () => {
+test('PC practice checks report missing Dota and generic findings separately from blockers', async () => {
   const { practiceVerdict } = await import('../src/lib/practiceScan');
   const { scan: _, ...unstamped } = pc();
   const clean = practiceVerdict('dota2', unstamped, config(), now);
-  assert.equal(clean.status, 'ready'); assert.equal(clean.label, 'No cheats found'); assert.equal(clean.validUntil, null);
+  assert.equal(clean.status, 'ready'); assert.equal(clean.label, 'Practice scan complete'); assert.equal(clean.validUntil, null);
+  const absent = {
+    ...unstamped, dota: { ...unstamped.dota, found: false }, checks: { ...unstamped.checks, dotaFiles: 'failed' },
+    fileFindings: [{ name: 'attach.dll', folder: 'App data', reason: 'Unsigned program that contains DLL-injection functions', severity: 'low' }],
+    suspiciousPrograms: [{ name: 'Debugger.exe', reason: 'Unsigned program that contains DLL-injection functions', severity: 'low' }],
+  };
+  const checked = practiceVerdict('dota2', absent, config(), now);
+  assert.equal(checked.status, 'ready');
+  assert.deepEqual(checked.blockers, []);
+  for (const text of ['Dota 2', 'attach.dll', 'Debugger.exe']) assert.ok(checked.warnings.some(warning => warning.includes(text)));
+  assert.equal(preMatchScan(input({ facts: { ...absent, scan: stamp } })).status, 'incomplete');
   const sha = 'd'.repeat(64);
   const found = practiceVerdict('dota2', { ...unstamped, fileFindings: [{ name: 'loader.exe', folder: 'Downloads', reason: 'Unsigned program that targets dota2.exe', sha256: sha, severity: 'high' }] }, config(), now);
   assert.equal(found.status, 'blocked');
   assert.deepEqual(found.blockers, ['Downloads: loader.exe - Unsigned program that targets dota2.exe'], 'players see the file and reason, not the fingerprint');
+});
+
+test('Android practice reports missing game and signing policy without granting match clearance', async () => {
+  const { practiceVerdict } = await import('../src/lib/practiceScan');
+  const facts = {
+    platform: 'android', games: [], installedFlagged: [], rootIndicators: [], emulatorIndicators: [], accessibilityServices: [], overlayPackages: [],
+    developerOptions: false, usbDebugging: false, recording: false,
+    checks: { installedApps: true, gameSignatures: true, overlays: true, certificates: true },
+  };
+  const absent = practiceVerdict('mlbb', facts, config(), now);
+  assert.equal(absent.status, 'ready');
+  assert.ok(absent.warnings.some(warning => /game check was skipped/i.test(warning)));
+  const installed = { ...facts, games: [{ packageName: 'com.mobile.legends', certSha256: ['c'.repeat(64)], installer: 'com.android.vending' }] };
+  const unverified = practiceVerdict('mlbb', installed, config(), now);
+  assert.equal(unverified.status, 'ready');
+  assert.ok(unverified.warnings.some(warning => /installed game could not be verified/.test(warning)));
+  const c = config();
+  c.android.games.mlbb.trustedCertSha256 = ['d'.repeat(64)];
+  assert.equal(practiceVerdict('mlbb', installed, c, now).status, 'blocked');
+  assert.equal(practiceVerdict('mlbb', { ...facts, checks: { ...facts.checks, gameSignatures: false } }, c, now).status, 'incomplete');
 });

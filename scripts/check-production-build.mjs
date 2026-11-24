@@ -8,6 +8,8 @@ import dotenv from 'dotenv';
 const FORBIDDEN = [
   ['ArenaHub-QA-Only', 'the test account password'],
   ['Sign in as Admin', 'the one-click demo sign-in'],
+  ['Continue as Admin', 'the local admin shortcut'],
+  ['Continue as User', 'the local user shortcut'],
   ['127.0.0.1:9098', 'a connection to the local Auth emulator'],
 ];
 // Server-only secrets: their actual values, read from the environment and the .env files, must not be

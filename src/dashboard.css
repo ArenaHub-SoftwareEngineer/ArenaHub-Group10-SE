@@ -685,17 +685,12 @@ html[data-motion="reduced"] .profile-popover:popover-open { animation: none; }
 .draft-calendar-day:focus-visible { outline: 2px solid var(--brand-ink); outline-offset: -2px; }
 .draft-calendar-date { align-self: center; min-width: 24px; padding: 3px; border-radius: 999px; text-align: center; font-size: var(--fs-xs); }
 .draft-calendar-day[aria-current="date"] .draft-calendar-date { background: var(--brand); color:var(--text-primary); font-weight: 700; }
-.draft-calendar-event { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 4px; border-radius: 4px; background: var(--brand-soft); color: var(--brand-ink); font-size: var(--fs-xs); }
-.draft-calendar-more { color: var(--text-muted); font-size: var(--fs-xs); }
-.draft-calendar-dot { display: none; }
 .draft-calendar-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .draft-schedule-import { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 .draft-schedule-import summary { cursor: pointer; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 650; }
 .draft-schedule-import[open] summary { margin-bottom: 10px; }
 @media (max-width: 600px) {
   .draft-calendar-day { min-height: 46px; padding: 3px; }
-  .draft-calendar-event, .draft-calendar-more { display: none; }
-  .draft-calendar-dot { display: block; align-self: center; width: 5px; height: 5px; border-radius: 50%; background: var(--brand-ink); }
 }
 
 .studio-bracket-library { display: grid; gap: 8px; }
@@ -829,3 +824,38 @@ html[data-motion="reduced"] .schedule-game-tile img { transition: none; }
 .published-standings :is(th, td):not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
 .published-standings tbody tr:hover { background: var(--surface-soft); }
 .published-standings > p { margin-top: 10px; }
+
+/* Time box: type a time or pick one from the list (components/ui/TimeField.tsx). */
+.time-field { position: relative; display: block; }
+.time-field > input { padding-right: 40px; }
+.time-field-toggle { position: absolute; top: 0; right: 0; display: grid; place-items: center; width: 40px; height: 44px; color: var(--text-muted); cursor: pointer; }
+.time-field-toggle:hover, .time-field[data-open] .time-field-toggle { color: var(--text-primary); }
+.time-field-list {
+  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0;
+  max-height: 232px; overflow-y: auto; overscroll-behavior: contain;
+  margin: 0; padding: 4px; list-style: none;
+  background: var(--surface-elevated); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: var(--shadow-2);
+}
+.time-field-list li { padding: 9px 12px; border-radius: 6px; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 500; cursor: pointer; font-variant-numeric: tabular-nums; }
+.time-field-list li:hover, .time-field-list li[data-active] { background: var(--surface-hover); color: var(--text-primary); }
+.time-field-list li[aria-selected="true"] { background: var(--brand-soft); color: var(--brand-ink); font-weight: 650; }
+.time-field-error { display: block; margin-top: 6px; color: var(--danger); font-size: var(--fs-xs); font-weight: 500; }
+
+/* Estimated start and end in the Schedule a match dialog. */
+.match-estimate { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--info-border); border-radius: 8px; background: var(--info-soft); color: var(--info); }
+.match-estimate > svg { flex: none; margin-top: 2px; }
+.match-estimate div { display: grid; gap: 4px; }
+.match-estimate strong { color: var(--text-primary); font-size: var(--fs-sm); font-weight: 650; font-variant-numeric: tabular-nums; }
+.match-estimate small { color: var(--text-secondary); font-size: var(--fs-xs); line-height: 1.5; }
+.match-estimate-clash { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--warning-border); border-radius: 8px; background: var(--warning-soft); color: var(--text-primary); font-size: var(--fs-xs); line-height: 1.5; }
+.match-estimate-clash > svg { flex: none; margin-top: 1px; color: var(--warning); }
+.time-field-list[data-upward] { top: auto; bottom: calc(100% + 6px); }
+/* Date, Start time and End time in one row; on phones the date takes its own row. */
+.draft-calendar-fields.has-end { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 560px) {
+  .draft-calendar-fields.has-end { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .draft-calendar-fields.has-end .draft-calendar-date-field { grid-column: 1 / -1; }
+}
+.match-estimate-short { color: var(--warning) !important; font-weight: 600; }
+.match-estimate-use { justify-self: start; margin-top: 2px; padding: 0; background: none; border: 0; color: var(--brand-ink); font-size: var(--fs-xs); font-weight: 650; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.match-estimate-use:hover { color: var(--text-primary); }

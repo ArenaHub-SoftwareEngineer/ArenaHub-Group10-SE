@@ -25,9 +25,14 @@ service-account*.json
 dist-agent/
 # Local demo mode (npm run demo): its own build and the emulator accounts and data
 dist-demo/
+dist-vercel/
+.vercel/
 .emulator-data/
 # Match monitor data written by browser tests (vite --mode test)
 .test-data/
 
 # Local Graphify code graph (rebuild with: graphify update .)
 graphify-out/
+
+.vercel
+.env*

@@ -2,8 +2,13 @@ import { PageHeading } from '../ui/PageHeading';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { hasCampusEmail } from '../../lib/campusAccess';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { User, UserRole, UserStatus } from '../../lib/types';
+import { ROLE_LABEL, STAFF_ROLES, summarizeUsers } from '../../lib/adminInsights';
+import { SegmentBar } from './AdminOverview';
+import './adminOverview.css';
+
+type RoleFilter = UserRole | 'all' | 'staff';
 import { firestoreService } from '../../lib/firestore';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { useToast } from '../ui/Toast';
@@ -22,8 +27,18 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [actionType, setActionType] = useState<'suspend' | 'ban' | 'restore' | null>(null);
 
+  const [role, setRole] = useState<RoleFilter>('all');
+  const summary = useMemo(() => summarizeUsers(users, Date.now()), [users]);
+  const statusTiles = [
+    { id: 'all', label: 'All accounts', value: summary.total, note: summary.newThisWeek ? `${summary.newThisWeek} joined this week` : `${summary.colleges.length} colleges`, tone: 'neutral' },
+    { id: 'active', label: 'Active', value: summary.active, note: 'Can watch and chat', tone: 'success' },
+    { id: 'suspended', label: 'Suspended', value: summary.suspended, note: 'Waiting for review', tone: summary.suspended ? 'warning' : 'neutral' },
+    { id: 'banned', label: 'Banned', value: summary.banned, note: 'No access', tone: summary.banned ? 'danger' : 'neutral' },
+  ] as const;
+
   const filteredUsers = users.filter((u) => {
-    const matchesFilter = filter === 'all' || u.status === filter;
+    const matchesFilter = (filter === 'all' || u.status === filter)
+      && (role === 'all' || (role === 'staff' ? STAFF_ROLES.includes(u.role) : u.role === role));
     const matchesSearch =
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -53,13 +68,31 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
 
   return (
     <div className="space-y-6">
-      <PageHeading title="Users" description="Find registered accounts, review their status, and manage ArenaHub access." />
+      <PageHeading title="Users" description="Who is on ArenaHub, their status and role. Select a tile to filter, then suspend, ban or restore an account." />
+      <nav className="ov-kpis" aria-label="Filter accounts by status">
+        {statusTiles.map(tile => (
+          <button key={tile.id} type="button" className={`ov-kpi is-link ov-tone is-${tile.tone}`} aria-pressed={filter === tile.id} onClick={() => setFilter(tile.id)}>
+            <span>{tile.label}</span><strong>{tile.value}</strong><small>{tile.note}</small>
+          </button>
+        ))}
+        <button type="button" className="ov-kpi is-link ov-tone is-brand" aria-pressed={role === 'staff'} onClick={() => setRole(role === 'staff' ? 'all' : 'staff')}>
+          <span>Staff</span><strong>{summary.staff}</strong><small>Admins, organizers, moderators</small>
+        </button>
+      </nav>
+      <SegmentBar label="Accounts by status" parts={[
+        { tone: 'success', value: summary.active, label: 'Active' },
+        { tone: 'warning', value: summary.suspended, label: 'Suspended' },
+        { tone: 'danger', value: summary.banned, label: 'Banned' },
+      ]} />
       <div className="page-toolbar">
-        <div className="ah-chips" role="group" aria-label="Filter users by account status">
-          {(['all', 'active', 'suspended', 'banned'] as const).map(tab => (
-            <button key={tab} type="button" className="ah-chip capitalize" aria-pressed={filter === tab} onClick={() => setFilter(tab)}>{tab}</button>
-          ))}
-        </div>
+        <label className="ov-role-select">
+          <span className="sr-only">Filter by role</span>
+          <select value={role} onChange={event => setRole(event.target.value as RoleFilter)}>
+            <option value="all">All roles</option>
+            <option value="staff">Staff only</option>
+            {summary.roles.map(item => <option key={item.role} value={item.role}>{ROLE_LABEL[item.role] || item.role} ({item.count})</option>)}
+          </select>
+        </label>
         <label className="page-search">
           <Search size={16} aria-hidden="true" />
           <input type="search" aria-label="Search users" value={search}
@@ -67,6 +100,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
         </label>
       </div>
 
+      <p className="ov-count-line" role="status">Showing {filteredUsers.length} of {users.length} accounts{search.trim() ? ` matching "${search.trim()}"` : ''}</p>
       <div className="page-panel overflow-x-auto" role="region" aria-label="Registered accounts" tabIndex={0}>
         <table className="users-table w-full text-left border-collapse text-sm">
           <thead>
@@ -88,7 +122,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
                 {/* User Info */}
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-(--surface-elevated) border border-(--border-strong) flex items-center justify-center font-heading font-bold text-xs text-(--text-primary) shrink-0">
+                    <div className={`ov-avatar shrink-0${STAFF_ROLES.includes(user.role) ? ' is-staff' : ''}`}>
                       {user.avatarInitials}
                     </div>
                     <div>
@@ -118,7 +152,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ users }) => {
 
                 {/* Role Dropdown */}
                 <td className="py-3 px-4" data-label="Role">
-                  <span className="text-xs capitalize" title="Staff permissions are assigned separately by the project administrator.">{user.role}</span>
+                  <span className={`ov-role-pill${STAFF_ROLES.includes(user.role) ? ' is-staff' : ''}`} title="Staff permissions are assigned separately by the project administrator.">{ROLE_LABEL[user.role] || user.role}</span>
                 </td>
 
                 {/* Joined Date */}

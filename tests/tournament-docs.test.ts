@@ -60,6 +60,45 @@ test('documents round-trip back into the same match graph', () => {
   assert.equal(fingerprint(toTournamentDoc(rebuilt, 1)), fingerprint(toTournamentDoc(bracket, 1)));
 });
 
+test('old local fixture labels are normalized without altering the match schedule or identifying fields', () => {
+  const source = toTournamentDoc({ ...sampleBracket(), title: 'DEMO Dota 2 Cup', demo: true }, 4);
+  const match = source.matches.find(entry => entry.team1 && entry.team2 && !entry.team1.isBye && !entry.team2.isBye)!;
+  match.team1!.name = 'DEMO Alpha';
+  match.team2!.name = 'DEMO Bravo';
+  match.streamTitle = 'DEMO Alpha vs DEMO Bravo';
+  match.scheduledDate = '2026-11-23';
+  match.scheduledTime = '13:00';
+  const rebuilt = fromDocs(source);
+  const shown = rebuilt.matches.find(entry => entry.id === match.id)!;
+  assert.equal(rebuilt.title, 'Dota 2 Cup');
+  assert.equal(rebuilt.demo, true);
+  assert.equal(shown.team1!.name, 'Alpha');
+  assert.equal(shown.team2!.name, 'Bravo');
+  assert.equal(shown.streamTitle, 'Alpha vs Bravo');
+  assert.equal(shown.scheduledDate, match.scheduledDate);
+  assert.equal(shown.scheduledTime, match.scheduledTime);
+  assert.deepEqual(shown.score, match.score);
+  assert.equal(shown.team1!.id, match.team1!.id);
+  assert.equal(fromDocs({ ...source, demo: undefined }).title, 'DEMO Dota 2 Cup');
+});
+
+test('bracket appearance belongs to the team id and survives a published round trip', () => {
+  const bracket = sampleBracket();
+  const realTeams = bracketTeams(bracket);
+  const image = 'data:image/webp;base64,UklGRg==';
+  bracket.appearance = { theme: 'navy-gold', wideImage: true, exportFooter: true, teams: {
+    [realTeams[0].id]: { image, color: '#51a5ff', motif: 'lightning bolt' },
+    [realTeams[1].id]: { image: 'https://example.com/team.jpg' },
+    withdrawn: { color: '#ffffff' },
+  } };
+  const saved = toTournamentDoc(bracket, 3);
+  const badge = { image, color: '#51a5ff', motif: 'lightning bolt' };
+  assert.deepEqual(saved.appearance?.teams, { [realTeams[0].id]: badge });
+  assert.equal(JSON.stringify(saved).split(image).length, 2);
+  const rebuilt = fromDocs(saved, toRosterDoc(bracket));
+  assert.deepEqual(rebuilt.appearance, saved.appearance);
+});
+
 test('scoring a match changes only that tournament fingerprint and yields a result announcement', () => {
   const bracket = sampleBracket();
   const before = toTournamentDoc(bracket, 1);

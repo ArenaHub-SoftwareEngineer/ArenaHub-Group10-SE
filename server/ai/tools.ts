@@ -79,7 +79,7 @@ const HELP: Record<string, string> = {
   admission: 'Personal accounts join as spectators by scanning a campus student\'s invite QR code. Campus accounts can read everything public after signing in.',
   registration: 'Team registration and rosters are handled by facilitators on the organizer side. Only in-game names, roles and colleges are public.',
   account: 'Sign in with your campus Google account. Organizer access is granted by the project administrator only.',
-  leaderboard: 'Open Player leaderboard for individual records per game across current and past tournaments: games, series won and lost, kills, deaths, assists, KDA and MVP awards. Select a player to see the matches behind the totals.',
+  leaderboard: 'Open Standings for tournament standings and team results.',
 };
 
 /** Builds the tools for one request. Staff tools exist only for staff callers. */

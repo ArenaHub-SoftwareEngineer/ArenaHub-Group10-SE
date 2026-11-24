@@ -1,10 +1,11 @@
-// Contrast audit: with the local demo running (npm run demo), visits every page as Player and Admin and lists
+// Contrast audit: with the local test site running (npm run demo -- --local), visits each page as Player and Admin and lists
 // visible text below WCAG AA contrast (4.5:1, or 3:1 for large text). Usage: npm run audit:contrast [-- out.json]
 const { chromium } = require('playwright');
 const fs = require('fs');
 const out = process.argv[2] || 'test-results/contrast.json';
 const ADMIN = ['overview', 'bracket-studio', 'live-stream', 'match-data', 'users', 'games', 'reports', 'integrity', 'match-monitor', 'operations', 'featured', 'ai-assistant'];
 const PLAYER = ['home', 'current-live', 'brackets', 'teams', 'schedule', 'standings', 'integrity', 'operations', 'ai-assistant'];
+const ACCOUNTS = { Player: 'student@wmsu.edu.ph', Admin: 'organizer@wmsu.edu.ph' };
 
 async function audit(page, label) {
   return page.evaluate(label => {
@@ -51,7 +52,9 @@ async function audit(page, label) {
     const p2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await p2.goto('http://localhost:3210/');
     await p2.getByRole('button', { name: /sign in to arenahub/i }).first().click();
-    await p2.getByRole('button', { name: new RegExp(`Sign in as ${who}`) }).click();
+    await p2.getByLabel('Email address').fill(ACCOUNTS[who]);
+    await p2.getByRole('textbox', { name: 'Password', exact: true }).fill('ArenaHub-QA-Only-27!');
+    await p2.getByRole('button', { name: 'Sign in with email' }).click();
     await p2.locator('.auth-entry').waitFor({ state: 'detached', timeout: 30000 }); await p2.waitForTimeout(1500);
     for (const id of ids) { await p2.goto(`http://localhost:3210/${base}${id}`); await p2.waitForTimeout(1500); all.push(...await audit(p2, `${who}:${id}`)); }
     await p2.close();

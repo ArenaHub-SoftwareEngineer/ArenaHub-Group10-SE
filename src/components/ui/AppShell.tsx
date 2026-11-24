@@ -39,6 +39,7 @@ interface AppShellProps {
   routeKey: string;
   pageTitle: string;
   fullBleed?: boolean;
+  widePage?: boolean;
   navLabel: string;
   live?: ShellLive[];
   children: React.ReactNode;
@@ -178,7 +179,7 @@ function NavigationLink({ href, onNavigate, children, ...props }: React.Componen
 
 export function AppShell({
   workspace, context, contextLogo, groups, isActive, onNavigate, mobileTabs, actions, pageKey, routeKey, pageTitle,
-  fullBleed = false, navLabel, live = [], children,
+  fullBleed = false, widePage = false, navLabel, live = [], children,
 }: AppShellProps) {
   const reduced = Boolean(useReducedMotion() || document.documentElement.dataset.motion === 'reduced');
   const phone = useMedia(PHONE_QUERY);
@@ -293,7 +294,7 @@ export function AppShell({
       </aside>
 
       <main ref={main} id={contentId} tabIndex={-1} aria-label={pageTitle} className={`shell-main${fullBleed ? ' is-full' : ''}`}>
-        <motion.div key={pageKey} className="shell-page" initial={reduced ? false : { opacity: .8, y: 5 }}
+        <motion.div key={pageKey} className={`shell-page${widePage ? ' is-wide' : ''}`} initial={reduced ? false : { opacity: .8, y: 5 }}
           animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .2, ease: [.2, 0, 0, 1] }}>
           {children}
         </motion.div>

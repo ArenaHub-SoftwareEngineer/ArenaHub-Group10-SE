@@ -1,7 +1,6 @@
 /**
- * Loads clearly labelled DEMO tournaments into the Firestore emulator for demonstrations
- * (for example the defense, which must run without internet).
- * Every team name starts with "DEMO", every tournament carries demo: true, and the UI shows a DEMO label.
+ * Loads tournament fixtures into the Firestore emulator for offline testing.
+ * The internal demo flag keeps fixture results out of player leaderboards.
  *
  * Emulator only. Usage:
  *   firebase emulators:start --only auth,firestore --project demo-arenahub --config firebase.test.json
@@ -30,14 +29,14 @@ const ROLES: Record<string, string[]> = {
 function demoBracket(gameId: string, gameName: string, format: string, matchFormat: MatchFormat, size: number, day: string): BracketDraft {
   const colleges = INSTITUTION_COLLEGES.slice(0, size);
   const draft = createBracketFromTeams({
-    title: `DEMO ${gameName} Cup`, gameName, format, matchFormat, finalMatchFormat: matchFormat,
-    teams: colleges.map((c, i) => ({ name: `DEMO ${c.code} ${['Alpha', 'Titans', 'Pulse', 'Vanguard', 'Storm', 'Echo', 'Nova', 'Atlas'][i]}`, college: c.code, seed: i + 1 })),
+    title: `${gameName} Cup`, gameName, format, matchFormat, finalMatchFormat: matchFormat,
+    teams: colleges.map((c, i) => ({ name: `${c.code} ${['Alpha', 'Titans', 'Pulse', 'Vanguard', 'Storm', 'Echo', 'Nova', 'Atlas'][i]}`, college: c.code, seed: i + 1 })),
   });
   const roles = ROLES[gameId] || ROLES['game-mlbb'];
   let matches: Match[] = draft.matches.map((m, i) => ({
     ...m, gameId, scheduledDate: day, scheduledTime: `${String(13 + (i % 6)).padStart(2, '0')}:00`,
-    team1: m.team1 && !m.team1.isBye ? { ...m.team1, gameId, collegeCode: m.team1.collegeCode || colleges.find(c => m.team1!.name.includes(c.code))?.code || '', players: roles.map((role, p) => ({ id: `${m.team1!.id}-p${p}`, name: '', ign: `${m.team1!.name.split(' ')[1]}${role.split(' ')[0]}${p + 1}`, role, collegeId: '', isVerified: true })) } : m.team1,
-    team2: m.team2 && !m.team2.isBye ? { ...m.team2, gameId, collegeCode: m.team2.collegeCode || colleges.find(c => m.team2!.name.includes(c.code))?.code || '', players: roles.map((role, p) => ({ id: `${m.team2!.id}-p${p}`, name: '', ign: `${m.team2!.name.split(' ')[1]}${role.split(' ')[0]}${p + 1}`, role, collegeId: '', isVerified: true })) } : m.team2,
+    team1: m.team1 && !m.team1.isBye ? { ...m.team1, gameId, collegeCode: m.team1.collegeCode || colleges.find(c => m.team1!.name.includes(c.code))?.code || '', players: roles.map((role, p) => ({ id: `${m.team1!.id}-p${p}`, name: '', ign: `${m.team1!.name.split(' ')[0]}${role.split(' ')[0]}${p + 1}`, role, collegeId: '', isVerified: true })) } : m.team1,
+    team2: m.team2 && !m.team2.isBye ? { ...m.team2, gameId, collegeCode: m.team2.collegeCode || colleges.find(c => m.team2!.name.includes(c.code))?.code || '', players: roles.map((role, p) => ({ id: `${m.team2!.id}-p${p}`, name: '', ign: `${m.team2!.name.split(' ')[0]}${role.split(' ')[0]}${p + 1}`, role, collegeId: '', isVerified: true })) } : m.team2,
   }));
   // Play out the first playable match and mark the next one live, so every page has something to show.
   const playable = () => matches.filter(m => m.status !== 'completed' && m.team1 && m.team2 && !m.team1.isBye && !m.team2.isBye && !m.inactive);
@@ -78,4 +77,4 @@ for (const bracket of brackets) {
 }
 batch.set(db.doc('config/catalog'), { games: DEFAULT_GAMES, categories: DEFAULT_CATEGORIES, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
 await batch.commit();
-console.log(`Loaded ${brackets.length} DEMO tournaments: ${brackets.map(b => b.title).join(', ')}`);
+console.log(`Loaded ${brackets.length} local tournaments: ${brackets.map(b => b.title).join(', ')}`);

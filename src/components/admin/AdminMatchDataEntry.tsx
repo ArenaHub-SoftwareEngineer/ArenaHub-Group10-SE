@@ -14,6 +14,7 @@ import { MatchHighlightsEditor } from './MatchHighlightsEditor';
 import { errorMessage } from '../../lib/errors';
 import { Sparkles, Save, ChevronDown, CheckCircle2, BarChart3, RefreshCw } from '../ui/Icons';
 import { CollegeLogo } from '../common/CollegeLogo';
+import { matchName } from '../../lib/matchName';
 
 interface PlayerStatRow {
   playerId: string;
@@ -144,7 +145,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
     if (invalid) { showToast('Complete each included player’s K/D/A with non-negative whole numbers.', 'error'); return; }
     const ranked = [...filledRows].sort((a, b) => (Number(b.kills) + Number(b.assists)) / Math.max(1, Number(b.deaths)) - (Number(a.kills) + Number(a.assists)) / Math.max(1, Number(a.deaths)));
     const lines = ranked.map(r => `${r.ign || r.playerName}: ${r.kills}/${r.deaths}/${r.assists} · KDA ${((Number(r.kills) + Number(r.assists)) / Math.max(1, Number(r.deaths))).toFixed(2)}`);
-    setAiAnalysis(`Match ${selectedMatch?.matchNumber} · Game ${gameNumber}\n\n${filledRows.length} players with complete entered stats.\n${lines.join('\n')}\n\nHighest entered KDA: ${ranked[0].ign || ranked[0].playerName}. This is a descriptive stat, not an MVP verdict or win prediction.\n${matchNotes ? `\nOrganizer observations: ${matchNotes}` : ''}`);
+    setAiAnalysis(`${matchName(selectedMatch)} · Game ${gameNumber}\n\n${filledRows.length} players with complete entered stats.\n${lines.join('\n')}\n\nHighest entered KDA: ${ranked[0].ign || ranked[0].playerName}. This is a descriptive stat, not an MVP verdict or win prediction.\n${matchNotes ? `\nOrganizer observations: ${matchNotes}` : ''}`);
     showToast('Stats summary ready.', 'success');
   };
 
@@ -152,7 +153,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
   const num = (value: string) => Number(value) || 0;
   const kdaOf = (row: PlayerStatRow) => row.kills === '' && row.deaths === '' && row.assists === '' ? null : (num(row.kills) + num(row.assists)) / Math.max(1, num(row.deaths));
   const filled = [...team1Rows, ...team2Rows].filter(r => r.kills !== '' || r.deaths !== '' || r.assists !== '').length;
-  const short = (name?: string) => (name || 'TBD').replace(/^DEMO\s+/i, '');
+  const short = (name?: string) => name || 'TBD';
 
   const renderStatInput = (team: 'team1' | 'team2', rows: PlayerStatRow[], teamCode: string) => {
     const collapsed = team === 'team1' ? collapseTeam1 : collapseTeam2;
@@ -215,7 +216,7 @@ export const AdminMatchDataEntry: React.FC<AdminMatchDataEntryProps> = ({ matche
         <div className="stats-matchbar-top">
           <label className="stats-match-picker"><span>Match</span>
             <select aria-label="Select match" value={selectedMatch.id} onChange={e => handleMatchChange(e.target.value)}>
-              {matches.map(m => <option key={m.id} value={m.id}>{m.matchNumber} — {m.team1?.collegeCode || 'TBD'} vs {m.team2?.collegeCode || 'TBD'} · {m.status.toUpperCase()}</option>)}
+              {matches.map(m => <option key={m.id} value={m.id}>{matchName(m)} — {m.team1?.collegeCode || 'TBD'} vs {m.team2?.collegeCode || 'TBD'} · {m.status.toUpperCase()}</option>)}
             </select>
           </label>
           <span className="stats-match-meta"><span className={`status-pill${selectedMatch.status === 'live' ? ' is-danger' : selectedMatch.status === 'completed' ? ' is-success' : ''}`}>{statusLabel}</span>{selectedMatch.roundName} · {selectedMatch.matchFormat}</span>

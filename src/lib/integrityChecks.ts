@@ -1,5 +1,6 @@
 import { Match, MatchFormat, Team, seriesWinsNeeded } from './types';
 import type { EvidenceFile } from './evidenceStorage';
+import { matchName } from './matchName';
 export const REPORT_REASONS = ['Suspected cheating', 'Unregistered player', 'Account sharing', 'Score dispute', 'Unsportsmanlike conduct'] as const;
 export type IntegrityReason = typeof REPORT_REASONS[number];
 export type CaseStatus = 'open' | 'reviewing' | 'resolved' | 'dismissed';
@@ -50,4 +51,4 @@ export function checkTeamRoster(team: Team, allTeams: Team[], expectedPlayers = 
   }
   return [...new Set(issues)];
 }
-export function matchLabel(match: Match) { return match.lobby ? `${match.roundName} · ${match.lobby.squads}-squad lobby` : `${match.matchNumber} · ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}`; }
+export function matchLabel(match: Match) { return match.lobby ? `${match.roundName} · ${match.lobby.squads}-squad lobby` : `${matchName(match)} · ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}`; }

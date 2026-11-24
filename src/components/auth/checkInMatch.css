@@ -1,0 +1,12 @@
+/* "Your match" on player check-in: one radio card per scheduled match. */
+.checkin-matches { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; min-width: 0; }
+.checkin-matches legend { padding: 0; margin-bottom: 6px; font-weight: 600; }
+.checkin-matches > label { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-btn, 8px); background: var(--surface-raised, var(--surface)); cursor: pointer; }
+.checkin-matches > label:hover { background: var(--surface-hover); }
+.checkin-matches > label.is-active { border-color: var(--brand-border); background: var(--brand-soft); }
+.checkin-matches > label:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+.checkin-matches input[type=radio] { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: var(--brand); }
+.checkin-matches span { display: grid; gap: 2px; min-width: 0; }
+.checkin-matches strong { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.checkin-matches small { color: var(--text-secondary); font-size: var(--fs-xs); }
+.checkin-matches small.is-live { color: var(--live); font-weight: 600; }

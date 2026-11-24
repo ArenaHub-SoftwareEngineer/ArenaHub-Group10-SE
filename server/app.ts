@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 import { createAiRouter } from './ai';
 import { createFairPlayRouter } from './fairPlay';
 import { createIntegrityRouter } from './integrity';
-import { publicAccessGuard } from './publicAccess';
+import { publicAccessGuard, viaTunnel } from './publicAccess';
 import { createPresenceRouter } from './presence';
 import { corsPolicy } from './cors';
 import { adminMode } from './firebaseAdmin';
@@ -14,15 +14,33 @@ import { publicErrorHandler, securityHeaders } from './securityHeaders';
 export interface AppOptions {
   /** Folder with the built site to serve, or null for an API-only deployment. */
   site?: string | null;
-  /** Requires a persistent Node process and writable private disk; disable on serverless hosts. */
+  /**
+   * The match monitor. On the laptop it keeps SQLite and recordings on disk. On a serverless host it needs
+   * INTEGRITY_STORE=firestore (see server/firestoreIntegrityStore.ts); otherwise leave it off there.
+   */
   integrity?: boolean;
+  /**
+   * Hosted player address: a folder holding join.html and its font and logo. "/" opens the join page, so
+   * players type only the host name. Used by api/index.ts on Vercel.
+   */
+  joinSite?: string | null;
+}
+
+/** A monitor that could not start (for example no service account) answers 503 instead of taking the AI routes down with it. */
+function integrityOrUnavailable(env: Record<string, string | undefined>): express.RequestHandler {
+  try { return createIntegrityRouter(env); }
+  catch (error) {
+    const reason = error instanceof Error ? error.message : 'The match monitor could not start.';
+    console.error(`[integrity] ${reason}`);
+    return (_req, res) => { res.status(503).set('Cache-Control', 'no-store').json({ error: 'The anti-cheat server is not set up yet. Ask the organizer.' }); };
+  }
 }
 
 export function createApp(env: Record<string, string | undefined>, options: AppOptions = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback');
-  app.use(securityHeaders({ site: options.site }));
+  app.use(securityHeaders({ site: options.site || options.joinSite }));
   // Online mode (npm run online): requests through the public tunnel may only reach the player pages.
   app.use(publicAccessGuard(env));
 
@@ -45,13 +63,23 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
   app.use('/api/presence', cors, createPresenceRouter());
   app.use('/api/ai', cors, createAiRouter(env));
   app.use('/api/fair-play', cors, createFairPlayRouter(env));
-  if (options.integrity !== false) app.use('/api/integrity', cors, createIntegrityRouter(env));
+  if (options.integrity !== false) app.use('/api/integrity', cors, integrityOrUnavailable(env));
   app.use('/api', (_req, res) => { res.status(404).json({ error: 'Unknown API route.' }); });
+
+  if (options.joinSite) {
+    const site = resolve(options.joinSite), page = resolve(site, 'join.html');
+    app.get(['/', '/join', '/join.html'], (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(page));
+    app.get(['/arenahub-logo.svg', '/fonts/:file', '/pov.html', '/pov.js', '/pov.css', '/vendor/livekit-client.umd.js'], express.static(site, { index: false, fallthrough: false, maxAge: '1d' }));
+    app.use((_req, res) => { res.redirect(302, '/'); });
+  }
 
   if (options.site) {
     const site = resolve(options.site);
     app.use(express.static(site));
-    app.get('*', (_req, res) => res.sendFile(resolve(site, 'index.html')));
+    app.get('*', (req, res) => {
+      if (!env.INTEGRITY_HOSTED_URL && viaTunnel(req, env.INTEGRITY_PUBLIC_URL) && req.path !== '/player-check-in') { res.sendStatus(404); return; }
+      res.sendFile(resolve(site, 'index.html'));
+    });
   }
   app.use(publicErrorHandler);
   return app;

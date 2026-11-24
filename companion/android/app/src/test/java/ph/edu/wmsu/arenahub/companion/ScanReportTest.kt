@@ -20,4 +20,23 @@ class ScanReportTest {
     @Test fun absentStampDoesNotManufactureReadiness() {
         assertFalse(JSONObject().withScanStamp(null).has("scan"))
     }
+
+    @Test fun verdictReadsTheServerShapeAndPicksATone() {
+        val json = JSONObject().put("status", "blocked").put("label", "Action required").put("detail", "Close it")
+            .put("blockers", org.json.JSONArray().put("Restricted app: Lulubox").put("")).put("warnings", org.json.JSONArray())
+        val view = ScanView.from(json)!!
+        assertEquals(Tone.BAD, view.tone)
+        assertEquals(listOf("Restricted app: Lulubox"), view.blockers)
+        assertEquals(Tone.OK, ScanView.from(JSONObject().put("status", "ready"))!!.tone)
+        assertEquals(Tone.WARN, ScanView.from(JSONObject().put("status", "incomplete"))!!.tone)
+        assertNull("no verdict before the first report", ScanView.from(null))
+        assertNull(ScanView.from(JSONObject()))
+    }
+
+    @Test fun findingsPutTheNameFirstAndDropFingerprints() {
+        val line = findingLine("Downloads: tool.apk - Renamed copy of a listed tool SHA-256 ${"a".repeat(64)}")
+        assertEquals("tool.apk", line.title)
+        assertEquals("Renamed copy of a listed tool · Downloads", line.detail)
+        assertEquals(FindingLine("Root access detected", null), findingLine("Root access detected"))
+    }
 }

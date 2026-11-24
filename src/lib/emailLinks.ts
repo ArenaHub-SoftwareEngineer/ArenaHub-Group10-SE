@@ -9,7 +9,9 @@ export type AccountReturn = 'verified' | 'password-reset' | 'email-changed';
 
 export function returnLink(after: AccountReturn): ActionCodeSettings | undefined {
   if (typeof window === 'undefined' || !/^https?:$/.test(window.location.protocol)) return undefined;
-  return { url: `${window.location.origin}/?account=${after}` };
+  const url = new URL(window.location.pathname === '/player-check-in' ? window.location.href : '/', window.location.origin);
+  url.searchParams.set('account', after);
+  return { url: url.href };
 }
 
 const REJECTED_RETURN = new Set(['auth/unauthorized-continue-uri', 'auth/invalid-continue-uri', 'auth/missing-continue-uri']);

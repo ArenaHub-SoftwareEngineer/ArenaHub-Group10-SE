@@ -18,6 +18,8 @@ import { monitorAddress } from '../../src/lib/monitorAddress';
 import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, type MonitorConfig } from '../../src/lib/integrityRisk';
 import { PRACTICE_NOTE, practiceVerdict } from '../../src/lib/practiceScan';
 import { codeFromFileName, dotaGameDirFromExe, downloadedFrom, isPackaged, parseLaunchLink, protocolRegistration, rememberedServer, rememberServer } from './launch';
+import { startAgentWindow, type AgentWindow, type WindowAction, type WindowStep } from './agentWindow';
+import { scanSteps, programsStep, dotaStep, sweepStep } from './agentSteps';
 
 const run = promisify(execFile);
 const VERSION = 'pc-agent 3.3.0';
@@ -55,14 +57,58 @@ Reports and screenshots go to the server shown below and are deleted after 30 da
 Close this window or press Ctrl+C to stop. Stopping is logged for the referee.
 `;
 const interactive = process.stdin.isTTY || args.interactive === true;
-async function ask(question: string) {
+/** The browser window, when one is open. The console keeps answering every question too. */
+let win: AgentWindow | null = null;
+async function ask(question: string, signal?: AbortSignal) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try { return (await rl.question(question)).trim(); } finally { rl.close(); }
+  try { return (await rl.question(question, signal ? { signal } : {})).trim(); } finally { rl.close(); }
 }
+/**
+ * Waits for whichever answers first: the console (when it can be typed in) or the window.
+ * Returns the typed text, or the window's action.
+ */
+async function answer<T extends WindowAction['type']>(question: string | null, type: T): Promise<{ typed: string } | { action: Extract<WindowAction, { type: T }> }> {
+  const fromWindow = win?.next(type).then(action => ({ action }));
+  if (!question) return fromWindow || { typed: '' };
+  if (!fromWindow) return { typed: await ask(question) };
+  const abort = new AbortController();
+  const typed = ask(question, abort.signal).then(text => ({ typed: text }), () => new Promise<never>(() => {}));
+  const first = await Promise.race([typed, fromWindow]);
+  if ('action' in first) { abort.abort(); process.stdout.write('\n'); }
+  return first;
+}
+/** Shows a final message in the console and the window. */
+function tell(message: string, phase: 'error' | 'declined' | 'ended' = 'error') {
+  console.log(message);
+  win?.set({ phase, message });
+}
+const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 /** A window opened by a click closes when the agent exits, so keep the last message readable. */
 async function finish(exitCode: number): Promise<never> {
-  if (process.stdin.isTTY) await ask('\nPress Enter to close.');
-  process.exit(exitCode);
+  if (process.stdin.isTTY) await answer('\nPress Enter to close.', 'close');
+  // Give the browser tab a moment to show the last state before the agent goes away.
+  if (win) await pause(1500);
+  return exitSafely(exitCode);
+}
+/**
+ * Exiting at once while stdin or a socket is still closing trips a libuv assertion on Windows
+ * (exit code 0xC0000409). Close what we own, let the event loop finish, and force it only as a backstop.
+ */
+function exitSafely(exitCode: number): Promise<never> {
+  process.exitCode = exitCode;
+  win?.close();
+  process.stdin.destroy();
+  setTimeout(() => process.exit(exitCode), 3000).unref();
+  return new Promise<never>(() => {});
+}
+async function openWindow(link: boolean, practiceMode: boolean) {
+  if (args['no-window'] === true || !(process.stdin.isTTY || link)) return;
+  try {
+    win = await startAgentWindow(practiceMode ? { mode: 'practice', phase: 'scanning', server, steps: scanSteps({ official: false, folders: false }) }
+      : code ? { mode: 'official', phase: 'connecting', server, steps: [] }
+      : { mode: null, phase: 'choose', server, steps: [] }, { open: process.env.ARENAHUB_NO_BROWSER !== '1' });
+    console.log(`\nYour scan is open in your browser. If it did not open, paste this address into your browser:\n  ${win.url}\nKeep this window open: closing it stops the scan.\n`);
+  } catch { win = null; }
 }
 /** Lets the ArenaHub website start this agent with one click. Per user, no admin rights needed. */
 async function registerWebsiteStart() {
@@ -81,54 +127,65 @@ async function main() {
   if (!server) server = rememberedServer() || '';
 
   let practiceMode = args.practice === true || link?.mode === 'practice';
+  await openWindow(!!link, practiceMode);
   // Double-clicking a plain download gives nothing to go on, so the player chooses here.
-  if (!practiceMode && !code && link?.mode !== 'scan' && interactive) {
+  if (!practiceMode && !code && link?.mode !== 'scan' && (interactive || win)) {
     console.log('\nArenaHub Anti-cheat (PC)\n  1  Official match scan (needs your 8-character scan code from staff)\n  2  Practice scan (check this PC now, no code needed)');
-    practiceMode = (await ask('Type 1 or 2: ')) === '2';
+    const choice = await answer(interactive ? 'Type 1 or 2: ' : null, 'choose');
+    if ('typed' in choice) practiceMode = choice.typed === '2';
+    else if (choice.action.mode === 'practice') practiceMode = true;
+    else { code = choice.action.code; try { server = monitorAddress(choice.action.server); } catch { server = ''; } }
   }
   if (practiceMode) return practice();
+  win?.set({ mode: 'official', phase: 'connecting', server });
   if (interactive && !server) { try { server = monitorAddress(await ask('Tournament server address: ')); } catch { /* Reported below. */ } }
   if (interactive && !code) code = (await ask('Your 8-character match scan code: ')).toUpperCase();
   if (!/^https?:\/\/[^\s/]+$/.test(server) || !/^[A-Za-z0-9]{8}$/.test(code)) {
-    console.log('Open the app and enter the server address and match code, or run:\narenahub-agent --server https://<tournament server> --code <8-character code>\nFor a practice scan with no code: arenahub-agent --practice [--server https://<tournament server>]');
+    tell('Open the app and enter the server address and match code, or run:\narenahub-agent --server https://<tournament server> --code <8-character code>\nFor a practice scan with no code: arenahub-agent --practice [--server https://<tournament server>]');
+    win?.set({ message: 'The server address or scan code is missing. Open your scan again from the ArenaHub page.' });
     return finish(1);
   }
+  win?.set({ server });
   // Check the code before asking for consent, so a used or expired code is reported straight away,
   // and the player sees whose scan this is and whether the folder check is part of it.
-  let folderCheck = true;
+  let folderCheck = true, info: any = {};
   try {
     const lookup = await api(`/device/pairing/${code}`);
-    const info = await lookup.json() as any;
-    if (lookup.status === 404) { console.log(info.error || 'That scan code is wrong, already used or expired. Ask staff for a new one.'); return finish(1); }
+    // An older server without this route answers with a plain page; the claim below still checks the code.
+    info = await lookup.json().catch(() => ({})) as any;
+    if (lookup.status === 404) { tell(info.error || 'That scan code is wrong, already used or expired. Ask staff for a new one.'); return finish(1); }
     if (lookup.ok) {
-      if (info.platform !== 'pc') { console.log(`This code is for ${info.platform === 'android' ? 'the Android app' : 'an iPhone'}, not this PC. Open it on the device you play on.`); return finish(1); }
+      if (info.platform !== 'pc') { tell(`This code is for ${info.platform === 'android' ? 'the Android app' : info.platform === 'ios' ? 'an iPhone' : 'a phone'}, not this PC. Open it on the device you play on.`); return finish(1); }
       console.log(`\nThis scan code is for ${info.playerName} - ${info.matchLabel} (${info.gameLabel}).`);
       if (typeof info.folderCheck === 'boolean') folderCheck = info.folderCheck;
     }
-  } catch { console.log(`Cannot reach ${server}. Check your internet connection.`); return finish(1); }
+  } catch { tell(`Cannot reach ${server}. Check your internet connection.`); return finish(1); }
   console.log(OFFICIAL_NOTICE);
   console.log(`Tournament server: ${server}. Verify this address with staff before agreeing.`);
   if (args.yes !== true) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    const answer = (await rl.question(folderCheck ? 'Type YES to agree and start (this includes the cheat-file folder check), or NO to decline: ' : 'Type YES to agree and start, or NO to decline: ')).trim().toUpperCase();
-    rl.close();
-    if (answer !== 'YES') {
+    win?.set({ phase: 'consent', player: { name: info.playerName || '', match: info.matchLabel || '', game: info.gameLabel || '' }, folderCheck, record: info.record === true, dota: (info.game || 'dota2') === 'dota2', notice: OFFICIAL_NOTICE });
+    const reply = await answer(folderCheck ? 'Type YES to agree and start (this includes the cheat-file folder check), or NO to decline: ' : 'Type YES to agree and start, or NO to decline: ', 'consent');
+    const said = 'typed' in reply ? reply.typed.toUpperCase() : reply.action.answer.toUpperCase();
+    if (said !== 'YES') {
       // Anything but YES is a decline. The referee is told, so they can arrange another way to play.
-      if (answer === 'NO') {
+      if (said === 'NO') {
         try {
           const declined = await api('/device/decline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
-          console.log(declined.ok ? 'You declined. The referee has been told. Please go to the referee desk before your match.' : ((await declined.json() as any).error || 'Could not send your answer.'));
-        } catch { console.log('Could not reach the tournament API server to send your answer. Tell the referee you declined.'); }
-      } else console.log('Monitoring not started. Open the scan again and type YES or NO.');
+          tell(declined.ok ? 'You declined. The referee has been told. Please go to the referee desk before your match.' : ((await declined.json() as any).error || 'Could not send your answer.'), declined.ok ? 'declined' : 'error');
+        } catch { tell('Could not reach the tournament API server to send your answer. Tell the referee you declined.'); }
+      } else tell('Monitoring not started. Open the scan again and type YES or NO.', 'ended');
       return finish(0);
     }
   }
 
+  win?.set({ phase: 'connecting' });
   const claim = await api('/device/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, device: { model: hostname().slice(0, 80), os: `Windows ${release()}`, agent: VERSION } }) });
   const session = await claim.json() as any;
-  if (!claim.ok) { console.log(session.error || 'Pairing failed.'); return finish(1); }
+  if (!claim.ok) { tell(session.error || 'Pairing failed.'); return finish(1); }
   rememberServer(server);
   console.log(`Paired: ${session.playerName} - ${session.matchLabel} (${session.gameLabel}). Monitoring until ${new Date(session.expiresAt).toLocaleTimeString()}.`);
+  win?.set({ phase: 'scanning', player: { name: session.playerName, match: session.matchLabel, game: session.gameLabel }, expiresAt: Number(session.expiresAt) || undefined, steps: scanSteps({ official: true, folders: session.monitor?.fileSweep === true }) });
+  if (win) void (async () => { await win!.next('stop'); await stop('You stopped the scan.', true); })();
   policy = scanPolicy(session.monitor);
   scanStamp = session.monitor?.scan;
   token = session.token; game = session.game; gsiToken = session.gsiToken || '';
@@ -159,7 +216,7 @@ let policy: ScanPolicy & { fileSweep?: boolean } = { blockedProcesses: [], block
 let scanStamp: { challenge: string; policyVersion: string } | undefined;
 const scanPolicy = (monitor: any): ScanPolicy & { fileSweep?: boolean } => ({ blockedProcesses: monitor.blockedProcesses || [], blockedApplications: monitor.blockedApplications || [], blockedFileHashes: monitor.blockedFileHashes || [], blockedModules: monitor.blockedModules || [], fileSweep: monitor.fileSweep === true });
 let lastScreenshotOk = true, stopping = false, reporting = false, capturing = false;
-let sweepCache: { at: number; key: string; findings: SweepFinding[]; status: 'complete' | 'partial' | 'failed' } | undefined;
+let sweepCache: { at: number; key: string; findings: SweepFinding[]; paths: string[]; entries: number; status: 'complete' | 'partial' | 'failed' } | undefined;
 let sweepRunning: Promise<void> | null = null;
 let referencePrinted = false;
 
@@ -222,26 +279,45 @@ async function dotaAudit(): Promise<{ audit: DotaAudit; status: 'complete' | 'pa
   return result;
 }
 async function fileSweep() {
-  if (!policy.fileSweep) return { status: 'not-configured' as const, findings: [] };
-  if (!sweepAllowed) return { status: 'failed' as const, findings: [] };
+  if (!policy.fileSweep) { win?.step('folders', sweepStep('not-configured', 0)); return { status: 'not-configured' as const, findings: [] }; }
+  if (!sweepAllowed) { win?.step('folders', sweepStep('not-allowed', 0)); return { status: 'failed' as const, findings: [] }; }
   const key = JSON.stringify([policy.blockedProcesses, policy.blockedApplications, policy.blockedFileHashes]);
   // The folder check can take a minute or two, so it runs beside the heartbeat instead of blocking it.
   // It reruns every 10 minutes or when the lists change; until the first pass ends the status is not-running.
   if (!sweepRunning && (!sweepCache || sweepCache.key !== key || Date.now() - sweepCache.at > 10 * 60_000)) {
-    sweepRunning = sweepFolders(defaultSweepRoots(), { blockedProcesses: policy.blockedProcesses, blockedApplications: policy.blockedApplications || [], blockedFileHashes: policy.blockedFileHashes }, { signatures: paths => windowsProvider.signatures!(paths) })
+    if (!sweepCache) win?.step('folders', sweepStep('not-running', 0));
+    sweepRunning = sweepFolders(defaultSweepRoots(), { blockedProcesses: policy.blockedProcesses, blockedApplications: policy.blockedApplications || [], blockedFileHashes: policy.blockedFileHashes }, { signatures: paths => windowsProvider.signatures!(paths), onProgress: state => { if (!sweepCache) win?.step('folders', sweepStep('not-running', 0, state.entries)); } })
       .then(result => {
-        sweepCache = { at: Date.now(), key, findings: result.findings, status: result.status };
+        sweepCache = { at: Date.now(), key, findings: result.findings, paths: result.paths, entries: result.stats.entries, status: result.status };
+        win?.step('folders', sweepStep(result.status, result.findings.length, result.stats.entries));
+        // Report the finished folder check now instead of waiting for the next scheduled report.
+        if (token) void heartbeat();
         console.log(`
 Folder check finished: ${result.stats.entries} entries, ${result.findings.length} finding(s)${result.status === 'partial' ? ' (reached a time or size limit)' : ''}.`);
       })
-      .catch(() => { sweepCache = { at: Date.now(), key, findings: [], status: 'failed' }; })
+      .catch(() => { sweepCache = { at: Date.now(), key, findings: [], paths: [], entries: 0, status: 'failed' }; win?.step('folders', sweepStep('failed', 0)); })
       .finally(() => { sweepRunning = null; });
   }
   if (!sweepCache || sweepCache.key !== key) return { status: 'not-running' as const, findings: [] };
+  // A flagged file the player has since deleted stops counting straight away, not at the next full check.
+  const kept = sweepCache.findings.filter((_, index) => !sweepCache!.paths[index] || existsSync(sweepCache!.paths[index]));
+  if (kept.length !== sweepCache.findings.length) {
+    sweepCache = { ...sweepCache, findings: kept, paths: sweepCache.paths.filter(path => !path || existsSync(path)) };
+    win?.step('folders', sweepStep(sweepCache.status, kept.length, sweepCache.entries));
+  }
   return { status: sweepCache.status, findings: sweepCache.findings };
 }
+/** Shows a check as running only during the first pass, so later re-checks do not flicker in the window. */
+function track<T>(key: string, work: Promise<T>, result: (value: T) => Partial<WindowStep>) {
+  if (win?.state.steps.find(step => step.key === key)?.status === 'waiting') win.step(key, { status: 'running', detail: undefined });
+  return work.then(value => { win?.step(key, result(value)); return value; });
+}
 async function snapshot() {
-  const [observation, install, sweep] = await Promise.all([scanWindows(policy), dotaAudit(), fileSweep()]);
+  const [observation, install, sweep] = await Promise.all([
+    track('programs', scanWindows(policy), programsStep),
+    track('dota', dotaAudit(), result => dotaStep(result.audit, result.status)),
+    fileSweep(),
+  ]);
   return {
     platform: 'pc' as const,
     ...observation,
@@ -275,11 +351,14 @@ async function screenshot() {
   } catch { lastScreenshotOk = false; }
   finally { capturing = false; try { unlinkSync(file); } catch {} }
 }
+let reportAgain = false;
 async function heartbeat() {
-  if (reporting || stopping) return;
+  if (stopping) return;
+  if (reporting) { reportAgain = true; return; }
   reporting = true;
   try {
-    const response = await api('/device/heartbeat', { method: 'POST', token, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(await snapshot()) });
+    const facts = await snapshot();
+    const response = await api('/device/heartbeat', { method: 'POST', token, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(facts) });
     if (response.status === 410) return stop('The match window closed.');
     const body = await response.json() as any;
     if (response.ok) {
@@ -291,15 +370,29 @@ async function heartbeat() {
       const message = scan ? `${scan.label}: ${scan.detail}` : 'Scan received. Keep this window open.';
       console.log(`\n${message}`);
       if (scan?.blockers?.length) for (const reason of scan.blockers) console.log(`  - ${reason}`);
-    }
-  } catch { process.stdout.write('\rCannot reach the tournament API server. Retrying...            '); }
-  finally { reporting = false; }
+      if (win && scan) {
+        win.step('report', { status: scan.status === 'ready' ? 'done' : scan.status === 'blocked' ? 'failed' : 'warn', detail: `${scan.label}. Checked again every ${body.heartbeatSeconds || 15} seconds.` });
+        // Stay on the scanning screen until the first folder check is done, instead of showing "incomplete".
+        // Judged on the facts just sent: a folder check that finished after they were collected counts next report.
+        const sweeping = facts.checks.fileSweep === 'not-running';
+        win.set({ phase: sweeping ? 'scanning' : 'result', lastCheck: Date.now(), verdict: { status: scan.status, label: scan.label, detail: scan.detail, blockers: scan.blockers || [], warnings: scan.warnings || [], validUntil: scan.validUntil ?? null } });
+      }
+    } else if (win) win.step('report', { status: 'failed', detail: body.error || 'The tournament server refused this report.' });
+  } catch {
+    process.stdout.write('\rCannot reach the tournament API server. Retrying...            ');
+    win?.step('report', { status: 'failed', detail: 'Cannot reach the tournament server. Retrying by itself.' });
+  }
+  finally {
+    reporting = false;
+    if (reportAgain) { reportAgain = false; void heartbeat(); }
+  }
 }
 async function stop(reason: string, notify = false) {
   if (stopping) return; stopping = true;
   removeGsi();
   if (notify) { try { await api('/device/stop', { method: 'POST', token }); } catch {} }
   console.log(`\n${reason} Monitoring stopped.`);
+  if (win) { win.set({ phase: 'ended', message: `${reason} Monitoring stopped.` }); await pause(1500); }
   process.exit(0);
 }
 // ---- Practice scan ----
@@ -308,11 +401,11 @@ async function stop(reason: string, notify = false) {
 let practicing = false;
 async function practice() {
   practicing = true;
+  win?.set({ mode: 'practice', phase: 'scanning', steps: scanSteps({ official: false, folders: false }) });
   console.log(`
 ArenaHub practice scan (PC)
 This checks this PC now, so you can fix problems before match day. It does not count for a match.
-It runs the same checks as the official scan: running and installed programs, Dota 2's files and
-launch options and, if the tournament requires it, your folders for cheat files.
+It checks running and installed programs, Dota 2 files if present, and any configured folder checks.
 The result stays on this PC. Nothing is sent and no screenshots are taken.
 `);
   // No questions: the server comes from the website link, the download or last time. Without one, the
@@ -329,21 +422,39 @@ The result stays on this PC. Nothing is sent and no screenshots are taken.
   }
   console.log(`Checking against ${source}.`);
   policy = { blockedProcesses: config.pc.blockedProcesses.map(e => e.match), blockedApplications: (config.pc.blockedApplications || []).map(e => e.match), blockedFileHashes: (config.pc.blockedFileHashes || []).map(e => e.sha256), blockedModules: (config.pc.blockedModules || []).map(e => e.match), fileSweep: config.pc.fileSweep === true };
-  await locateDota();
-  if (policy.fileSweep) {
-    // Practice reads files on this PC and sends nothing, so starting it is the only consent it needs.
-    sweepAllowed = true;
-    console.log('Checking your user folders and other drives for cheat files (read only). This usually takes under two minutes...');
-    // The official scan waits for the folder check to finish, so the practice scan does too.
-    await fileSweep(); await sweepRunning;
+  const listsFrom = source.startsWith('the current') ? `the tournament lists from ${server}` : 'the lists built into this agent';
+  for (;;) {
+    // Every pass is a fresh scan: a player who just removed something must see it gone.
+    sweepCache = undefined;
+    win?.set({ mode: 'practice', phase: 'scanning', verdict: undefined, steps: scanSteps({ official: false, folders: policy.fileSweep === true }) });
+    await locateDota();
+    // Programs and game files are checked while the slower folder check runs.
+    const early = Promise.all([track('programs', scanWindows(policy), programsStep), track('dota', dotaAudit(), result => dotaStep(result.audit, result.status, true))]);
+    if (policy.fileSweep) {
+      // Practice reads files on this PC and sends nothing, so starting it is the only consent it needs.
+      sweepAllowed = true;
+      console.log('Checking your user folders and other drives for cheat files (read only). This usually takes under two minutes...');
+      // The official scan waits for the folder check to finish, so the practice scan does too.
+      await fileSweep(); await sweepRunning;
+    }
+    console.log('Checking programs and Dota 2 files...');
+    await early;
+    win?.step('judge', { status: 'running' });
+    const verdict = practiceVerdict('dota2', await snapshot(), config);
+    console.log(`\n==== Practice result: ${verdict.label} ====\n${verdict.detail}`);
+    if (verdict.blockers.length) { console.log('\nFix these before match day:'); for (const reason of verdict.blockers) console.log(`  - ${reason}`); }
+    if (verdict.warnings.length) { console.log('\nWorth knowing (these do not stop you):'); for (const reason of verdict.warnings) console.log(`  - ${reason}`); }
+    console.log(`\n${PRACTICE_NOTE}`);
+    if (!win) return finish(0);
+    win.step('judge', { status: verdict.status === 'ready' ? 'done' : verdict.status === 'blocked' ? 'failed' : 'warn', detail: `${verdict.label}. Judged on this PC; nothing was sent.` });
+    win.set({ phase: 'result', verdict: { status: verdict.status, label: verdict.label, detail: verdict.detail, blockers: verdict.blockers, warnings: verdict.warnings, validUntil: null }, listsFrom, note: PRACTICE_NOTE });
+    const closeFromWindow = win.next('close').then(action => ({ action }));
+    const next = await Promise.race([answer(process.stdin.isTTY ? '\nPress Enter to close, or choose Scan again in your browser.' : null, 'rescan'), closeFromWindow]);
+    if ('action' in next && next.action.type === 'rescan') { console.log('\nScanning again...'); continue; }
+    await pause(800);
+    // The console's "Press Enter" prompt is still open, so close stdin before leaving.
+    return exitSafely(0);
   }
-  console.log('Checking programs and Dota 2 files...');
-  const verdict = practiceVerdict('dota2', await snapshot(), config);
-  console.log(`\n==== Practice result: ${verdict.label} ====\n${verdict.detail}`);
-  if (verdict.blockers.length) { console.log('\nFix these before match day:'); for (const reason of verdict.blockers) console.log(`  - ${reason}`); }
-  if (verdict.warnings.length) { console.log('\nWorth knowing (these do not stop you):'); for (const reason of verdict.warnings) console.log(`  - ${reason}`); }
-  console.log(`\n${PRACTICE_NOTE}`);
-  return finish(0);
 }
 
 const quit = (reason: string) => practicing ? process.exit(0) : void stop(reason, true);

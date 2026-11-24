@@ -105,3 +105,5 @@
   .desk-score { font-size: var(--fs-2xl); }
   .desk-control { flex: 1 1 calc(50% - 8px); justify-content: center; }
 }
+
+.desk-room-title { margin: var(--sp-2) 0 var(--sp-3); font-size: var(--fs-lg); font-weight: 700; color: var(--text-primary); }

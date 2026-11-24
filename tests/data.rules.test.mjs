@@ -39,6 +39,15 @@ test('students and banned staff cannot write tournaments', async () => {
   await assertFails(updateDoc(doc(campus('student'), 'tournaments/t1'), { title: 'Hijacked', revision: 3, updatedAt: serverTimestamp() }));
 });
 
+test('staff can publish bracket artwork metadata and viewers can read it', async () => {
+  const staff = campus('staff', true), student = campus('student');
+  const appearance = { theme: 'navy-gold', wideImage: true, teams: { a: { color: '#51a5ff' } } };
+  await assertSucceeds(setDoc(doc(staff, 'tournaments/artwork'), tournament('artwork', { appearance })));
+  await assertSucceeds(getDoc(doc(student, 'tournaments/artwork')));
+  await assertFails(setDoc(doc(student, 'tournaments/artwork'), tournament('artwork', { appearance, revision: 2 })));
+  await assertFails(setDoc(doc(staff, 'tournaments/artwork'), tournament('artwork', { appearance: { ...appearance, unknown: true }, revision: 2 })));
+});
+
 test('viewers see published and archived tournaments; withdrawn ones are staff only', async () => {
   const staff = campus('staff', true), student = campus('student');
   await assertSucceeds(setDoc(doc(staff, 'tournaments/old'), tournament('old', { status: 'archived' })));

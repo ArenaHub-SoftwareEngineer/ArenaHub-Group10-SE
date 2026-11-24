@@ -3,12 +3,14 @@ import type { Match, Team } from '../../lib/types';
 import { apiUrl } from '../../lib/apiBase';
 import { FairPlayCenter } from './FairPlayCenter';
 import { ArrowRight, ChevronDown, Download, Monitor, ShieldCheck, Smartphone } from 'lucide-react';
-import { IOS_INDICATOR_KEYS, IOS_SIDELOAD_INDICATORS } from '../../lib/iosAntiCheat';
+import { IOS_INDICATOR_KEYS, IOS_SIDELOAD_INDICATORS, type IosIndicator } from '../../lib/iosAntiCheat';
 
-/** The player's anti-cheat page: enter the scan code, follow three steps, pick the device app. */
+/** The player's anti-cheat page: join the shared room or practice on this device. */
 export function PlayerAntiCheat({ matches, teams, initialCaseId }: { matches: Match[]; teams?: Team[]; initialCaseId?: string | null; onSignIn?: () => void }) {
-  const [code, setCode] = useState(''), [error, setError] = useState(''), [casesOpen, setCasesOpen] = useState(Boolean(initialCaseId));
+  const [casesOpen, setCasesOpen] = useState(Boolean(initialCaseId));
+  const [iosChecked, setIosChecked] = useState<IosIndicator[]>([]);
   const apiOrigin = new URL(apiUrl('/api/integrity'), location.origin).origin;
+  const androidDownload = new URL(apiUrl('/api/integrity/downloads/arenahub-companion.apk'), location.origin).href;
   const isAndroid = /Android/i.test(navigator.userAgent);
   return <div className="module-page anticheat-page">
     <header className="dashboard-page-heading"><div><h1>Anti-cheat</h1><p>Run your required device scan before joining an official MLBB, CODM BR/MP or Dota 2 match.</p></div></header>
@@ -17,19 +19,16 @@ export function PlayerAntiCheat({ matches, teams, initialCaseId }: { matches: Ma
       <section className="operations-section anticheat-code" aria-labelledby="scan-title">
         <span className="anticheat-badge" aria-hidden="true"><ShieldCheck size={22} /></span>
         <h2 id="scan-title">Scan before you play</h2>
-        <p>Enter the 8-character code your organizer gave you. It is linked to your roster slot, so never share it.</p>
-        <form className="module-form anticheat-form" onSubmit={event => { event.preventDefault(); const value = code.trim().toUpperCase(); if (!/^[A-Z2-9]{8}$/.test(value)) { setError('Enter the 8-character scan code from your organizer.'); return; } const origin = new URL(apiUrl('/api/integrity'), location.origin).origin; location.assign(`${origin}/join.html?c=${value}`); }}>
-          <label>My match scan code<input className="anticheat-code-input" required autoCapitalize="characters" autoComplete="off" spellCheck={false} maxLength={8} value={code} onChange={event => { setCode(event.target.value.toUpperCase()); setError(''); }} placeholder="ABCD2345" /></label>
-          {error && <p className="field-error" role="alert">{error}</p>}
-          <button className="arena-primary">Open my scan <ArrowRight size={16} aria-hidden="true" /></button>
-        </form>
-        <p className="field-hint">No code yet? Ask tournament staff before your match. Staff can admit the match only when every roster player has a current passing scan.</p>
+        <p>Open the organizer’s check-in QR or link on the device you play on. Sign in with your verified school account and enter your player details.</p>
+        {/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || apiOrigin !== location.origin
+          ? <a className="arena-primary" href={`${apiOrigin}/join.html`}>Open room check-in <ArrowRight size={16} aria-hidden="true" /></a> : null}
+        <p className="field-hint">For a Dota 2 match, open the organizer’s check-in link on the Windows PC you play on.</p>
       </section>
 
       <section className="operations-section" aria-labelledby="steps-title">
         <h2 id="steps-title">How it works</h2>
         <ol className="ah-steps">
-          <li><strong>Get your own match code</strong><span>Your organizer creates one code per roster slot.</span></li>
+          <li><strong>Check in</strong><span>Use the shared link and choose your game.</span></li>
           <li><strong>Open ArenaHub Anti-cheat</strong><span>Android companion for MLBB and CODM, Safari on iPhone, or the Windows agent for Dota 2. Agree to monitoring on your device.</span></li>
           <li><strong>Finish your device check</strong><span>Android and Windows: wait for Scan passed and keep the app running. iPhone: bring your playing device to a referee for inspection and supervised clearance.</span></li>
         </ol>
@@ -41,7 +40,7 @@ export function PlayerAntiCheat({ matches, teams, initialCaseId }: { matches: Ma
       <div className="anticheat-device-grid">
         <article className="anticheat-device">
           <span className="anticheat-device-icon" aria-hidden="true"><Smartphone size={22} /></span>
-          <strong>Android</strong><span>MLBB and CODM. Install the companion, then open your code.</span>
+          <strong>Android</strong><span>MLBB and CODM. Join the room and follow the steps to open the companion.</span>
           <a className="arena-outline" href={apiUrl('/api/integrity/downloads/arenahub-companion.apk')}><Download size={16} aria-hidden="true" />Android companion</a>
         </article>
         <article className="anticheat-device">
@@ -59,7 +58,7 @@ export function PlayerAntiCheat({ matches, teams, initialCaseId }: { matches: Ma
 
     <section className="anticheat-devices" aria-labelledby="practice-title">
       <h2 id="practice-title">Practice before match day</h2>
-      <p className="anticheat-lead">Check your own device any time, with no code. The practice scan uses the same rules as the official scan, saves nothing and does not count for a match. Fix anything it finds before you arrive.</p>
+      <p className="anticheat-lead">Check your device without a code. A practice result shows which checks ran and any findings to review. Match clearance is completed with your referee or match code.</p>
       <div className="anticheat-device-grid anticheat-practice-grid">
         <article className="anticheat-device">
           <span className="anticheat-device-icon" aria-hidden="true"><Monitor size={22} /></span>
@@ -75,15 +74,22 @@ export function PlayerAntiCheat({ matches, teams, initialCaseId }: { matches: Ma
           <span className="anticheat-device-icon" aria-hidden="true"><Smartphone size={22} /></span>
           <strong>Android</strong><span>Install the companion, then tap Practice scan and choose your game. The result appears in the app.</span>
           {isAndroid
-            ? <a className="arena-outline" href={`intent://practice?s=${encodeURIComponent(apiOrigin)}#Intent;scheme=arenahub;package=ph.edu.wmsu.arenahub.companion;end`}><ShieldCheck size={16} aria-hidden="true" />Open practice scan</a>
+            ? <a className="arena-outline" href={`intent://practice?s=${encodeURIComponent(apiOrigin)}#Intent;scheme=arenahub;package=ph.edu.wmsu.arenahub.companion;S.browser_fallback_url=${encodeURIComponent(androidDownload)};end`}><ShieldCheck size={16} aria-hidden="true" />Open practice scan</a>
             : <span className="anticheat-command-label">Server address for the app: <code className="anticheat-command">{apiOrigin}</code></span>}
         </article>
         <article className="anticheat-device">
           <span className="anticheat-device-icon" aria-hidden="true"><Smartphone size={22} /></span>
-          <strong>iPhone</strong><span>Apple does not let any app check other apps, so a referee checks your iPhone by hand. Check these six things yourself first.</span>
+          <strong>iPhone</strong><span>Use the checklist to review your settings. A referee checks your device for match clearance.</span>
           <details className="anticheat-ios-checks">
             <summary>The six referee checks</summary>
-            <ol>{IOS_INDICATOR_KEYS.map(key => <li key={key}><strong>{IOS_SIDELOAD_INDICATORS[key].where}</strong><span>{IOS_SIDELOAD_INDICATORS[key].fix}</span></li>)}</ol>
+            <ol>{IOS_INDICATOR_KEYS.map(key => <li key={key}>
+              <label><input type="checkbox" checked={iosChecked.includes(key)} onChange={event => {
+                const checked = event.currentTarget.checked;
+                setIosChecked(previous => checked ? [...previous, key] : previous.filter(item => item !== key));
+              }} /> {IOS_SIDELOAD_INDICATORS[key].where}</label>
+              <span>{IOS_SIDELOAD_INDICATORS[key].fix}</span>
+            </li>)}</ol>
+            <p className="field-hint" role="status">{iosChecked.length} of {IOS_INDICATOR_KEYS.length} reviewed. A referee grants match clearance.</p>
           </details>
         </article>
       </div>

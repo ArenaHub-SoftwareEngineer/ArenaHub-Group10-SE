@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
-import { Home, CalendarDays, Trophy, Crown, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag, Settings2, HelpCircle } from '../ui/Icons';
+import { Home, CalendarDays, Trophy, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag, Settings2, HelpCircle } from '../ui/Icons';
 import { hasCampusEmail } from '../../lib/campusAccess';
 import { CAMPUS_LOGO, CAMPUS_SHORT_NAME } from '../../lib/institution';
 import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
@@ -37,7 +37,6 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
       { id: 'schedule', label: 'Schedule', icon: CalendarDays, keywords: 'calendar dates times' },
       { id: 'choose-tournament', label: 'Brackets', icon: GitBranch, keywords: 'tournament bracket' },
       { id: 'standings', label: 'Standings', icon: Trophy, keywords: 'rankings table records' },
-      { id: 'leaderboard', label: 'Leaders', title: 'Player leaderboard', icon: Crown, keywords: 'top players kda kills mvp stats rankings' },
       { id: 'teams', label: 'Teams', title: 'Players & teams', icon: Users, keywords: 'rosters colleges ranks' },
     ] },
     { label: 'Compete', items: [
@@ -54,7 +53,7 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
   const status = isGuest ? 'Preview' : campus ? `${CAMPUS_SHORT_NAME} member` : 'Spectator';
   return <div className="spectator-shell">
     <AppShell workspace="arena" context={campus ? CAMPUS_SHORT_NAME : undefined} contextLogo={campus ? CAMPUS_LOGO || undefined : undefined} groups={groups} live={live} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
-      mobileTabs={['home', 'current-live', 'choose-tournament', 'schedule']} pageKey={activeTab}
+      mobileTabs={['home', 'current-live', 'choose-tournament', 'schedule']} pageKey={activeTab} widePage={activeTab === 'schedule' || activeTab === 'brackets'}
       routeKey={routeKey} pageTitle={activeTab === 'live' ? 'Match details' : activeTab === 'brackets' ? 'Tournament bracket' : (item => item?.title || item?.label)(groups.flatMap(group => group.items).find(item => item.id === activeTab)) || 'Home'} fullBleed={activeTab === 'ai-assistant'}
       actions={<>
         <span className="shell-status" title={status}><i aria-hidden="true" />{status}</span>

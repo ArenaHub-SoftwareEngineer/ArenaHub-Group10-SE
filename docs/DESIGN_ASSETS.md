@@ -45,3 +45,22 @@ Use the publishers' own channels, not fan sites or wallpaper aggregators, so the
 ### Re-rendering the 3D still
 
 If the brand colour or the 3D scene changes, render a new `public/media/hero-stage.webp` from the live scene (a Playwright screenshot of `.ah-stage` on the welcome page, converted to WebP). The colour comes from `institution.config.json` > `theme.primary`.
+
+## 3. Welcome page photos (real photos, Unsplash License)
+
+Kerr asked on 2026-11-24 for real photos on the welcome page (`src/components/auth/landing/`). These are photos of real events, not AI images. They come from Unsplash, are free to use under the Unsplash License, and are credited in the page footer. They live in `public/media/landing/` as WebP files at 78% quality.
+
+| File | Unsplash photo | Photographer |
+|---|---|---|
+| `cheer.webp` | https://unsplash.com/photos/E3Tns2qzUQo | Alexandros Giannakakis |
+| `dim.webp` | https://unsplash.com/photos/f69QNI9zulg | Raman Shaunia |
+| `table4.webp` | https://unsplash.com/photos/l7UvNkgkjJI | Alef Morais |
+| `intent.webp` | https://unsplash.com/photos/two-men-looking-down-intently-at-something-3rpQoI6QhI8 | Alef Morais |
+| `phones3.webp` (spare) | https://unsplash.com/photos/three-men-looking-down-at-their-phones-o7Wvxz85yks | Alef Morais |
+| `controller.webp` | https://unsplash.com/photos/person-holding-smartphone-with-game-controller-attachment-gC6BmJGz_ns | Daniel Romero |
+| `smile.webp` | https://unsplash.com/photos/rwJ92D4xNug | Alef Morais |
+| `chair.webp` | https://unsplash.com/photos/Mf23RF8xArY | Florian Olivo |
+
+Photos with visible sponsor or publisher branding were left out (for example the Red Bull/OG banners and the EA stage).
+
+The signed-in home page (`src/components/spectator/HomeScreen.tsx`, 2026-11-25) reuses `cheer.webp` (fallback poster art), `dim.webp` (the photo tucked behind the featured match) and `intent.webp` (the fair play band). Its footer credits those three photographers.

@@ -41,9 +41,28 @@ object Api {
         return Result(code, body)
     }
 
+    fun getJson(server: String, path: String): Result {
+        val connection = URL("$server/api/integrity$path").openConnection() as HttpURLConnection
+        connection.requestMethod = "GET"
+        connection.connectTimeout = 8_000
+        connection.readTimeout = 15_000
+        connection.instanceFollowRedirects = false
+        return read(connection)
+    }
+
     fun postJson(server: String, path: String, body: JSONObject, token: String? = null): Result {
         val connection = open("$server/api/integrity$path", token, "application/json")
         connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        return read(connection)
+    }
+
+    /** Live screen sharing: "info" names the player and match, "token" returns the LiveKit address and access token. */
+    fun pov(server: String, action: String, key: String): Result {
+        val connection = open("$server/api/integrity/device/pov/$action", key, "application/json")
+        connection.readTimeout = 8000
+        val bytes = "{}".toByteArray()
+        connection.setFixedLengthStreamingMode(bytes.size)
+        connection.outputStream.use { it.write(bytes) }
         return read(connection)
     }
 

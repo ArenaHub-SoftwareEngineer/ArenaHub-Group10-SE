@@ -4,7 +4,7 @@ import type { ContentReport } from './types';
 import type { LiveChatMessage } from './matchChat';
 import { notificationRecord, notificationRef } from './notificationService';
 export function watchCommunityReports(receive: (reports: ContentReport[]) => void, fail: () => void) {
-  return onSnapshot(collection(db, 'communityReports'), snap => receive(snap.docs.map(d => ({ ...d.data(), id: d.id, shared: true, contentType: 'Chat message', reportedBy: 'Verified campus member', timeAgo: d.data().createdAt?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) || 'Just now', flagCount: 1 } as ContentReport))), fail);
+  return onSnapshot(collection(db, 'communityReports'), snap => receive(snap.docs.map(d => ({ ...d.data(), id: d.id, shared: true, contentType: 'Chat message', reportedBy: 'Verified campus member', timeAgo: d.data().createdAt?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila' }) || 'Just now', createdAt: d.data().createdAt?.toMillis?.() ?? Date.now(), flagCount: 1 } as ContentReport))), fail);
 }
 export async function reportLiveMessage(matchId: string, message: LiveChatMessage) {
   const user = auth.currentUser; if (!user?.emailVerified) throw new Error('Sign in with your campus account to report chat.');

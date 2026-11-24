@@ -30,6 +30,17 @@ object MonitorState {
     @Volatile var status = "Not monitoring"
     @Volatile var lastReport = 0L
     @Volatile var pendingUploads = 0
+    /** The latest verdict from the tournament server, or null before the first report. */
+    @Volatile var scan: ScanView? = null
+    @Volatile var playerName = ""
+    @Volatile var matchLabel = ""
+    @Volatile var expiresAt = 0L
+    /** on, off (referee did not ask), refused or stopped. */
+    @Volatile var recording = "off"
+    /** Set while the server cannot be reached or refuses reports. */
+    @Volatile var problem: String? = null
+    /** Why the last scan ended, until the player starts another or dismisses it. */
+    @Volatile var ended: String? = null
 }
 
 /**
@@ -86,6 +97,10 @@ class MonitorService : Service() {
             else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST
         }
         MonitorState.status = "Starting anti-cheat scan"
+        MonitorState.scan = null; MonitorState.problem = null; MonitorState.ended = null; MonitorState.lastReport = 0L
+        MonitorState.playerName = intent.getStringExtra(EXTRA_PLAYER) ?: ""
+        MonitorState.matchLabel = intent.getStringExtra(EXTRA_MATCH) ?: ""
+        MonitorState.expiresAt = intent.getLongExtra(EXTRA_EXPIRES, 0)
         startForeground(NOTIFICATION_ID, notification(), type)
         MonitorState.running = true
         MonitorState.status = "Monitoring on"
@@ -95,9 +110,10 @@ class MonitorService : Service() {
         val resultCode = intent.getIntExtra(EXTRA_PROJECTION_CODE, Activity.RESULT_CANCELED)
         val projection = data?.let { getSystemService(MediaProjectionManager::class.java).getMediaProjection(resultCode, it) }
         if (projection != null) {
-            recorder = ScreenRecorder(this, projection, onSegment = { file -> enqueue(file) }, onStopped = { MonitorState.status = "Screen recording was stopped. The referee will see this." }).also { it.start() }
-        } else if (recordingRefused) MonitorState.status = "Monitoring on. You did not allow screen recording, and the referee has been told."
-        else MonitorState.status = "Monitoring on (the referee did not ask for screen recording)."
+            recorder = ScreenRecorder(this, projection, onSegment = { file -> enqueue(file) }, onStopped = { MonitorState.status = "Screen recording was stopped. The referee will see this."; MonitorState.recording = "stopped" }).also { it.start() }
+            MonitorState.recording = "on"
+        } else if (recordingRefused) { MonitorState.status = "Monitoring on. You did not allow screen recording, and the referee has been told."; MonitorState.recording = "refused" }
+        else { MonitorState.status = "Monitoring on (the referee did not ask for screen recording)."; MonitorState.recording = "off" }
 
         scheduler.scheduleWithFixedDelay({ report() }, 0, heartbeat, TimeUnit.SECONDS)
         return START_NOT_STICKY
@@ -118,12 +134,15 @@ class MonitorService : Service() {
                     scanStamp = monitor?.optJSONObject("scan")
                     MonitorState.lastReport = System.currentTimeMillis()
                     val scan = result.json().optJSONObject("scan")
+                    MonitorState.scan = ScanView.from(scan)
+                    MonitorState.problem = null
                     MonitorState.status = scan?.let { "${it.optString("label")}: ${it.optString("detail")}" } ?: "Scan running"
                 }
-                else -> MonitorState.status = result.error("The tournament server rejected a scan (${result.code}).")
+                else -> { MonitorState.status = result.error("The tournament server rejected a scan (${result.code})."); MonitorState.problem = MonitorState.status }
             }
         } catch (_: Exception) {
             MonitorState.status = "Cannot reach the tournament server. Check your Wi-Fi or mobile data. Retrying..."
+            MonitorState.problem = MonitorState.status
         }
         try {
             if (!stopping) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification())
@@ -157,6 +176,7 @@ class MonitorService : Service() {
         if (stopping) return
         stopping = true
         MonitorState.status = reason
+        MonitorState.ended = reason
         recorder?.stop()
         scheduler.shutdownNow()
         uploader.execute {
@@ -193,7 +213,7 @@ class MonitorService : Service() {
             .setContentText(MonitorState.status)
             .setStyle(Notification.BigTextStyle().bigText(MonitorState.status))
             .setOnlyAlertOnce(true)
-            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel), "Stop", stop).build())
@@ -217,6 +237,8 @@ class MonitorService : Service() {
         const val EXTRA_RECORD = "record"
         const val EXTRA_PROJECTION_CODE = "projectionCode"
         const val EXTRA_PROJECTION_DATA = "projectionData"
+        const val EXTRA_PLAYER = "player"
+        const val EXTRA_MATCH = "match"
 
         fun stop(context: Context) { context.startService(Intent(context, MonitorService::class.java).setAction(ACTION_STOP)) }
     }

@@ -37,7 +37,7 @@ function classify(identity: Identity, active: boolean, spectatorEmail: () => Pro
   if (!identity.verified || (identity.provider === 'google.com' && !campus)) throw new AuthError(401, 'A verified account is required.');
   if (!active) throw new AuthError(403, 'This account is not active.');
   const staff = campus && (identity.admin || STAFF_ROLES.includes(identity.role));
-  const base: Caller = { uid: identity.uid, email: identity.email, campus, admitted: campus, staff, role: identity.role };
+  const base: Caller = { uid: identity.uid, email: identity.email, campus, admitted: campus, staff, role: identity.admin ? 'admin' : identity.role };
   if (campus || !['google.com', 'password'].includes(identity.provider)) return Promise.resolve(base);
   return spectatorEmail().then(email => ({ ...base, admitted: !!email && email === identity.email }));
 }

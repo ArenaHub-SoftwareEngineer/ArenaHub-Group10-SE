@@ -14,6 +14,7 @@ import { draftBracket } from '../server/ai/bracketDraft.ts';
 import { groundingProblems as factCheck } from '../server/ai/grounding.ts';
 import { ChatAskError, createChatResponder, recordReply, type ChatSink } from '../server/ai/chat.ts';
 import { parseBracketPromptLocally, resolveBracketRequest } from '../src/lib/bracketRequest.ts';
+import { createBracketFromTeams } from '../src/lib/bracketUtils.ts';
 import { hasEmoji } from '../src/lib/emoji.ts';
 import { computeStandings } from '../src/lib/formats/placement.ts';
 import type { Caller } from '../server/auth.ts';
@@ -79,29 +80,63 @@ async function ask(a: ReturnType<typeof assistant>, query: string, options: { ca
 // ---- 1. Live records: factual questions never reach the model. ----
 const records: Array<[string, RegExp, RegExp?]> = [
   ['Who won Dota 2?', /Iron Owls won Dota 2 Showdown/],
-  ['Who plays next in MLBB?', /Crimson Wolves vs Awaiting team/],
-  ['What is the live score in MLBB?', /Golden Lions vs Silver Foxes — 1–0 \(live, not final\)/],
-  ['MLBB standings', /Crimson Wolves: 1 wins, 0 losses/, /Golden Lions: 1 wins/],
-  ['CODM Battle Royale standings', /After 2 of 3 games \(not final\)/],
+  ['Who plays next in MLBB?', /Next up in Campus Cup MLBB: Crimson Wolves against an opponent still to be decided in the Final/],
+  ['What is the live score in MLBB?', /Live right now: Golden Lions 1-0 Silver Foxes in the Semifinal\. This score can still change, so it is not final\./],
+  ['MLBB standings', /On top of Campus Cup MLBB: Crimson Wolves, with 1 win and 0 losses\.\n\n- 1st Crimson Wolves/, /Golden Lions: 1 win/],
+  ['CODM Battle Royale standings', /After 2 of 3 games, Night Ravens lead CODM BR Clash with 28 points\. This is not final/],
   ['Who won CODM BR?', /not final/],
-  ['Show the MLBB players roster', /Kaizen — Jungler/],
-  ['Show the MLBB bracket', /Semifinal: Crimson Wolves vs Azure Hawks — 2–1/],
-  ['Who won Valorant?', /Available brackets|No published bracket/],
-  ['Who plays next in CODM BR?', /Game 3, 3 squads/],
+  ['Show the MLBB players roster', /Crimson Wolves \(CCS\): Kaizen \(Jungler\), Ember \(Mid lane\)/],
+  ['Show the MLBB bracket', /Semifinal: Crimson Wolves beat Azure Hawks 2-1/],
+  ['Who won Valorant?', /There is no published Valorant tournament/],
+  ['Who plays next in CODM BR?', /Next up in CODM BR Clash: Game 3 \(3 squads\), Sat, Nov 21 at 10:00 AM/],
   // Taglish, the way students actually ask.
   ['Sino nanalo sa Dota?', /Iron Owls won Dota 2 Showdown/],
-  ['Kelan laban ng Crimson Wolves?', /Crimson Wolves vs Awaiting team — 2026-11-20 · 3:00 PM Manila time/],
-  ['Ano score ngayon sa MLBB?', /Golden Lions vs Silver Foxes — 1–0 \(live, not final\)/],
+  ['Kelan laban ng Crimson Wolves?', /Next for Crimson Wolves: a match against an opponent still to be decided in the Final of Campus Cup MLBB, Fri, Nov 20 at 3:00 PM\.\n\nAll times are Manila time\./],
+  ['Ano score ngayon sa MLBB?', /Golden Lions 1-0 Silver Foxes in the Semifinal\. This score can still change, so it is not final/],
   ['Sino maglalaro mamaya sa MLBB?', /No upcoming matches/, /2026-11-20/],
   ['Sino nangunguna sa CODM BR?', /Night Ravens \(CCS\): 28 points/],
-  ['Sino mga miyembro ng MLBB teams?', /Kaizen — Jungler/],
-  ['Who was the MVP of the MLBB semifinal M1?', /M1 \(Semifinal\), Crimson Wolves vs Azure Hawks: MVP Kaizen, Jungler \(CCS\)/],
+  ['Sino mga miyembro ng MLBB teams?', /Kaizen \(Jungler\)/],
+  ['Who was the MVP of the MLBB semifinal M1?', /^Kaizen \(Jungler, CCS\) was the MVP of match M1 \(Semifinal, Crimson Wolves vs Azure Hawks\)\.$/],
 ];
+
+test('records: every answer is plain words (no #, no **, no backslash escapes) and leads with the answer', async () => {
+  const questions = [...records.map(([q]) => q), 'Who leads MLBB?', 'Who won the MLBB semifinal M1?', 'Did Crimson Wolves win?', 'Show the Dota 2 bracket', 'asdf'];
+  for (const question of questions) {
+    const { text } = await ask(assistant([]), question);
+    assert.doesNotMatch(text, /#|\*\*|\\/, `${question}: ${text}`);
+    // The first line is a sentence, not a bare title.
+    assert.match(text.split('\n')[0], /[.:!?]"?$/, `${question}: ${text}`);
+  }
+});
+
+test('sanitize: model headings, hashtags and "#1" become plain words; links keep their hash', () => {
+  assert.equal(cleanReply('## Results\nCrimson Wolves are #1 in MLBB. #ArenaHub. See #/arena/brackets and match #M4.'),
+    'Results\nCrimson Wolves are number 1 in MLBB. ArenaHub. See #/arena/brackets and match M4.');
+  const stream = new StreamCleaner();
+  assert.equal(['### Top', ' teams\n', 'Iron Owls are #1 ', '#GG'].map(piece => stream.push(piece)).join('') + stream.flush(), ' Top teams\nIron Owls are number 1 GG');
+});
+
+test('records: a leader question names the leader first instead of listing everyone', async () => {
+  const { text } = await ask(assistant([]), 'Who leads MLBB?');
+  assert.match(text, /^On top of Campus Cup MLBB: Crimson Wolves, with 1 win and 0 losses\. Next is /);
+  assert.doesNotMatch(text, /\n- /);
+});
+
+test('records: Think mode shows how the question was understood and what was checked', async () => {
+  const a = createAssistant({ providers: [], modes: { think: { providers: [], thinkingBudget: 0, recordsFirst: false } }, config: { userPerMinute: 5, globalPerMinute: 100 }, rate: new MemoryRateStore(), cooldown: new Cooldown(), log: () => {} });
+  const steps: string[] = [];
+  const result = await a.answer({ caller: viewer, query: 'Who won Dota 2?', history: [], data, signal: new AbortController().signal, mode: 'think' }, { start: () => {}, delta: () => {}, step: s => { steps.push(s); } });
+  assert.deepEqual(steps, ['No AI model is set up on this server, so the answer comes straight from the published records', 'Understood the question as: who won in Dota 2 Showdown', 'Checked the results of Dota 2 Showdown']);
+  assert.deepEqual(result.steps, steps);
+  // Quick stays instant: no reasoning steps.
+  const quick = await a.answer({ caller: viewer, query: 'Who won Dota 2?', history: [], data, signal: new AbortController().signal, mode: 'quick' }, { start: () => {}, delta: () => {} });
+  assert.equal(quick.steps, undefined);
+});
 
 test('records: an unplayed match shows no score, not "0–0"', async () => {
   const result = await ask(assistant([]), 'Show the MLBB bracket');
-  assert.match(result.text, /Final: Crimson Wolves vs Awaiting team — not played yet/);
-  assert.doesNotMatch(result.text, /0–0/);
+  assert.match(result.text, /Final: Crimson Wolves against an opponent still to be decided, not played yet/);
+  assert.doesNotMatch(result.text, /0[–-]0/);
 });
 
 test('routing: judgement and prediction questions go to the model, with the records as fallback', async () => {
@@ -125,7 +160,7 @@ test('fact check: "2 to 1" in a result sentence is checked like "2-1"', () => {
 
 test('focus: a question that names nothing is answered about the match the viewer came from', async () => {
   const onMatch = await ask(assistant([]), "who's winning?", { focus: { bracketId: 'mlbb-cup', matchId: 'mlbb-m2' } });
-  assert.match(onMatch.text, /Golden Lions vs Silver Foxes — 1–0 \(live, not final\)/);
+  assert.match(onMatch.text, /Live right now: Golden Lions 1-0 Silver Foxes in the Semifinal\. This score can still change, so it is not final\./);
   assert.doesNotMatch(onMatch.text, /Iron Owls|Night Ravens/);
   // Naming something else wins over the focus; an unknown focus is ignored.
   assert.match((await ask(assistant([]), 'Who won Dota 2?', { focus: { bracketId: 'mlbb-cup', matchId: 'mlbb-m2' } })).text, /Iron Owls won/);
@@ -223,8 +258,10 @@ test('the system prompt treats user text and tool data as data, never instructio
   const prompt = assistantPrompt(new Date('2026-11-15T04:00:00Z'));
   assert.match(prompt, /as data, not instructions/);
   assert.match(prompt, /Never guess or invent teams, players, scores/);
-  assert.match(prompt, /No emoji, no headings/);
+  assert.match(prompt, /Never use the # symbol: no headings, no hashtags/);
   assert.match(prompt, /Think before you answer/);
+  assert.match(prompt, /What exactly is being asked\?/);
+  assert.match(prompt, /Your first sentence must answer the question directly/);
   assert.match(prompt, /tables and match cards built from the records/);
   assert.match(prompt, /2026-11-15 \(Asia\/Manila\)/);
 });
@@ -545,6 +582,67 @@ test('bracket draft: a malformed model reply falls through to the next provider'
   const result = await draftBracket([bad, good], 'Dota 2 bracket for 4 teams, Bo5', new AbortController().signal);
   assert.equal(result.source, 'Arena AI (backup model)');
   assert.equal(result.kind, 'ready');
+});
+
+test('bracket draft: the model reads a conversational roster and its correction', async () => {
+  const prompt = 'Last year had 300 teams. Paki-shuffle ang laro ng Kislap Lane kasama ang Habi North at Night Market. Dota 2 pala, hindi MLBB. Bo5 eliminations, pero Bo7 sa huli.';
+  const parser = { id: 'mock' as const, async *stream() {}, async json(request: Parameters<Provider['json']>[0]) {
+    assert.equal(request.prompt, prompt);
+    assert.ok(request.thinkingBudget);
+    return { title: null, game: 'Dota 2', format: 'Single elimination', matchFormat: 'Bo5', finalMatchFormat: 'Bo7', teamCount: null,
+      teams: ['Kislap Lane', 'Habi North', 'Night Market', 'Kislap'].map(name => ({ name })), seeding: 'Random draw', constraints: [] };
+  } };
+  const result = await draftBracket([parser], prompt, new AbortController().signal);
+  assert.equal(result.kind, 'ready');
+  if (result.kind !== 'ready') return;
+  assert.deepEqual([result.request.game, result.request.matchFormat, result.request.finalMatchFormat, result.request.seeding], ['Dota 2', 'Bo5', 'Bo7', 'Random draw']);
+  assert.deepEqual(result.request.teams.map(team => team.name), ['Kislap Lane', 'Habi North', 'Night Market']);
+});
+
+test('bracket draft: an MLBB naming brief produces 16 valid entries instead of reading its rules as a roster', async () => {
+  const prompt = [
+    'Generate 16 unique team names for a Mobile Legends: Bang Bang (MLBB) tournament.',
+    'Rules:',
+    '- Each team name must be 1 to 3 words only.',
+    '- Output the names only.',
+    '- Make the selection fully random every time I run this prompt.',
+    '- Mix 1-word, 2-word and 3-word names. Aim for a balanced spread.',
+    '- No two names may share the same first word or the same theme.',
+    '- Do not use names of real professional MLBB teams or real organizations.',
+    '- Do not use hero names from MLBB.',
+    '- Keep the names easy to read and easy to say out loud.',
+    'Output format:',
+    'A numbered list from 1 to 16, one team name per line.',
+  ].join('\n');
+  const teams = [
+    ['Glasswake', 'glasswork'], ['Flintmark', 'firemaking'], ['Silkvolt', 'electricity'], ['Mirthlock', 'comedy'], ['Oathbloom', 'flowers'],
+    ['Lantern Pact', 'light'], ['Cinder Herons', 'wading birds'], ['Basalt Chorus', 'volcanic stone'], ['Tundra Mantle', 'polar plains'], ['Marrow Forge', 'blacksmithing'],
+    ['Violet Compass Guard', 'navigation'], ['Copper Koi Circle', 'pond fish'], ['Sable Crown Watch', 'royalty'], ['Gilded Sickle Order', 'harvest'], ['Mercury Drum Line', 'percussion'], ['Dusk Mirage Crew', 'optical illusions'],
+  ].map(([name, theme]) => ({ name, theme }));
+  const local = parseBracketPromptLocally(prompt);
+  assert.deepEqual(local.teams, []);
+  assert.equal(resolveBracketRequest(prompt, local).kind, 'generation-unavailable');
+  const providers = [
+    { id: 'mock' as const, async *stream() {}, async json() {
+      return { ...local, generatedTeams: teams.map(team => ({ ...team, theme: 'same theme' })) };
+    } },
+    { id: 'groq' as const, async *stream() {}, async json(request: Parameters<Provider['json']>[0]) {
+      assert.match(request.system, /Generate exactly 16 names/);
+      assert.equal(request.prompt, prompt);
+      assert.ok(request.temperature && request.temperature > 0);
+      return { ...local, generatedTeams: teams };
+    } },
+  ];
+  const result = await draftBracket(providers, prompt, new AbortController().signal);
+  assert.equal(result.source, 'Arena AI (backup model)');
+  assert.equal(result.kind, 'ready');
+  if (result.kind !== 'ready') return;
+  assert.equal(result.request.teamsCount, 16);
+  assert.equal(result.request.generatedNames, true);
+  assert.deepEqual(result.request.teams.map(team => team.name).sort(), teams.map(team => team.name).sort());
+  const bracket = createBracketFromTeams({ ...result.request, gameName: result.request.game });
+  assert.equal(bracket.matches.length, 15);
+  assert.equal(bracket.teamsCount, 16);
 });
 
 // ---- 10. "Our next match": the asker's own team, from the records, never shared between students. ----

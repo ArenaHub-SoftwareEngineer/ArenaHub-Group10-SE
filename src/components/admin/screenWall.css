@@ -1,0 +1,101 @@
+/* Live player screens: game, then match, then a dark video wall (grid or spotlight). */
+.lw-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.lw-steps { display: flex; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; flex-wrap: wrap; }
+.lw-steps li { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-muted); font-size: var(--fs-sm); }
+.lw-steps li span { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-hover); font-size: var(--fs-xs); font-weight: 600; }
+.lw-steps li.is-current { color: var(--text-primary); border-color: var(--brand-border); background: var(--brand-soft); }
+.lw-steps li.is-current span { background: var(--brand); color: #1b110a; }
+.lw-steps li.is-done { color: var(--text-secondary); }
+
+.lw-picked { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.lw-picked strong { font-size: var(--fs-lg); }
+.lw-empty { color: var(--text-secondary); padding: 20px 0; }
+
+.lw-matches { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.lw-matches > li { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.lw-match { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 16px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-btn, 8px); background: var(--surface); color: var(--text-primary); cursor: pointer; }
+.lw-match:hover { background: var(--surface-hover); border-color: var(--brand-border); }
+.lw-match:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.lw-match-main { display: grid; gap: 2px; min-width: 0; }
+.lw-match-main strong { overflow-wrap: anywhere; }
+.lw-match-main small { color: var(--text-secondary); font-size: var(--fs-xs); }
+.lw-match-main small.is-live { color: var(--live); font-weight: 600; }
+.lw-match-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: var(--fs-xs); }
+.lw-match-meta .status-pill { display: inline-flex; align-items: center; gap: 4px; }
+.lw-staff { display: inline-flex; align-items: center; gap: 4px; color: var(--text-secondary); }
+.lw-assign { flex: none; align-self: center; }
+
+/* The wall itself stays dark in both themes, like any video call. */
+.lw-room { display: block; }
+.lw-stage { --lw-bg: #0b0b0d; --lw-tile: #17171b; --lw-line: rgba(255, 255, 255, .1); display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 14px; background: var(--lw-bg); color: #f4f4f6; min-height: 420px; }
+.lw-stage:fullscreen { border-radius: 0; padding: 12px; overflow: auto; }
+.lw-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lw-title { display: grid; flex: 1; min-width: 160px; }
+.lw-title strong { font-size: var(--fs-md, 16px); overflow-wrap: anywhere; }
+.lw-title span { color: #a9a9b3; font-size: var(--fs-xs); }
+.lw-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lw-tool { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--lw-line); border-radius: var(--radius-btn, 8px); background: #1e1e23; color: #f4f4f6; font: inherit; font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+.lw-tool:hover { background: #2a2a31; }
+.lw-tool:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.lw-tool.is-pause { background: #3a1416; border-color: rgba(248, 113, 113, .5); color: #ffd6d6; }
+.lw-tool.is-pause:hover { background: #4b1a1d; }
+.lw-tool.is-resume { background: #123222; border-color: rgba(74, 222, 128, .5); color: #d8ffe6; }
+.lw-chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; min-height: 36px; color: #a9a9b3; font-size: var(--fs-xs); }
+.lw-paused { margin: 0; padding: 10px 14px; border: 1px solid rgba(248, 113, 113, .5); border-radius: 10px; background: rgba(248, 113, 113, .14); color: #ffe1e1; font-size: var(--fs-sm); }
+.lw-stage .lw-empty, .lw-stage .field-error { color: #c9c9d1; padding: 32px 8px; text-align: center; }
+
+.lw-grid { display: grid; grid-template-columns: repeat(var(--lw-cols, 3), minmax(0, 1fr)); gap: 8px; align-content: start; }
+.lw-stage:fullscreen .lw-grid { flex: 1; grid-auto-rows: minmax(0, 1fr); }
+.lw-stage:fullscreen .lw-grid .lw-tile { aspect-ratio: auto; min-height: 0; }
+
+.lw-tile { position: relative; aspect-ratio: 16 / 9; min-width: 0; overflow: hidden; border-radius: 10px; background: var(--lw-tile); outline: 2px solid transparent; outline-offset: -2px; transition: outline-color .15s; }
+.lw-tile.is-live { background: #000; }
+.lw-tile:hover, .lw-tile:focus-within { outline-color: rgba(255, 255, 255, .35); }
+.lw-tile.is-spotlight { outline-color: var(--brand); }
+.lw-tile:fullscreen { border-radius: 0; outline: none; }
+.lw-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.lw-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; color: #8e8e99; font-size: var(--fs-xs); text-align: center; padding: 8px 8px 40px; }
+.lw-avatar { display: grid; place-items: center; width: clamp(40px, 22%, 72px); aspect-ratio: 1; border-radius: 50%; background: #2a2a31; color: #e6e6ea; font-size: var(--fs-lg); font-weight: 700; }
+.lw-hit { position: absolute; inset: 0; z-index: 1; border: 0; padding: 0; background: transparent; cursor: zoom-in; }
+.lw-tile.is-spotlight .lw-hit { cursor: zoom-out; }
+.lw-hit:focus-visible { outline: 3px solid var(--brand); outline-offset: -3px; border-radius: 10px; }
+.lw-name { position: absolute; left: 8px; bottom: 8px; z-index: 2; display: grid; max-width: calc(100% - 16px); padding: 4px 10px; border-radius: 8px; background: rgba(0, 0, 0, .66); pointer-events: none; line-height: 1.25; }
+.lw-name strong { font-size: var(--fs-sm); color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lw-name small { font-size: 11px; color: #c9c9d1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lw-weak { position: absolute; left: 8px; top: 8px; z-index: 2; padding: 2px 8px; border-radius: 6px; background: rgba(251, 191, 36, .9); color: #1b1404; font-size: 11px; font-weight: 700; pointer-events: none; }
+/* Hidden controls must not catch clicks meant for the tile, so they ignore the pointer until shown. */
+.lw-actions { position: absolute; right: 8px; top: 8px; z-index: 2; display: flex; gap: 6px; opacity: 0; pointer-events: none; transition: opacity .15s; }
+.lw-tile:hover .lw-actions, .lw-tile:focus-within .lw-actions { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .lw-actions { opacity: 1; pointer-events: auto; } }
+.lw-actions button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 8px; background: rgba(0, 0, 0, .7); color: #fff; cursor: pointer; }
+.lw-actions button:hover { background: rgba(0, 0, 0, .9); }
+.lw-actions button:focus-visible { outline: 2px solid var(--brand); }
+
+/* Spotlight: one big screen, the rest in a strip underneath. */
+.lw-spotlight { display: grid; gap: 8px; }
+.lw-spotlight > .lw-tile { width: 100%; max-height: min(72vh, 900px); }
+.lw-stage:fullscreen .lw-spotlight { flex: 1; grid-template-rows: minmax(0, 1fr) auto; }
+.lw-stage:fullscreen .lw-spotlight > .lw-tile { aspect-ratio: auto; max-height: none; height: 100%; }
+.lw-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 200px); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+
+@media (max-width: 640px) {
+  .lw-matches > li { flex-direction: column; gap: 6px; }
+  .lw-assign { align-self: flex-start; }
+  .lw-stage { padding: 8px; border-radius: 10px; }
+  .lw-grid { grid-template-columns: repeat(min(var(--lw-cols, 2), 2), minmax(0, 1fr)); gap: 6px; }
+  .lw-name { padding: 2px 6px; border-radius: 6px; }
+  .lw-name strong { font-size: 12px; }
+  .lw-name small { font-size: 10px; }
+  .lw-actions button { width: 30px; height: 30px; }
+  .lw-tools { width: 100%; }
+  .lw-chip { display: none; }
+  .lw-strip { grid-auto-columns: minmax(130px, 42vw); }
+  .lw-name { left: 6px; bottom: 6px; padding: 3px 8px; }
+}
+/* Narrow phones: one screen per row, like a video call on a phone, so each game stays readable. */
+@media (max-width: 480px) {
+  .lw-grid { grid-template-columns: minmax(0, 1fr); }
+  .lw-stage:fullscreen .lw-grid { grid-template-columns: repeat(min(var(--lw-cols, 2), 2), minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { .lw-tile, .lw-actions { transition: none; } }

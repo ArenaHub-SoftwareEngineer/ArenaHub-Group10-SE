@@ -108,8 +108,14 @@ service cloud.firestore {
     // One document per published bracket. Every update must raise the revision by exactly one,
     // so two organizers cannot silently overwrite each other.
     function validTournament(data, id) {
-      return data.keys().hasOnly(['id', 'title', 'gameId', 'gameName', 'gameKey', 'format', 'matchFormat', 'teamsCount', 'seedingRule', 'createdAt', 'status', 'revision', 'featured', 'demo', 'matches', 'placement', 'updatedAt'])
+      return data.keys().hasOnly(['id', 'title', 'gameId', 'gameName', 'gameKey', 'format', 'matchFormat', 'teamsCount', 'seedingRule', 'createdAt', 'status', 'revision', 'featured', 'demo', 'matches', 'placement', 'appearance', 'updatedAt'])
         && (!data.keys().hasAny(['placement']) || validPlacement(data.placement))
+        && (!data.keys().hasAny(['appearance']) || (
+          data.appearance is map && data.appearance.keys().hasOnly(['theme', 'wideImage', 'exportFooter', 'teams'])
+          && data.appearance.get('theme', 'navy-gold') == 'navy-gold'
+          && data.appearance.get('wideImage', false) is bool && data.appearance.get('exportFooter', false) is bool
+          && data.appearance.get('teams', {}) is map && data.appearance.get('teams', {}).size() <= 256
+        ))
         && data.id == id && data.title is string && data.title.size() > 0 && data.title.size() <= 160
         && data.gameKey is string && data.gameKey.size() > 0 && data.gameKey.size() <= 80
         && data.status in ['published', 'archived', 'unpublished']

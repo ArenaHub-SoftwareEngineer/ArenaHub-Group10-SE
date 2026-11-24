@@ -51,8 +51,10 @@ test('without a model, the records answer ranks players across past and current 
   const result = await ask(assistant([]), 'Who has the most kills in MLBB?');
   assert.equal(result.source, 'Live records');
   // Kaizen: 6+4+5+1+3 = 19 kills over 5 games. Echo: 1+2+3+4+0 = 10.
-  assert.match(result.text, /#1 Kaizen \(Crimson Wolves, CCS\): 19 kills; 19\/6\/11 over 5 games\./);
-  assert.match(result.text, /#2 Echo \(Azure Hawks, COE\): 10 kills/);
+  assert.match(result.text, /^Top of Mobile Legends by kills: Kaizen \(Crimson Wolves\), with 19 kills\./);
+  assert.match(result.text, /- 1st Kaizen \(Crimson Wolves, CCS\): 19 kills, 6 deaths, 11 assists over 5 games/);
+  assert.match(result.text, /- 2nd Echo \(Azure Hawks, COE\): 10 kills/);
+  assert.doesNotMatch(result.text, /#|\*\*/);
   assert.deepEqual(result.references.map(r => r.bracketId), ['now'], 'only the current tournament can be opened');
 });
 

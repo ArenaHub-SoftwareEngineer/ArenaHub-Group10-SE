@@ -6,7 +6,7 @@ import { CollegeLogo } from '../common/CollegeLogo';
 import { cardStatus } from './WatchCardView';
 import { ChevronLeft, ChevronRight, Play } from '../ui/Icons';
 
-const code = (team?: { collegeCode?: string; name?: string }) => team?.collegeCode || (team?.name || 'TBD').replace(/^DEMO\s+/i, '').slice(0, 3).toUpperCase();
+const code = (team?: { collegeCode?: string; name?: string }) => team?.collegeCode || (team?.name || 'TBD').slice(0, 3).toUpperCase();
 const ADVANCE_MS = 9000;
 
 /**

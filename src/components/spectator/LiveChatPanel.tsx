@@ -1,23 +1,32 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { User } from '../../lib/types';
 import {
-  deleteChatMessage, kickChatUser, lastMessageAt, muteChatUser, pinChatMessage, sendMatchChat, setChatAi, setSlowMode, unmuteChatUser,
+  deleteChatMessage, kickChatUser, lastMessageAt, muteChatUser, pinChatMessage, sendMatchChat, setSlowMode, unmuteChatUser,
   unpinChatMessage, watchChatState, watchMatchChat, watchMatchMutes, watchMyMute,
   type ChatMute, type ChatState, type LiveChatMessage,
 } from '../../lib/matchChat';
 import {
-  arenaQuestion, DEFAULT_MUTE_MINUTES, formatChatTime, formatCountdown, isStaffRole, KICK_HOURS, MUTE_PRESETS, muteSecondsLeft,
+  DEFAULT_MUTE_MINUTES, formatChatTime, formatCountdown, isStaffRole, KICK_HOURS, MUTE_PRESETS, muteSecondsLeft,
   SLOW_MODE_OPTIONS, slowModeLabel, slowModeSecondsLeft,
 } from '../../lib/chatModeration';
 import { reportLiveMessage } from '../../lib/communityReports';
-import { aiService } from '../../lib/ai';
 import { useToast } from '../ui/Toast';
 import { ConfirmModal } from '../ui/ConfirmModal';
+import { Modal } from '../ui/Modal';
 import { Clock, Flag, Pin, Send, Shield, Sparkles, X } from '../ui/Icons';
 import { aliasOf, rerollAlias, sessionAlias } from '../../lib/anonAlias';
 import { AnonAvatar } from '../ui/AnonAvatar';
 
-interface LiveChatPanelProps { matchId: string; currentUser: User; readOnly: boolean; canPost: boolean }
+interface LiveChatPanelProps {
+  matchId: string;
+  currentUser: User;
+  readOnly: boolean;
+  canPost: boolean;
+  /** When true the staff controls (slow mode, mute list) are shown. */
+  isAdmin?: boolean;
+  /** Callback to open Arena AI panel anchored to this match. */
+  onOpenArenaAI?: () => void;
+}
 
 const initials = (name: string) => name.split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase() || '?';
 const failure = (error: unknown, fallback: string) => {
@@ -28,15 +37,13 @@ const failure = (error: unknown, fallback: string) => {
 };
 
 /** Live match chat with timed mutes, kicks, slow mode, a pinned message and staff badges. */
-export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUser, readOnly, canPost }) => {
+export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUser, readOnly, canPost, isAdmin = false, onOpenArenaAI }) => {
   const { showToast } = useToast();
-  const staff = canPost && isStaffRole(currentUser.role);
+  const staff = isAdmin || (canPost && isStaffRole(currentUser.role));
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
   const [available, setAvailable] = useState(false);
   const [error, setError] = useState('');
   const [state, setState] = useState<ChatState>({ slowModeSec: 0, pinned: null, aiEnabled: true });
-  const [asking, setAsking] = useState(false);
-  const [aiPending, setAiPending] = useState<boolean | null>(null);
   const [myMute, setMyMute] = useState<ChatMute | null>(null);
   const [mutes, setMutes] = useState<Array<ChatMute & { uid: string }>>([]);
   const [lastSent, setLastSent] = useState<number | undefined>();
@@ -52,6 +59,11 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [kickTarget, setKickTarget] = useState<LiveChatMessage | null>(null);
   const [showMutes, setShowMutes] = useState(false);
+  // Mute-with-reason dialog
+  const [muteTarget, setMuteTarget] = useState<{ message: LiveChatMessage; minutes: number } | null>(null);
+  const [muteReason, setMuteReason] = useState('');
+  // Arena AI slash command pop-over
+  const [aiPopover, setAiPopover] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -89,20 +101,33 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
     return () => { document.removeEventListener('keydown', close); document.removeEventListener('mousedown', close); };
   }, [menuFor]);
 
+  // Handle /arenaai slash command detection in the input
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    // Show AI pop-over when user types /arenaai (case-insensitive)
+    if (/^\/arenaai\b/i.test(value.trim())) {
+      setAiPopover(true);
+    } else {
+      setAiPopover(false);
+    }
+  };
+
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     const text = input.trim();
     if (!canPost || !available || !text || sending || muteLeft || slowLeft) return;
+    // /arenaai command → open AI, don't send as a message
+    if (/^\/arenaai\b/i.test(text)) {
+      setInput('');
+      setAiPopover(false);
+      onOpenArenaAI?.();
+      return;
+    }
     setSending(true);
     try {
       const name = currentUser.name.trim();
       await sendMatchChat(matchId, currentUser.id, anonymous || !name || name.includes('@') ? alias || sessionAlias(matchId, takenNames()) : name, text, staff);
       setInput(''); setLastSent(Date.now()); setNow(Date.now());
-      const question = state.aiEnabled ? arenaQuestion(text) : null;
-      if (question) {
-        setAsking(true);
-        void aiService.askInChat(matchId, question).then(result => { if (!result.ok) showToast(result.message, 'error'); }).finally(() => setAsking(false));
-      }
     } catch (err) {
       const code = (err as { code?: string })?.code;
       showToast(code === 'permission-denied'
@@ -116,8 +141,26 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
     setMenuFor(null);
     try { await action(); showToast(success, 'success'); } catch (err) { showToast(failure(err, fallback), 'error'); }
   };
-  const mute = (message: LiveChatMessage, minutes: number) => run(() => muteChatUser(matchId, currentUser.id, message, minutes),
-    `${message.author} is muted for ${minutes} minutes.`, 'Could not mute this viewer.');
+
+  // Open mute-reason dialog instead of muting immediately
+  const openMuteDialog = (message: LiveChatMessage, minutes: number) => {
+    setMenuFor(null);
+    setMuteTarget({ message, minutes });
+    setMuteReason('');
+  };
+
+  const confirmMute = async () => {
+    if (!muteTarget) return;
+    const { message, minutes } = muteTarget;
+    await run(
+      () => muteChatUser(matchId, currentUser.id, message, minutes, muteReason.trim()),
+      `${message.author} is muted for ${minutes} minutes.`,
+      'Could not mute this viewer.',
+    );
+    setMuteTarget(null);
+    setMuteReason('');
+  };
+
   const kick = async () => {
     const target = kickTarget; if (!target) return;
     const removed = await kickChatUser(matchId, currentUser.id, target, 'Removed by staff');
@@ -134,24 +177,20 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
         : messages.length ? `${messages.length} messages` : 'Visible to viewers of this match'}</small>
     </header>
 
+    {/* Staff controls: only shown to admin/staff */}
     {staff && <div className="watch-chat-staffbar">
       <label>Slow mode
         <select value={state.slowModeSec} onChange={event => { const seconds = Number(event.target.value); void run(() => setSlowMode(matchId, currentUser.id, seconds, state), seconds ? `Slow mode set to ${slowModeLabel(seconds)}.` : 'Slow mode is off.', 'Could not change slow mode.'); }}>
           {SLOW_MODE_OPTIONS.map(sec => <option key={sec} value={sec}>{slowModeLabel(sec)}</option>)}
         </select>
       </label>
-      <label className="watch-chat-ai-toggle"><input type="checkbox" checked={aiPending ?? state.aiEnabled} disabled={aiPending !== null} onChange={event => {
-        // Show the new value at once; the saved chat state takes over when the write settles.
-        const enabled = event.target.checked; setAiPending(enabled);
-        void run(() => setChatAi(matchId, currentUser.id, enabled, state), enabled ? 'Arena AI answers @Arena questions again.' : 'Arena AI is off in this chat.', 'Could not change Arena AI.').finally(() => setAiPending(null));
-      }} /> Arena AI</label>
-      <button type="button" className="watch-chat-mutes-toggle" aria-expanded={showMutes} onClick={() => setShowMutes(value => !value)} disabled={!mutes.length}>
-        <Shield size={14} />{mutes.length ? `${mutes.length} muted` : 'No one muted'}
-      </button>
+      {mutes.length > 0 && <button type="button" className="watch-chat-mutes-toggle" aria-expanded={showMutes} onClick={() => setShowMutes(value => !value)}>
+        <Shield size={14} />{mutes.length} muted
+      </button>}
     </div>}
     {staff && showMutes && mutes.length > 0 && <ul className="watch-chat-mutes" aria-label="Muted viewers">
       {mutes.map(item => <li key={item.uid}>
-        <span>{item.kind === 'kick' ? 'Removed' : 'Muted'}: <strong>{item.name || 'Viewer'}</strong> · {formatCountdown(muteSecondsLeft(item.until, now))} left</span>
+        <span>{item.kind === 'kick' ? 'Removed' : 'Muted'}: <strong>{item.name || 'Viewer'}</strong> · {formatCountdown(muteSecondsLeft(item.until, now))} left{item.reason ? ` · "${item.reason}"` : ''}</span>
         <button type="button" onClick={() => void run(() => unmuteChatUser(matchId, currentUser.id, item.uid), 'Viewer can post again.', 'Could not lift the mute.')}>Lift</button>
       </li>)}
     </ul>}
@@ -184,21 +223,33 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
             <button type="button" role="menuitem" onClick={() => void run(() => deleteChatMessage(matchId, currentUser.id, message.id, state), 'Message deleted.', 'Could not delete.')}>Delete message</button>
             {!message.ai && <>
               <span className="watch-chat-menu-label">Mute author</span>
-              {MUTE_PRESETS.map(minutes => <button key={minutes} type="button" role="menuitem" onClick={() => void mute(message, minutes)}>
-                {minutes} minutes{minutes === DEFAULT_MUTE_MINUTES ? ' (default)' : ''}</button>)}
+              {MUTE_PRESETS.map(minutes => <button key={minutes} type="button" role="menuitem" onClick={() => openMuteDialog(message, minutes)}>
+                {minutes} minutes{minutes === DEFAULT_MUTE_MINUTES ? ' (default)' : ''}
+              </button>)}
               <button type="button" role="menuitem" className="is-danger" onClick={() => { setMenuFor(null); setKickTarget(message); }}>Remove from chat…</button>
             </>}
           </div>}
         </> : canPost && !message.ai && <button type="button" className="watch-chat-report" aria-label={`Report message by ${message.author}`} data-tip="Report"
           onClick={() => { void reportLiveMessage(matchId, message).then(() => showToast('Message reported privately to tournament staff.', 'success')).catch(() => showToast('This message may already be reported by you, or reporting is unavailable.', 'error')); }}><Flag size={14} /></button>}
       </article>)}
-      {asking && <p className="watch-chat-asking" role="status"><Sparkles size={13} /> Arena AI is answering…</p>}
     </div>
 
     {canPost ? muteLeft ? <p className="watch-chat-muted" role="status"><Shield size={14} /><span>{muteText} You can post again in <strong>{formatCountdown(muteLeft)}</strong>.</span></p>
       : <form className="watch-chat-form" onSubmit={send}>
         {anonymous && alias ? <AnonAvatar alias={aliasOf(alias) || alias} className="watch-chat-avatar is-anon" /> : <span className="watch-chat-avatar" aria-hidden="true">{initials(currentUser.name || 'You')}</span>}
-        <input type="text" aria-label="Match chat message" value={input} onChange={event => setInput(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : state.aiEnabled ? 'Chat, or ask @Arena…' : 'Chat…'} maxLength={500} disabled={!available || sending} />
+        <div className="watch-chat-input-wrap">
+          <input type="text" aria-label="Match chat message" value={input} onChange={event => handleInputChange(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : 'Chat… or type /arenaai'} maxLength={500} disabled={!available || sending} />
+          {/* Arena AI slash-command pop-over */}
+          {aiPopover && onOpenArenaAI && <div className="watch-chat-ai-popover">
+            <button type="button" className="watch-chat-ai-popover-btn" onClick={() => { setInput(''); setAiPopover(false); onOpenArenaAI(); }}>
+              <span className="watch-chat-ai-popover-icon"><Sparkles size={16} /></span>
+              <span>
+                <strong>Arena AI</strong>
+                <small>Ask anything about this live match</small>
+              </span>
+            </button>
+          </div>}
+        </div>
         <button type="submit" className="shell-icon-button" aria-label={slowLeft ? `Wait ${slowLeft} seconds` : 'Send chat message'} disabled={!input.trim() || !available || sending || slowLeft > 0}>
           {slowLeft ? <span className="watch-chat-wait" aria-hidden="true">{slowLeft}</span> : <Send size={18} />}
         </button>
@@ -209,6 +260,22 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
         </div>
       </form>
       : !readOnly && <p className="watch-chat-readonly">You can read chat. Posting is reserved for verified WMSU accounts.</p>}
+
+    {/* Mute with reason dialog */}
+    <Modal open={!!muteTarget} title={`Mute ${muteTarget?.message.author || 'viewer'} for ${muteTarget?.minutes} min?`}
+      description="Optionally add a reason — it's saved in the moderation log." onClose={() => { setMuteTarget(null); setMuteReason(''); }}>
+      <div className="watch-chat-mute-reason">
+        <label>
+          <span>Reason <small>(optional)</small></span>
+          <input type="text" value={muteReason} maxLength={200} placeholder="e.g. Spamming, toxic language…"
+            onChange={event => setMuteReason(event.target.value)} autoFocus />
+        </label>
+        <div className="dialog-actions">
+          <button type="button" className="arena-outline" onClick={() => { setMuteTarget(null); setMuteReason(''); }}>Cancel</button>
+          <button type="button" className="arena-primary confirm-destructive" onClick={() => void confirmMute()}>Mute</button>
+        </div>
+      </div>
+    </Modal>
 
     <ConfirmModal isOpen={!!kickTarget} title="Remove this viewer from chat?"
       description={`${kickTarget?.author || 'This viewer'} will not be able to post for ${KICK_HOURS} hours, and their messages in this match will be deleted. This is recorded in the audit log.`}

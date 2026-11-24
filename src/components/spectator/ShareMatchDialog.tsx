@@ -83,10 +83,10 @@ export function ShareMatchDialog({ open, onClose, match, gameName, canInvite }: 
 
   return <Modal open={open} onClose={onClose} title="Share this match" description={`${team1} vs ${team2}${gameName ? ` · ${gameName}` : ''}`} className="share-dialog">
     <div className="share-body">
-      {canInvite && <div className="fd-segment share-modes" role="tablist" aria-label="Who is it for">
+      {canInvite && <div className="share-modes" role="tablist" aria-label="Who is it for">
         {([['campus', `${CAMPUS_SHORT_NAME} link`], ['guest', 'Invite a guest']] as const).map(([id, label]) =>
           <button key={id} type="button" role="tab" aria-selected={mode === id} onClick={() => { setMode(id); setCopied(false); }}>
-            {mode === id && <motion.span layoutId="share-mode-pill" className="fd-segment-pill" transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }} />}
+            {mode === id && <motion.span layoutId="share-mode-pill" className="share-mode-pill" transition={reduced ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }} />}
             <span>{label}</span>
           </button>)}
       </div>}

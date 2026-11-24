@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
 import type { WatchCard } from '../../lib/watchCards';
 import { bracketScheduleLabel } from '../../lib/calendar';
-import { broadcastThumbnails } from '../../lib/streamUtils';
+import { matchThumbnails } from '../../lib/streamUtils';
 import { formatViewers } from '../../lib/presence';
 import { CollegeLogo } from '../common/CollegeLogo';
 
 const teamName = (team?: { name?: string }) => team?.name || 'Awaiting team';
 /** "Team A vs Team B", or "Game 2: 12-squad lobby" for a Battle Royale game. */
 export const cardTitle = (match: WatchCard['match']) => match.lobby ? `${match.roundName}: ${match.lobby.squads}-squad lobby` : `${teamName(match.team1)} vs ${teamName(match.team2)}`;
-const code = (team?: { collegeCode?: string; name?: string }) => team?.collegeCode || (team?.name || 'TBD').replace(/^DEMO\s+/i, '').slice(0, 3).toUpperCase();
+const code = (team?: { collegeCode?: string; name?: string }) => team?.collegeCode || (team?.name || 'TBD').slice(0, 3).toUpperCase();
 export const cardStatus = (card: WatchCard) => card.state === 'live' ? 'Live now' : card.state === 'waiting' ? 'Live · broadcast starting soon'
   : card.state === 'upcoming' ? bracketScheduleLabel(card.match) : card.match.status === 'completed' ? (card.match.lobby?.winner ? `Won by ${card.match.lobby.winner}` : 'Ended') : 'Not scheduled';
 
-/** The broadcast's own frame when YouTube has one, then the game artwork, then a plain stage. */
+/** The organizer's chosen thumbnail (uploaded picture, stream frame or game artwork), then the fallbacks, then a plain stage. */
 function Thumb({ card }: { card: WatchCard }) {
-  const sources = [...broadcastThumbnails(card.match), ...(card.image ? [card.image] : [])];
+  const sources = matchThumbnails(card.match, card.image);
   const [index, setIndex] = useState(0);
   const src = sources[index];
   const isArtwork = !src || src === card.image;

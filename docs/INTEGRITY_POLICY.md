@@ -4,9 +4,13 @@ Updated 17 November 2026. The tournament organizer must identify the hosting pro
 
 ## Your choice and the match window
 
-Official match admission requires every roster player to complete a supported companion scan. Monitoring starts after you agree on your device and lasts only for the assigned match window. You can decline, stop the app/agent, or refuse screen capture. Staff are told so they can arrange a supported organizer device. A declined or unsupported personal device does not pass required scan admission. Software does not decide a cheating penalty.
+Every roster player must pass a supported companion scan before match time. The organizer checks this; the website's Go live control does not. Monitoring starts after you agree on your device and lasts only for the assigned match window. You can decline, stop the app/agent, or refuse screen capture. Staff are told so they can arrange a supported organizer device. A declined or unsupported personal device does not pass required scan admission. Software does not decide a cheating penalty.
 
 Android displays a foreground notification; Windows keeps the agent window open. Ending a session at the server revokes its credentials. Devices stop when they next contact the server; closing the local app/agent stops local collection immediately.
+
+## Live game previews
+
+After check-in, you can start live screen sharing through your private match link. Your game preview is visible to tournament administrators, organizers and the facilitator assigned to your match. The live wall sends silent screen previews and holds the latest frame briefly in the tournament server's memory. Opening the link or starting the scan leaves sharing off until you approve the screen capture on your device. Use the game's window or single-app option where available. When using the whole display, turn on Do Not Disturb or Focus to hide notifications. You can stop sharing through the sharing page, the Android companion or your device's system broadcast controls.
 
 ## Reports and recordings
 

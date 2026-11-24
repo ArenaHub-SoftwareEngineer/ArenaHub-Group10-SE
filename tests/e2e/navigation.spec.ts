@@ -21,6 +21,8 @@ test('viewer page search handles empty results and browser history', async ({ pa
   await expect(page.getByRole('main', { name: 'Home' })).toBeVisible();
   await page.goForward();
   await expect(page.getByRole('main', { name: 'Standings' })).toBeVisible();
+  await page.goto('/#/arena/leaderboard');
+  await expect(page.getByRole('main', { name: 'Home' })).toBeVisible();
 });
 
 test('admin navigation shows the current page and works on narrow screens', async ({ page }, testInfo) => {
@@ -33,6 +35,7 @@ test('admin navigation shows the current page and works on narrow screens', asyn
     const more = page.getByRole('button', { name: 'More pages' });
     await more.click();
     const drawer = page.getByRole('dialog', { name: 'Admin navigation' });
+    await expect(nav.getByRole('link', { name: /^(Lobbies|Stats|Spotlight)$/ })).toHaveCount(0);
     await expect(drawer.getByRole('button', { name: 'Close navigation' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(drawer).toBeHidden();
@@ -45,6 +48,8 @@ test('admin navigation shows the current page and works on narrow screens', asyn
     await expect(nav.getByRole('link', { name: 'Games', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.keyboard.press('Escape');
   } else {
+    await expect(nav.getByRole('link', { name: 'Schedule', exact: true })).toBeVisible();
+    await expect(nav.getByRole('link', { name: /^(Lobbies|Stats|Spotlight)$/ })).toHaveCount(0);
     await nav.getByRole('link', { name: 'Games', exact: true }).click();
     await expect(nav.getByRole('link', { name: 'Games', exact: true })).toHaveAttribute('aria-current', 'page');
   }

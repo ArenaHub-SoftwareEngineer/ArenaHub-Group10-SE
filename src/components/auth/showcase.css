@@ -1,64 +1,12 @@
-/*
- * Welcome page feature cards and their pop-up previews (FeatureShowcase.tsx, FeatureDemos.tsx).
- * The card's surface (.landing-feature-surface) and the pop-up's surface (.fx-surface) share a motion layoutId,
- * so the card grows into the panel and shrinks back. Content fades in after the surface lands.
- */
-
-/* ---------- Cards ---------- */
-.landing-feature {
-  position: relative; isolation: isolate; display: flex; flex-direction: column; min-width: 0; padding: 0; text-align: left;
-  color: var(--text-primary); background: none; border: 0; cursor: pointer; border-radius: var(--radius-lg);
-  transition: transform var(--dur-3) var(--ease-out);
-}
-.landing-feature-surface { position: absolute; inset: 0; z-index: -1; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); transition: border-color var(--dur-2) var(--ease-out); }
-.landing-feature-media {
-  position: relative; display: grid; place-items: center; height: 210px; padding: var(--sp-5); overflow: hidden;
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: #08080a; border: 1px solid var(--border); border-bottom-color: var(--border);
-}
-.landing-feature-body { display: flex; flex-direction: column; gap: var(--sp-1); padding: var(--sp-5); flex: 1; }
-.landing-feature-title { color: var(--text-primary); font-size: var(--fs-lg); font-weight: 700; }
-.landing-feature-text { color: var(--text-secondary); font-size: var(--fs-sm); line-height: 1.55; }
-.landing-feature-open {
-  display: inline-flex; align-items: center; gap: var(--sp-2); margin-top: auto; padding-top: var(--sp-3);
-  color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; transition: color var(--dur-2) var(--ease-out), gap var(--dur-2) var(--ease-out);
-}
-@media (hover: hover) {
-  .landing-feature:hover { transform: translateY(-4px); }
-  .landing-feature:hover .landing-feature-surface { border-color: var(--border-strong); }
-  .landing-feature:hover .landing-feature-open { color: var(--brand-ink); gap: var(--sp-3); }
-}
-.landing-feature:active { transform: translateY(-1px) scale(.985); }
-.landing-feature:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
-
-/* ---------- Pop-up ---------- */
-.fx-backdrop { position: fixed; inset: 0; z-index: 80; background: rgb(0 0 0 / .72); }
-.fx-wrap { position: fixed; inset: 0; z-index: 81; display: grid; place-items: center; padding: var(--sp-6); overflow-y: auto; overscroll-behavior: contain; }
-.fx-dialog { position: relative; isolation: isolate; width: min(1080px, 100%); }
-.fx-surface { position: absolute; inset: 0; z-index: -1; border: 1px solid var(--border-strong); border-radius: var(--radius-xl); background: var(--surface); box-shadow: 0 40px 120px rgb(0 0 0 / .6); }
-.fx-content { display: flex; flex-direction: column; gap: var(--sp-5); padding: var(--sp-8); }
-.fx-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-4); }
-.fx-kicker { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--surface-elevated); color: var(--text-secondary); font-size: var(--fs-xs); font-weight: 600; }
-.fx-head h2 { margin: var(--sp-3) 0 var(--sp-2); color: var(--text-primary); font-size: var(--fs-3xl); font-weight: 700; letter-spacing: -.02em; line-height: 1.1; }
-.fx-head p { max-width: 64ch; margin: 0; color: var(--text-secondary); font-size: var(--fs-md); line-height: 1.55; }
-.fx-close { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--surface-elevated); color: var(--text-secondary); cursor: pointer; transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
-.fx-close:hover { color: var(--text-primary); background: color-mix(in srgb, var(--surface-elevated) 70%, #fff 12%); }
-.fx-close:active { transform: scale(.92); }
-.fx-stage { position: relative; min-height: 400px; display: grid; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #08080a; overflow: hidden; }
-.fx-demo { display: grid; min-width: 0; padding: var(--sp-6); }
-.fx-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-3); }
-.fx-nav { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
-.fx-arrow { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--border); color: var(--text-secondary); cursor: pointer; transition: border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
-.fx-arrow:hover { border-color: var(--border-strong); color: var(--text-primary); }
-.fx-arrow:active { transform: scale(.92); }
-.fx-tabs, .fd-segment { display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--bg-base); border: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
-.fx-tabs::-webkit-scrollbar, .fd-segment::-webkit-scrollbar { display: none; }
-.fx-tabs > button, .fd-segment > button {
+.fd-segment { display: inline-flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--bg-base); border: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+.fd-segment::-webkit-scrollbar { display: none; }
+.fd-segment > button {
   position: relative; isolation: isolate; flex: none; min-height: 36px; padding: 0 var(--sp-4); border-radius: 999px; cursor: pointer;
   color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; transition: color var(--dur-2) var(--ease-out);
 }
-.fx-tabs > button:hover, .fd-segment > button:hover { color: var(--text-primary); }
-.fx-tabs > button[aria-selected=true], .fd-segment > button[aria-selected=true] { color: var(--text-primary); }
-.fx-tab-pill, .fd-segment-pill { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--surface-elevated); box-shadow: 0 1px 2px rgb(0 0 0 / .4); }
+.fd-segment > button:hover { color: var(--text-primary); }
+.fd-segment > button[aria-selected=true] { color: var(--text-primary); }
+.fd-segment-pill { position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--surface-elevated); box-shadow: 0 1px 2px rgb(0 0 0 / .4); }
 
 /* ---------- Shared demo pieces ---------- */
 .fd-typing { display: inline-flex; align-items: center; gap: 4px; height: 18px; }
@@ -168,25 +116,8 @@
 .fd-ai-card small { color: var(--text-muted); font-weight: 600; }
 .fd-ai-card em { margin-left: auto; color: var(--text-secondary); font-style: normal; font-weight: 500; font-size: var(--fs-xs); }
 
-/* Arena AI card preview */
-.lp-ai { width: min(100%, 280px); display: flex; flex-direction: column; gap: var(--sp-2); }
-.lp-ai .fd-bubble { font-size: var(--fs-sm); padding: var(--sp-2) var(--sp-3); }
-.lp-ai-answer { display: flex; flex-direction: column; gap: 4px; }
-
-/* ---------- Phone ---------- */
+.fd-watch > *, .fd-fair, .fd-ai { min-width: 0; }
 @media (max-width: 767px) {
-  .fx-wrap { padding: 0; place-items: end stretch; }
-  .fx-dialog { width: 100%; }
-  .fx-surface { border-radius: var(--radius-xl) var(--radius-xl) 0 0; border-bottom: 0; }
-  .fx-content { max-height: 94dvh; overflow-y: auto; padding: var(--sp-5) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom)); gap: var(--sp-4); }
-  .fx-head h2 { font-size: var(--fs-2xl); }
-  .fx-head p { font-size: var(--fs-sm); }
-  .fx-stage { min-height: 0; }
-  .fx-demo { padding: var(--sp-3); }
-  .fx-foot { flex-direction: column; align-items: stretch; }
-  .fx-nav { justify-content: space-between; }
-  .fx-tabs { flex: 1; }
-  .fx-foot .arena-primary { width: 100%; }
   .fd-watch { grid-template-columns: 1fr; }
   .fd-player { min-height: 190px; }
   .fd-chat ol { max-height: 200px; }
@@ -197,18 +128,8 @@
   .fd-slot-team { font-size: var(--fs-xs); }
   .fd-table-head, .fd-table li { padding: 0 var(--sp-3); }
   .fd-bubble { font-size: var(--fs-sm); }
-  .landing-feature-media { height: 180px; }
 }
-
-/* ---------- Reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fd-typing i, .fd-caret, .fd-skeleton, .fd-result.is-wait::before { animation: none; }
-  .landing-feature:hover { transform: none; }
 }
 html[data-motion=reduced] :is(.fd-typing i, .fd-caret, .fd-skeleton, .fd-result.is-wait::before) { animation: none; }
-html[data-motion=reduced] .landing-feature:hover { transform: none; }
-@media (max-width: 640px) { .landing-features { grid-template-columns: 1fr; } }
-/* Nothing in the pop-up may push it wider than the screen. */
-.fx-dialog, .fx-content, .fx-stage, .fx-demo, .fx-nav, .fx-tabs, .fd-watch > *, .fd-fair, .fd-ai { min-width: 0; }
-.fx-tabs { max-width: 100%; }
-.lp-watch { width: min(100%, 250px); }

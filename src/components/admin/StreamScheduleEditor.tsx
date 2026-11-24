@@ -1,129 +1,75 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { parseStreamSchedule, type MatchScheduleUpdate } from '../../lib/streamSchedule';
-import { firestoreService } from '../../lib/firestore';
 import type { Match } from '../../lib/types';
 import { DraftScheduleCalendar } from './DraftScheduleCalendar';
-import { Calendar, Upload } from '../ui/Icons';
-import { Req } from '../ui/Req';
+import { Calendar, Sparkles, Upload } from '../ui/Icons';
 import { errorMessage } from '../../lib/errors';
 
-export function StreamScheduleEditor({ matches, publishedIds, onApplyDraft }: {
+export function StreamScheduleEditor({ matches, onApply, game, includeStarted = false }: {
   matches: Match[];
-  publishedIds?: Set<string>;
-  onApplyDraft?: (updates: MatchScheduleUpdate[]) => void;
+  game?: { id?: string; name?: string };
+  onApply: (updates: MatchScheduleUpdate[]) => void | Promise<void>;
+  includeStarted?: boolean;
 }) {
+  const fileInput = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState('');
-  const [preview, setPreview] = useState<MatchScheduleUpdate[]>([]);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
-  const example = matches.find(match => !['live', 'completed'].includes(match.status))?.matchNumber || 'M1';
 
-  function updateSource(value: string) {
-    setSource(value);
-    setPreview([]);
+  async function apply(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy || !source.trim()) return;
+    setBusy(true);
     setError('');
     setStatus('');
+    try {
+      const updates = parseStreamSchedule(source, matches, undefined, includeStarted);
+      await onApply(updates);
+      setStatus(`${updates.length} ${updates.length === 1 ? 'match' : 'matches'} scheduled.`);
+      setSource('');
+    } catch (err) {
+      setError(errorMessage(err, 'Could not apply the schedule.'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function upload(file: File) {
+    setError('');
+    setStatus('');
     if (file.size > 100_000) {
       setError('Choose a CSV file smaller than 100 KB.');
       return;
     }
-    setBusy(true);
-    try {
-      updateSource(await file.text());
-    } catch {
-      setError('Could not read the CSV file.');
-    } finally {
-      setBusy(false);
-    }
+    try { setSource(await file.text()); }
+    catch { setError('Could not read the CSV file.'); }
   }
 
-  function review() {
-    setError('');
-    setStatus('');
-    setPreview([]);
-    try {
-      setPreview(parseStreamSchedule(source, matches));
-    } catch (err) {
-      setError(errorMessage(err, 'Could not read the schedule.'));
-    }
-  }
-
-  async function apply() {
-    setBusy(true);
-    setError('');
-    try {
-      const updates = parseStreamSchedule(source, matches);
-      if (onApplyDraft) {
-        onApplyDraft(updates);
-        setStatus('Schedule added to the draft. Publish the bracket to share it.');
-        setPreview([]);
-        return;
-      }
-      firestoreService.updateMatchSchedules(updates);
-      if (updates.some(update => publishedIds?.has(update.id))) {
-        try {
-          await firestoreService.syncBracketsToCloud();
-        } catch {
-          setError('Saved on this device. Spectator sync failed. Try applying the schedule again.');
-          return;
-        }
-        setStatus('Schedule saved and published.');
-      } else {
-        setStatus('Schedule saved on this device.');
-      }
-      setPreview([]);
-    } catch (err) {
-      setError(errorMessage(err, 'Could not save the schedule.'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const bulkEditor = <>
-        <p className="studio-muted">Upload a CSV with match_id, date, and time columns, or write one instruction per match. Times use Manila time.</p>
-        <label className="stream-schedule-upload">
-          <Upload size={16} /> Upload CSV
-          <input type="file" accept=".csv,text/csv" disabled={busy} onChange={event => {
-            const file = event.target.files?.[0];
-            if (file) void upload(file);
-            event.target.value = '';
-          }} />
+  return <section className="arena-panel stream-schedule-editor">
+    <h2><Calendar size={18} /> Match schedule</h2>
+    <details className="draft-schedule-import">
+      <summary><Sparkles size={16} /> Schedule from a prompt</summary>
+      <form className="module-form schedule-prompt-form" onSubmit={event => void apply(event)}>
+        <label className="stream-schedule-source">Schedule instructions or CSV
+          <textarea rows={3} value={source} disabled={busy} maxLength={100_000}
+            placeholder="Schedule all matches on Dec 4 starting at 8 AM every 90 minutes"
+            onChange={event => { setSource(event.target.value); setError(''); setStatus(''); }} />
         </label>
-        <label className="stream-schedule-source"><Req>Schedule instructions or CSV</Req>
-          <textarea aria-required="true" rows={4} value={source} disabled={busy} maxLength={100_000}
-            placeholder={`Schedule ${example} on 2026-12-04 at 7:30 PM`}
-            onChange={event => updateSource(event.target.value)} />
-        </label>
+        <p className="studio-muted">Use a match or round number, a date, and a time. For CSV use match_id, date, time, end_time.</p>
         {error && <p className="module-error" role="alert">{error}</p>}
-        {status && <p className="studio-muted" role="status">{status}</p>}
-        {preview.length > 0 && <ul className="stream-schedule-preview" aria-label="Schedule preview">
-          {preview.map(update => <li key={update.id}>
-            <strong>{matches.find(match => match.id === update.id)?.matchNumber}</strong>
-            <span>{update.scheduledDate} · {update.scheduledTime}</span>
-          </li>)}
-        </ul>}
-        <div className="studio-actions">
-          <button type="button" className="arena-outline" disabled={busy || !source.trim()} onClick={review}>Preview schedule</button>
-          {preview.length > 0 && <button type="button" className="arena-primary" disabled={busy} onClick={() => void apply()}>
-            {busy ? 'Saving…' : `Apply ${preview.length} ${preview.length === 1 ? 'match' : 'matches'}`}
-          </button>}
+        {status && <p className="settings-notice" role="status">{status}</p>}
+        <div className="page-actions">
+          <button className="arena-primary" type="submit" disabled={busy || !source.trim()}>{busy ? 'Applying…' : 'Apply schedule'}</button>
+          <button className="arena-outline" type="button" disabled={busy} onClick={() => fileInput.current?.click()}><Upload size={16} /> Upload CSV</button>
+          <input type="file" accept=".csv,text/csv" hidden ref={fileInput} onChange={event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void upload(file);
+          }} />
         </div>
-  </>;
-
-  return (
-    <section id={onApplyDraft ? undefined : "stream-match-schedule"} className="arena-panel stream-schedule-editor">
-      <h2><Calendar size={18} /> Match schedule</h2>
-      {matches.length === 0 ? <p className="studio-muted">Choose a bracket or game with matches to add a schedule.</p> : onApplyDraft ? <>
-        <DraftScheduleCalendar matches={matches} onApply={onApplyDraft} />
-        <details className="draft-schedule-import">
-          <summary>Bulk import or schedule instructions</summary>
-          {bulkEditor}
-        </details>
-      </> : bulkEditor}
-    </section>
-  );
+      </form>
+    </details>
+    <DraftScheduleCalendar matches={matches} onApply={onApply} game={game} includeStarted={includeStarted} />
+  </section>;
 }

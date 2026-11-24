@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { createApp } from '../../server/app';
-import { ORGANIZER, QA_PASSWORD, signIn, watchErrors } from './helpers';
+import { ORGANIZER, QA_PASSWORD, signIn, watchErrors, openMonitorScans } from './helpers';
 
 test('production CSP runs the approved bootstrap and blocks injected inline JavaScript', async ({ page }) => {
   const dir = await mkdtemp(join(tmpdir(), 'arenahub-csp-'));
@@ -27,6 +27,7 @@ test('production CSP runs the approved bootstrap and blocks injected inline Java
 });
 
 test('staff can configure fingerprints and inspect installed-software findings with honest coverage', async ({ page, request }, testInfo) => {
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   const errors = watchErrors(page);
   const login = await request.post('http://127.0.0.1:9098/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo', { data: { email: ORGANIZER, password: QA_PASSWORD, returnSecureToken: true } });
   const staff = { Authorization: `Bearer ${(await login.json()).idToken}` };
@@ -35,23 +36,21 @@ test('staff can configure fingerprints and inspect installed-software findings w
   let sessionId = '';
   try {
     await signIn(page, ORGANIZER);
-    await page.evaluate(() => { location.hash = '#/admin/match-monitor'; });
-    await page.getByText('Blocklists and thresholds', { exact: true }).click();
-    const installed = page.getByLabel('PC installed software (registered display names)');
-    await expect(installed).toBeVisible();
-    await installed.fill('arenahub harmless fixture | Harmless installed test fixture | medium');
-    await page.getByText('Fingerprint checks', { exact: true }).click();
-    await page.getByLabel('PC executable SHA-256 fingerprints').fill('invalid | Fixture | high');
-    await page.getByRole('button', { name: 'Save settings' }).click();
-    await expect(page.getByRole('alert').filter({ hasText: '64 hexadecimal' })).toBeVisible();
-    await page.getByLabel('PC executable SHA-256 fingerprints').fill(`${fingerprint} | Harmless running test fixture | high`);
-    await page.getByRole('button', { name: 'Save settings' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'Saved. Devices' })).toBeVisible();
+    await openMonitorScans(page);
+    const configWithHash = (sha256: string) => ({
+      ...original,
+      pc: {
+        ...original.pc,
+        blockedApplications: [{ match: 'arenahub harmless fixture', label: 'Harmless installed test fixture', severity: 'medium' }],
+        blockedFileHashes: [{ sha256, label: 'Harmless running test fixture', severity: 'high' }],
+      },
+    });
+    expect((await request.put('/api/integrity/config', { headers: staff, data: configWithHash('invalid') })).status()).toBe(400);
+    expect((await request.put('/api/integrity/config', { headers: staff, data: configWithHash(fingerprint) })).ok()).toBe(true);
     const saved = await (await request.get('/api/integrity/config', { headers: staff })).json();
     expect(saved.pc.blockedFileHashes[0].sha256).toBe(fingerprint);
     expect(saved.android.games).toEqual(original.android.games);
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: testInfo.outputPath('monitor-fingerprint-settings.png'), fullPage: true });
 
     const created = await request.post('/api/integrity/pairings', { headers: staff, data: { matchId: `fingerprints-${testInfo.project.name}-${Date.now()}`, matchLabel: 'Fingerprint verification', game: 'dota2', platform: 'pc', playerName: 'Harmless fixture player', record: false, serverUrl: 'https://api.example.test' } });
     expect(created.ok()).toBe(true);
@@ -66,9 +65,10 @@ test('staff can configure fingerprints and inspect installed-software findings w
       installedApplications: [{ name: 'ArenaHub harmless fixture' }],
       checks: { processes: 'complete', installedApplications: 'complete', fileHashes: 'partial' },
     } })).ok()).toBe(true);
+    await page.getByRole('button', { name: 'Player scans', exact: true }).click();
     const row = page.locator('.monitor-session').filter({ hasText: 'Harmless fixture player' }).first();
     await row.getByRole('button', { name: /Open session/i }).click({ timeout: 20_000 });
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: /^Harmless fixture player ·/ });
     await expect(dialog).toContainText('Detection coverage: limited');
     await expect(dialog).toContainText('Listed software is installed');
     await expect(dialog).toContainText('execution not established');

@@ -64,7 +64,13 @@ export function groqProvider(apiKey: string, model: string, fetcher: typeof fetc
       }
     },
     async json(request) {
-      const response = await call({ messages: [{ role: 'system', content: `${request.system}\nReturn only a JSON object with these fields: ${JSON.stringify(request.schema)}` }, { role: 'user', content: request.prompt }], response_format: { type: 'json_object' }, max_completion_tokens: 2000 }, request.signal);
+      const budget = REASONING.test(model) ? request.thinkingBudget ?? 0 : 0;
+      const response = await call({
+        messages: [{ role: 'system', content: `${request.system}\nReturn only a JSON object with these fields: ${JSON.stringify(request.schema)}` }, { role: 'user', content: request.prompt }],
+        response_format: { type: 'json_object' }, temperature: request.temperature,
+        max_completion_tokens: (request.maxOutputTokens ?? 2000) + budget,
+        ...(budget > 0 && { reasoning_effort: reasoningEffort(budget) }),
+      }, request.signal);
       if (!response.ok) throw new Error(`Groq returned ${response.status}.`);
       return JSON.parse((await response.json() as any).choices?.[0]?.message?.content || 'null');
     },

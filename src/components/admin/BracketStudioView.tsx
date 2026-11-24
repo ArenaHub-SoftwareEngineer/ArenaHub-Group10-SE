@@ -4,6 +4,7 @@ import { validateScore } from '../../lib/integrityChecks';
 import { firestoreService } from '../../lib/firestore';
 import { ConfirmModal } from '../ui/ConfirmModal';
 import { StreamScheduleEditor } from './StreamScheduleEditor';
+import { applyMatchSchedules, isScheduleMatch, missingMatchSchedules } from '../../lib/streamSchedule';
 import { publicationGameKey } from '../../lib/bracketPublication';
 import { downloadBracketPng } from '../../lib/bracketImageExport';
 import { SuccessDialog } from '../ui/SuccessDialog';
@@ -11,27 +12,33 @@ import { useToast } from '../ui/Toast';
 import { Req } from '../ui/Req';
 import { BracketGenerationFeedbackModal, GenerationFeedbackData } from './BracketGenerationFeedbackModal';
 import { createBracketFromTeams, createPrebuiltManualBracket, updateMatchAndAdvance, parseTeamsFromCSV, MAX_BRACKET_TEAMS } from '../../lib/bracketUtils';
-import { Sparkles, Upload, Grid, Check, Trash2, Plus, Edit2, Layers, ChevronDown, LoaderCircle, FileText, Download } from '../ui/Icons';
+import { Sparkles, Upload, Grid, Check, Trash2, Plus, Edit2, Layers, ChevronDown, LoaderCircle, FileText, Download, Image } from '../ui/Icons';
 import { BracketFormat, getBracketSyncErrorMessage } from './bracket-studio/shared';
 import { MatchInfoModal } from './bracket-studio/MatchInfoModal';
 import { ManualBracketSetupModal } from './bracket-studio/BracketSetup';
 import { PublishBracketModal } from './bracket-studio/BracketPublishPanel';
-import { canEditRoundFormat, HorizontalBracketTree } from './bracket-studio/BracketCanvasEditor';
+import { canEditRoundFormat } from '../../lib/tournamentFormats';
+import { StudioBracketBoard } from './bracket-studio/StudioBracketBoard';
+import { TeamImagesDialog } from './bracket-studio/TeamImagesDialog';
+import { assertDocSize } from '../../lib/data/tournamentDocs';
 import { changeRoundFormat } from '../../lib/tournamentFormats';
 import { swissRoundCount } from '../../lib/formats/swiss';
 import { BracketAIDraft } from './bracket-studio/BracketAIDraft';
+import { duplicateMessage, duplicateNames, teamNameProblem } from '../../lib/teamNames';
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> = ({ initialBracketId }) => {
+export const BracketStudioView: React.FC<{ initialBracketId?: string | null; startNew?: boolean }> = ({ initialBracketId, startNew }) => {
   const { showToast } = useToast();
 
   // Mode
   const [buildMode, setBuildMode] = useState<'prompt' | 'manual' | 'upload'>('prompt');
+  const schedulePanel = useRef<HTMLDetailsElement>(null);
   const [libraryTab, setLibraryTab] = useState<'drafts' | 'live' | 'versions'>('drafts');
 
   // Bracket state
   const [currentDraft, setCurrentDraft] = useState<BracketDraft | null>(() => {
+    if (startNew) return null;
     if (initialBracketId) {
       const bracket = firestoreService.getPublishedBracketById(initialBracketId);
       if (bracket) return bracket;
@@ -51,6 +58,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
   const [drafts, setDrafts] = useState(() => firestoreService.getSavedBracketDrafts());
   const [bracketToLoad, setBracketToLoad] = useState<BracketDraft | null>(null);
   const [draftToDelete, setDraftToDelete] = useState<BracketDraft | null>(null);
+  const [showTeamImages, setShowTeamImages] = useState(false);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const [draftBeforeMatchEdit, setDraftBeforeMatchEdit] = useState<BracketDraft | null>(null);
   const [isExportingBracket, setIsExportingBracket] = useState(false);
@@ -66,7 +74,6 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     teamCount: number;
   } | null>(null);
 
-  const [showConfirmPublish, setShowConfirmPublish] = useState(false);
   const [showConfirmDiscard, setShowConfirmDiscard] = useState(false);
   const [showConfirmSave, setShowConfirmSave] = useState(false);
   const [generationFeedback, setGenerationFeedback] = useState<GenerationFeedbackData | null>(null);
@@ -115,6 +122,11 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     }
     if (teams.length > MAX_BRACKET_TEAMS) {
       showToast(`The roster has ${teams.length} teams. The current bracket limit is ${MAX_BRACKET_TEAMS}.`, 'error');
+      return false;
+    }
+    const repeated = duplicateMessage(duplicateNames(teams.map((team, index) => ({ id: String(index), name: team.name }))));
+    if (repeated) {
+      showToast(`${repeated} The bracket was not created.`, 'error');
       return false;
     }
 
@@ -283,7 +295,9 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     showToast('Match edit cancelled. No changes were saved.', 'info');
   };
 
-  const handleRequestMatchSave = () => {
+  const requestSaveDraft = () => {
+    const problem = currentDraft && teamNameProblem(currentDraft);
+    if (problem) { showToast(problem, 'error'); return; }
     setDraftBeforeMatchEdit(null);
     setSelectedMatch(null);
     setShowConfirmSave(true);
@@ -406,6 +420,38 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
     setCurrentDraft(published);
     setShowPublishGameModal(false);
     setPublishedGame(gameName);
+  };
+
+  const previouslyPublished = Boolean(currentDraft && publishedBrackets.some(bracket => bracket.id === currentDraft.id));
+  function updateTeamImage(teamId: string, image?: string) {
+    if (!currentDraft) return;
+    const teams = { ...currentDraft.appearance?.teams };
+    const badge = { ...teams[teamId] };
+    if (image) badge.image = image;
+    else delete badge.image;
+    if (Object.keys(badge).length) teams[teamId] = badge;
+    else delete teams[teamId];
+    const next = { ...currentDraft, appearance: { ...currentDraft.appearance, teams } };
+    if (image) assertDocSize({ draft: next }, 'This draft with its team images');
+    setCurrentDraft(next);
+  }
+  const scheduleMissing = currentDraft ? missingMatchSchedules(currentDraft.matches).length : 0;
+  const requestPublish = (draft: BracketDraft) => {
+    const problem = teamNameProblem(draft);
+    if (problem) { showToast(problem, 'error'); return; }
+    const missing = missingMatchSchedules(draft.matches).length;
+    if (missing && !publishedBrackets.some(bracket => bracket.id === draft.id)) {
+      showToast(`Schedule ${missing} remaining ${missing === 1 ? 'match' : 'matches'} before publishing.`, 'error');
+      requestAnimationFrame(() => {
+        const panel = schedulePanel.current;
+        if (!panel) return;
+        panel.open = true;
+        panel.querySelector('summary')?.focus();
+        panel.scrollIntoView({ block: 'start' });
+      });
+      return;
+    }
+    setShowPublishGameModal(true);
   };
 
   const handleRestoreVersion = async () => {
@@ -551,8 +597,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
             <span>Bracket details</span>
           </button>
 
+          <button type="button" className="arena-outline" onClick={requestSaveDraft}
+            disabled={!currentDraft || currentDraft === loadedBracket.current}>
+            <Check size={16} aria-hidden="true" /> Save draft
+          </button>
+
           <button
-            onClick={() => currentDraft && setShowPublishGameModal(true)}
+            onClick={() => currentDraft && requestPublish(currentDraft)}
             disabled={!currentDraft}
             className="arena-primary"
           >
@@ -745,22 +796,15 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       </div>
 
       <div className="studio-workspace">
-      {currentDraft && <details className="studio-builder">
-        <summary><span><strong>Draft schedule</strong><small>Add match times before publishing.</small></span><ChevronDown size={18} /></summary>
+      {currentDraft && <details className="studio-builder schedule-section" ref={schedulePanel}>
+        <summary><span><strong>Draft schedule</strong><small>{scheduleMissing ? `${scheduleMissing} ${scheduleMissing === 1 ? 'match needs' : 'matches need'} a date and start time` : 'All playable matches are scheduled'}</small></span><ChevronDown size={18} /></summary>
         <div className="studio-builder-body">
-          <StreamScheduleEditor key={currentDraft.id} matches={currentDraft.matches.filter(match =>
-            ![match.team1, match.team2].some(team => team?.isBye || team?.name === 'BYE'))}
-            onApplyDraft={updates => {
-              const byId = new Map(updates.map(update => [update.id, update]));
-              setCurrentDraft(draft => draft ? {
-                ...draft,
-                status: 'saved',
-                matches: draft.matches.map(match => {
-                  const update = byId.get(match.id);
-                  return update ? { ...match, ...update } : match;
-                }),
-              } : draft);
-            }} />
+          <StreamScheduleEditor key={currentDraft.id} game={{ id: currentDraft.gameId, name: currentDraft.gameName }}
+            matches={currentDraft.matches.filter(isScheduleMatch)} includeStarted={!previouslyPublished}
+            onApply={updates => setCurrentDraft(draft => draft ? {
+              ...draft,
+              matches: applyMatchSchedules(draft.matches, updates, !previouslyPublished),
+            } : draft)} />
         </div>
       </details>}
 
@@ -829,32 +873,30 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
                 </div>
               </div>
 
-              <p className="studio-board-help">
-                Set the series length before play starts. A round’s series length locks once a match starts or has a recorded result. A BYE advances a team automatically. Select a match to edit its details.
-              </p>
+              <ol className="ah-steps studio-board-steps">
+                <li>Pick each round’s series length (Bo1 to Bo7) before play. It locks once a match in that round starts.</li>
+                <li>Rename first-round teams by clicking their names. Use − and + beside a score to record game wins; the winner is ticked and moves on.</li>
+                <li>Select a match’s top strip to set its time, stream and details.</li>
+              </ol>
 
-              <div className="studio-tree-frame">
-                <button
-                  type="button"
-                  className="studio-bracket-save"
-                  onClick={() => void handleDownloadBracket()}
-                  disabled={isExportingBracket}
-                  aria-label="Save bracket image"
-                  data-tooltip="Save"
-                >
-                  {isExportingBracket
-                    ? <LoaderCircle size={17} className="animate-spin" />
-                    : <Download size={17} />}
-                </button>
-                <HorizontalBracketTree
-                  draft={currentDraft}
-                  selectedMatchId={selectedMatch?.id || null}
-                  onSelectMatch={handleOpenMatchEditor}
-                  onUpdateTeamName={handleUpdateTeamName}
-                  onScoreChange={handleScoreChange}
-                  onRoundFormatChange={handleRoundFormatChange}
-                />
-              </div>
+              <StudioBracketBoard
+                matches={currentDraft.matches}
+                appearance={currentDraft.appearance}
+                selectedMatchId={selectedMatch?.id || null}
+                onSelectMatch={handleOpenMatchEditor}
+                onUpdateTeamName={handleUpdateTeamName}
+                onScoreChange={handleScoreChange}
+                onRoundFormatChange={handleRoundFormatChange}
+                actions={<>
+                  <button type="button" className="arena-outline arena-sm" aria-haspopup="dialog" onClick={() => setShowTeamImages(true)}>
+                    <Image size={15} aria-hidden="true" /> Team images
+                  </button>
+                  <button type="button" className="arena-outline arena-sm" onClick={() => void handleDownloadBracket()} disabled={isExportingBracket}>
+                    {isExportingBracket ? <LoaderCircle size={15} className="animate-spin" /> : <Download size={15} />} Save image
+                  </button>
+                </>}
+              />
+              <TeamImagesDialog key={currentDraft.id} open={showTeamImages} draft={currentDraft} onChange={updateTeamImage} onClose={() => setShowTeamImages(false)} />
 
             </div>
           )}
@@ -879,10 +921,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
 
       {/* ── POPUP MODAL: Match Info (matches Screenshot 2) ── */}
       <MatchInfoModal
+        key={selectedMatch?.id}
         match={selectedMatch}
+        appearance={currentDraft?.appearance}
         isOpen={Boolean(selectedMatch)}
         onClose={handleCancelMatchEdit}
-        onSave={handleRequestMatchSave}
+        onSave={requestSaveDraft}
+        onUpdateTeamImage={updateTeamImage}
         onUpdateTeamName={handleUpdateTeamName}
         onScoreChange={handleScoreChange}
       />
@@ -898,7 +943,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
         onSaveAndPublishLive={(draft) => {
           setCurrentDraft(draft);
           setShowFeedbackModal(false);
-          setShowPublishGameModal(true);
+          requestPublish(draft);
         }}
       />
 
@@ -925,6 +970,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       <PublishBracketModal
         isOpen={showPublishGameModal}
         draft={currentDraft}
+        publishedBrackets={publishedBrackets}
         onClose={() => setShowPublishGameModal(false)}
         onConfirm={handleConfirmPublishToGame}
       />
@@ -957,7 +1003,7 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null }> =
       <ConfirmModal
         isOpen={showConfirmSave}
         title="Save Bracket Changes?"
-        description={`Save the current teams, BYE assignments, seeds, and scores for "${currentDraft?.title || 'this bracket'}" to your account? Publish to share it with spectators.`}
+        description={`Save the current teams, team images, and match details for “${currentDraft?.title || 'this bracket'}” to your account? Publish to share it with spectators.`}
         confirmLabel="Yes, Save Changes"
         onConfirm={performSaveBracket}
         onCancel={() => {

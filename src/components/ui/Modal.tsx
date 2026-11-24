@@ -36,9 +36,13 @@ export function Modal({ open, title, description, icon, onClose, children, busy 
     trigger.current = document.activeElement as HTMLElement;
     if (!dialog.current.open) dialog.current.showModal();
     dialog.current.querySelector<HTMLElement>('input:not([type="checkbox"]), textarea, select')?.focus();
-    const previous = document.body.style.overflow;
+    // The page behind stops scrolling. Lock <html> too: it is the scroller on long pages such as the welcome page,
+    // and leaving it scrollable shows a second scrollbar beside the dialog's own.
+    const root = document.documentElement;
+    const previous = [document.body.style.overflow, root.style.overflow];
     document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = previous; };
+    root.style.overflow = 'hidden';
+    return () => { [document.body.style.overflow, root.style.overflow] = previous; };
   }, [open]);
   const motionProps = sheet
     ? { initial: { y: reduced ? 0 : '100%', opacity: reduced ? 0 : 1 }, animate: { y: 0, opacity: 1 }, exit: { y: reduced ? 0 : '100%', opacity: reduced ? 0 : 1 },

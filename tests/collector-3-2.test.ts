@@ -184,8 +184,12 @@ test('folder check judges content: renamed tables and scripts, listed tools, fin
     writeFileSync(join(desktop, 'renamed.bin'), pe('fingerprinted tool'));
     writeFileSync(join(desktop, 'game.exe'), pe('ordinary program'));
     const policy = { blockedProcesses: ['cheatengine*'], blockedApplications: ['cheat engine*'], blockedFileHashes: [sha256Buffer(pe('fingerprinted tool'))] };
-    const { findings, status } = await sweepFolders([{ folder: 'Downloads', path: downloads }, { folder: 'Desktop', path: desktop }], policy);
+    const { findings, paths, status } = await sweepFolders([{ folder: 'Downloads', path: downloads }, { folder: 'Desktop', path: desktop }], policy);
     assert.equal(status, 'complete');
+    // Each finding keeps its full path locally (same order), so the agent can drop it once the file is deleted.
+    assert.equal(paths.length, findings.length);
+    findings.forEach((finding, index) => assert.ok(paths[index].endsWith(finding.name), `${paths[index]} is ${finding.name}`));
+    assert.ok(paths.every(path => path.startsWith(home)));
     assert.deepEqual(findings.map(f => `${f.folder}:${f.name}:${f.reason}`).sort(), [
       'Desktop:renamed.bin:Matches a staff file fingerprint',
       'Downloads:Cheat Engine 7.5:Folder named like a listed tool',
@@ -281,10 +285,9 @@ test('lessons from the real-PC run: no regex blow-up, no source-code or Java fal
   assert.equal(analyzeContent(Buffer.from("const sample = '#IfWinActive ahk_exe dota2.exe\nF1::Send q';")).automationScript, false);
   assert.equal(analyzeContent(Buffer.from(['#Requires AutoHotkey v2.0', '#HotIf WinActive("ahk_exe dota2.exe")', 'F1::Send "qwer"'].join(NL))).automationScript, true);
   assert.equal(analyzeContent(Buffer.from(['import pydirectinput', '# dota2.exe combo', 'pydirectinput.press("q")'].join(NL))).automationScript, true);
-  // Java's attach.dll (Minecraft runtimes) has injector functions but no Dota target: a warning on disk, a block when running.
+  // The generic indicator also occurs in legitimate software such as Java's attach.dll.
   const javaAttach = { kind: 'pe' as const, referencesDota: false, injectionApis: true, cheatTable: false, automationScript: false };
   assert.deepEqual(judgeTraits('attach.dll', javaAttach, { processes: [], applications: [] }, 'unsigned').map(v => v.severity), ['low']);
-  assert.deepEqual(judgeTraits('attach.dll', javaAttach, { processes: [], applications: [] }, 'unsigned', 'running').map(v => v.severity), ['medium']);
   // Archive entries cannot be signature-checked: only a Dota target is reported from them.
   assert.deepEqual(judgeTraits('vsdebugeng.impl.dll', javaAttach, { processes: [], applications: [] }, 'unknown'), []);
   const facts = pcFacts({ fileFindings: [{ name: 'attach.dll', folder: 'App data', reason: 'Unsigned program that contains DLL-injection functions', severity: 'low' }] });

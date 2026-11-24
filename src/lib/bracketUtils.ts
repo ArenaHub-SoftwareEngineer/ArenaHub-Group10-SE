@@ -1,6 +1,9 @@
 import { BracketDraft, Match, Team, MatchFormat, ExtractedTeam } from './types';
 import { doubleElimination, resolveTournamentGraph, roundRobin } from './tournamentFormats';
 import { advanceSwiss, swiss, SWISS_MAX_TEAMS } from './formats/swiss';
+import { fairShuffle, isRandomDraw } from './fairDraw';
+import { teamNameKey } from './teamNames';
+import type { OpeningMatch } from './bracketPromptDetails';
 
 export type { ExtractedTeam } from './types';
 
@@ -241,17 +244,43 @@ export function extractTeamsFromPrompt(promptText: string): ExtractedTeam[] {
     return detectedTeams;
   }
 
-  // 3. Look for comma-separated teams after "teams:"
-  const afterTeamsMatch = promptText.match(/(?:teams|roster|participants)\s*:\s*([^.\n]+)/i);
-  if (afterTeamsMatch) {
-    const rawList = afterTeamsMatch[1].split(/,|;/);
-    const commaTeams = rawList
-      .map((t) => t.trim().replace(/^["']|["']$/g, ''))
-      .filter((t) => t.length > 1 && !isInstructionLine(t) && !/^(and|or)$/i.test(t));
-    if (commaTeams.length >= 2) {
-      return commaTeams.map((name, idx) => ({ name, seed: idx + 1 }));
+  const rosterStart = lines.findIndex(line => /^\s*(?:teams|roster|participants)\s*:\s*$/i.test(line));
+  if (rosterStart >= 0) {
+    const names: string[] = [];
+    for (const rawName of lines.slice(rosterStart + 1)) {
+      const name = rawName.trim().replace(/^[-*•]\s+/, '').replace(/^[“"]|[”"]$/g, '').trim();
+      if (!name && !names.length) continue;
+      if (!name || name.endsWith(':') || isInstructionLine(name) || /\b(?:vs\.?|versus)\b/i.test(name)) break;
+      names.push(name);
     }
+    if (names.length >= 2) return names.map((name, i) => ({ name, seed: i + 1 }));
   }
+
+  // Plain lists and short conversational prompts can still be read when a model is unavailable.
+  const plainName = (name: string) => /^[\p{L}\p{N}][\p{L}\p{M}\p{N} &+_'’.\-]{0,79}$/u.test(name)
+    && !isInstructionLine(name)
+    && !/\b(?:bracket|tournament|match(?:es|ups)?|bo\s*[1357]|round\s+robin|swiss|seeding|shuffle|randomize|title)\b/i.test(name)
+    && !/^(?:mlbb|mobile legends(?: bang bang)?|dota\s*2?|codm|call of duty(?: mobile(?: multiplayer)?)?|\d+\s+teams?)$/i.test(name);
+  const cleanName = (name: string) => name.trim().replace(/^["“']|["”'?!]$/g, '').trim();
+  const asTeams = (names: string[]) => names.map((name, index) => ({ name, seed: index + 1 }));
+  for (const line of lines) {
+    const input = line.trim();
+    const labeled = input.match(/\b(?:teams|roster|participants|lineup)\s*(?::|are\b|will be\b|includes?\b)\s*(.+)/i);
+    const inline = /\b(?:bracket|cup|tournament|draw|mlbb|dota\s*2|codm)\b/i.test(input)
+      ? input.match(/\b(?:between|with|using|for)\s+(?:the following teams\s*:\s*)?(.+)/i) : null;
+    const list = (labeled?.[1] ?? inline?.[1] ?? input).split(/\s*[?!]\s*|\.\s+(?=\p{Lu})/u)[0].trim().replace(/\.$/, '');
+    const names = list.split(/\s*[,;|]\s*(?:and\s+)?|\s+and\s+/i).map(cleanName);
+    if (names.length >= 2 && names.every(plainName)) return asTeams(names);
+  }
+
+  const trailingNames: string[] = [];
+  for (const line of [...lines].reverse()) {
+    const name = cleanName(line);
+    if (!name && !trailingNames.length) continue;
+    if (!plainName(name)) break;
+    trailingNames.unshift(name);
+  }
+  if (trailingNames.length >= 2) return asTeams(trailingNames);
 
   return [];
 }
@@ -289,6 +318,8 @@ export function createBracketFromTeams({
   finalMatchFormat = 'Bo5',
   seedingRule = 'Win Rate',
   explicitBracketSize,
+  openingMatches,
+  previousDraw,
 }: {
   title: string;
   teams: ExtractedTeam[];
@@ -298,6 +329,8 @@ export function createBracketFromTeams({
   finalMatchFormat?: MatchFormat;
   seedingRule?: string;
   explicitBracketSize?: number;
+  openingMatches?: OpeningMatch[];
+  previousDraw?: readonly string[];
 }): BracketDraft {
   const normalizedFormat = format.toLowerCase().replace(/[-_]/g, ' ');
   if (!['single elimination', 'double elimination', 'round robin', 'swiss'].includes(normalizedFormat)) throw new Error('Choose single elimination, double elimination, round robin, or Swiss.');
@@ -324,8 +357,36 @@ export function createBracketFromTeams({
     });
   }
 
+  // "Random draw": a fresh, unpredictable order on every build (lib/fairDraw.ts), so seed 1 and its BYE are not
+  // decided by who was typed first. Numbered placeholder slots keep their numbers in their new order.
+  const placeholders = new Set(effectiveTeams.slice(teams.length));
+  let drawnTeams = effectiveTeams;
+  if (isRandomDraw(seedingRule)) {
+    const assignSeeds = (order: ExtractedTeam[]) => {
+      let slotNumber = teams.length;
+      return order.map((team, i) => ({ ...team, seed: i + 1, ...(placeholders.has(team) ? { name: `Team ${++slotNumber}` } : {}) }));
+    };
+    const prior = previousDraw?.map(teamNameKey);
+    const repeats = (order: ExtractedTeam[]) => prior?.length === order.length && order.every((team, i) => teamNameKey(team.name) === prior[i]);
+    let order = fairShuffle(effectiveTeams);
+    drawnTeams = assignSeeds(order);
+    if (teams.length) {
+      for (let attempt = 0; attempt < 32 && repeats(drawnTeams); attempt++) {
+        order = fairShuffle(effectiveTeams);
+        drawnTeams = assignSeeds(order);
+      }
+      // Keep the guarantee even in the unlikely event that every retry returned the previous draw.
+      if (repeats(drawnTeams)) {
+        const first = order.findIndex(team => !placeholders.has(team));
+        const other = (first + 1) % order.length;
+        [order[first], order[other]] = [order[other], order[first]];
+        drawnTeams = assignSeeds(order);
+      }
+    }
+  }
+
   // Seeded teams array
-  const seededTeams: Team[] = effectiveTeams.map((et, i) => ({
+  const seededTeams: Team[] = drawnTeams.map((et, i) => ({
     id: `team-draft-${i + 1}`,
     name: et.name,
     collegeId: `col-${i + 1}`,
@@ -366,6 +427,28 @@ export function createBracketFromTeams({
 
   // Standard seeding pairing order for Round 1
   const seedOrder = getStandardSeedOrder(bracketSize);
+  const fixedTeams = new Map<number, [Team, Team]>();
+  if (openingMatches?.length) {
+    const byName = new Map(seededTeams.map(team => [team.name.toLowerCase(), team]));
+    const placed = new Set<string>();
+    for (const { number, teams: names } of openingMatches) {
+      const first = byName.get(names[0].toLowerCase()), second = byName.get(names[1].toLowerCase());
+      if (!first || !second || first.id === second.id || placed.has(first.id) || placed.has(second.id)
+        || !Number.isInteger(number) || number < 1 || number > bracketSize / 2 || fixedTeams.has(number)) {
+        throw new Error('Check the opening match numbers and team names.');
+      }
+      fixedTeams.set(number, [first, second]);
+      placed.add(first.id);
+      placed.add(second.id);
+    }
+    if (!['single elimination', 'double elimination'].includes(normalizedFormat) || teamCount - fixedTeams.size < bracketSize / 2) {
+      throw new Error('The opening matchups do not fit this bracket.');
+    }
+  }
+  const unplaced = seededTeams.filter(team => ![...fixedTeams.values()].some(pair => pair.includes(team)));
+  // Place first-side teams before assigning second sides so any remaining empty slots are byes.
+  const freeMatches = Array.from({ length: bracketSize / 2 }, (_, i) => i + 1).filter(number => !fixedTeams.has(number));
+  const freePair = new Map(freeMatches.map((number, i) => [number, [unplaced[i], unplaced[freeMatches.length + i]]]));
 
   // Generate match nodes
   for (let r = 0; r < numRounds; r++) {
@@ -388,13 +471,10 @@ export function createBracketFromTeams({
       if (r === 0) {
         const seed1 = seedOrder[m * 2];
         const seed2 = seedOrder[m * 2 + 1];
-
-        if (seed1 <= teamCount) {
-          team1 = seededTeams[seed1 - 1];
-        }
-        if (seed2 <= teamCount) {
-          team2 = seededTeams[seed2 - 1];
-        } else {
+        [team1, team2] = fixedTeams.size
+          ? (fixedTeams.get(m + 1) ?? freePair.get(m + 1) ?? [])
+          : [seededTeams[seed1 - 1], seededTeams[seed2 - 1]];
+        if (!team2) {
           // seed2 is an earned BYE for team1
           isByeMatch = true;
           team2 = {
@@ -471,7 +551,7 @@ export function createBracketFromTeams({
     matchFormat,
     seedingRule,
     matches: normalizedFormat === 'double elimination' ? doubleElimination(matches, finalMatchFormat) : normalizedFormat === 'round robin' ? roundRobin(seededTeams, matches[0], matchFormat) : normalizedFormat === 'swiss' ? swiss(seededTeams, matches[0], matchFormat) : matches,
-    teams: effectiveTeams,
+    teams: drawnTeams,
     parsedParams: {
       game: gameName,
       format,

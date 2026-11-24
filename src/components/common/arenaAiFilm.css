@@ -1,0 +1,149 @@
+/*
+ * Arena AI film (common/ArenaAiFilm.tsx). Everything is sized in container units (cqw) so the film scales as
+ * one picture, from a phone column to a desktop chapter. The only glow in the product lives here, on purpose:
+ * it is a motion piece, not interface.
+ */
+
+.aif { --aif-k: 1; --aif-ease: cubic-bezier(.16, 1, .3, 1); position: relative; width: 100%; container-type: inline-size; color: #fff; font-family: var(--font-arena); }
+.aif-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; margin: 0; }
+
+.aif-screen {
+  position: relative; overflow: hidden; isolation: isolate; aspect-ratio: 16 / 10; border-radius: 3cqw;
+  background: #050506; border: 1px solid rgb(255 255 255 / .08);
+  box-shadow: 0 50px 100px -40px rgb(0 0 0 / .95);
+}
+.aif-glow {
+  position: absolute; inset: -20%; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 48% 42% at 50% 46%, rgb(255 102 0 / .34), rgb(150 50 10 / .16) 45%, transparent 75%);
+}
+.aif-vignette { position: absolute; inset: 0; z-index: 5; pointer-events: none; background: radial-gradient(ellipse 80% 75% at 50% 50%, transparent 55%, rgb(0 0 0 / .7)); }
+
+/* The "world": composer and the opening lockup share one camera. */
+.aif-world { position: absolute; inset: 0; z-index: 2; transform-origin: 62% 62%; will-change: transform; }
+
+/* ---------- Mark and wordmark ---------- */
+.aif-lockup {
+  position: absolute; left: 50%; translate: -50% -50%; display: flex; align-items: center; perspective: 90cqw; white-space: nowrap;
+  will-change: transform, filter, opacity;
+}
+.aif-mark { position: relative; display: block; flex: none; aspect-ratio: 440 / 524; transform-style: preserve-3d; }
+.aif-mark svg { position: relative; z-index: 1; display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 .9cqw rgb(255 110 20 / .55)); }
+.aif-halo {
+  position: absolute; inset: -55%; z-index: 0; border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 120 40 / .55), rgb(255 90 0 / .18) 38%, transparent 68%);
+}
+.aif-fill { fill: var(--brand); fill-rule: evenodd; }
+.aif-stroke path { fill: none; stroke: #ffb27a; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+
+.aif-word { display: block; overflow: hidden; padding-block: .12em; }
+.aif-word-inner { display: inline-block; font-weight: 800; letter-spacing: -.045em; line-height: 1; }
+.aif-word-inner > span { display: inline-block; white-space: pre; opacity: 0; filter: blur(6px); translate: 0 .18em; transition: opacity .35s var(--aif-ease), filter .45s var(--aif-ease), translate .45s var(--aif-ease); text-shadow: 0 0 .5em rgb(255 150 80 / .35); }
+.aif-word-inner > span.is-on { opacity: 1; filter: none; translate: 0 0; }
+.aif-word.is-brand .aif-word-inner { font-weight: 1000; letter-spacing: -.055em; }
+
+/* ---------- Composer ---------- */
+.aif-composer-wrap { position: absolute; left: 50%; top: 52%; width: 60cqw; translate: -50% 0; display: flex; flex-direction: column; align-items: center; gap: 1.6cqw; will-change: transform, filter, opacity; }
+.aif-composer {
+  width: 100%; padding: 2cqw 2.2cqw 1.5cqw; border-radius: 2.4cqw;
+  background: rgb(22 22 26 / .92); border: 1px solid rgb(255 255 255 / .13);
+  box-shadow: 0 2cqw 5cqw -1.5cqw rgb(0 0 0 / .9), 0 0 0 1px rgb(255 102 0 / .06), 0 0 6cqw -2cqw rgb(255 102 0 / .35);
+}
+.aif-ask { min-height: 1.4em; margin: 0 0 1.6cqw; color: #fff; font-size: 2.5cqw; font-weight: 600; line-height: 1.35; letter-spacing: -.01em; }
+.aif-placeholder { color: rgb(255 255 255 / .42); font-weight: 500; }
+.aif-caret { display: inline-block; width: .12em; height: 1.05em; margin-left: .08em; vertical-align: -.16em; background: var(--brand); animation: aif-blink 1s steps(1) infinite; }
+@keyframes aif-blink { 50% { opacity: 0; } }
+.aif-composer-foot { display: flex; align-items: center; justify-content: space-between; }
+.aif-mode { display: inline-flex; align-items: center; gap: .6cqw; padding: .55cqw 1.1cqw; border-radius: 1cqw; border: 1px solid rgb(255 255 255 / .12); color: rgb(255 255 255 / .72); font-size: 1.6cqw; font-weight: 600; }
+.aif-mode svg { width: 1.8cqw; height: 1.8cqw; }
+.aif-send {
+  position: relative; width: 4.6cqw; height: 4.6cqw; display: grid; place-items: center; border-radius: 1.2cqw;
+  background: #2a2a30; color: rgb(255 255 255 / .45); transition: background-color .25s, color .25s, transform .15s var(--aif-ease), box-shadow .3s;
+}
+.aif-send > svg:first-child { width: 2.3cqw; height: 2.3cqw; }
+.aif-send.is-armed { background: var(--brand); color: #fff; box-shadow: 0 .3cqw 0 #ba4a00, inset 0 1px 0 #ffffff4d; }
+.aif-send.is-pressed { transform: scale(.86); }
+.aif-send.is-sent { box-shadow: 0 0 0 .5cqw rgb(255 102 0 / .25), 0 0 4cqw rgb(255 102 0 / .6); }
+.aif-cursor { position: absolute; left: 52%; top: 48%; z-index: 3; width: 3.4cqw; height: 3.4cqw; overflow: visible; filter: drop-shadow(0 .3cqw .6cqw rgb(0 0 0 / .7)); }
+.aif-cursor path { fill: #fff; stroke: #0b0b0d; stroke-width: 1.4; stroke-linejoin: round; }
+
+.aif-chips { display: flex; justify-content: center; flex-wrap: wrap; gap: 1cqw; }
+.aif-chip { display: inline-flex; align-items: center; gap: .6cqw; padding: .6cqw 1.3cqw; border-radius: 99px; border: 1px solid rgb(255 255 255 / .13); background: rgb(255 255 255 / .04); color: rgb(255 255 255 / .7); font-size: 1.45cqw; font-weight: 600; }
+.aif-chip svg { width: 1.6cqw; height: 1.6cqw; }
+
+/* ---------- Answer ---------- */
+.aif-answer { position: absolute; left: 50%; top: 50%; z-index: 3; width: 70cqw; translate: -50% -50%; display: flex; flex-direction: column; gap: 1.8cqw; will-change: transform, filter, opacity; }
+.aif-question { align-self: flex-end; max-width: 80%; margin: 0; padding: 1cqw 1.8cqw; border-radius: 1.8cqw 1.8cqw .5cqw 1.8cqw; background: rgb(255 255 255 / .08); color: rgb(255 255 255 / .9); font-size: 1.9cqw; font-weight: 600; }
+.aif-steps { display: flex; flex-direction: column; gap: .7cqw; margin: 0; padding: 0; list-style: none; }
+.aif-steps li { display: flex; align-items: center; gap: 1.2cqw; color: rgb(255 255 255 / .38); font-size: 1.75cqw; font-weight: 600; transition: color .3s; }
+.aif-step-mark { width: 2.4cqw; height: 2.4cqw; flex: none; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgb(255 255 255 / .2); transition: background-color .3s, border-color .3s; }
+.aif-step-mark svg { width: 1.5cqw; height: 1.5cqw; }
+.aif-steps li.is-run { color: #fff; }
+.aif-steps li.is-run .aif-step-mark { border-color: var(--brand); border-top-color: transparent; animation: aif-spin .6s linear infinite; }
+.aif-steps li.is-done { color: rgb(255 255 255 / .72); }
+.aif-steps li.is-done .aif-step-mark { border-color: var(--success); background: var(--success); color: #06140b; }
+@keyframes aif-spin { to { rotate: 1turn; } }
+
+.aif-reply { display: flex; flex-direction: column; gap: 1.2cqw; }
+.aif-name { display: inline-flex; align-items: center; gap: .6cqw; color: var(--brand-ink); font-size: 1.6cqw; font-weight: 800; }
+.aif-name svg { width: 1.8cqw; height: 1.8cqw; }
+.aif-reply p { min-height: 2.6em; margin: 0; color: #fff; font-size: 2.9cqw; font-weight: 700; line-height: 1.3; letter-spacing: -.02em; text-shadow: 0 0 1.4cqw rgb(255 140 70 / .32); }
+.aif-w { display: inline-block; white-space: pre; animation: aif-word .55s var(--aif-ease) both; }
+@keyframes aif-word { from { opacity: 0; filter: blur(.8cqw); transform: translateY(.35em); } }
+.aif-card {
+  display: flex; align-items: center; gap: 1.2cqw; padding: 1.2cqw 1.6cqw; border-radius: 1.6cqw;
+  background: rgb(14 14 18 / .9); border: 1px solid rgb(255 255 255 / .12); font-size: 1.7cqw; font-weight: 800;
+  opacity: 0; transform: translateY(2cqw) rotateX(-30deg); transform-origin: 50% 0; transition: opacity .5s var(--aif-ease), transform .7s var(--aif-ease);
+}
+.aif-card.is-in { opacity: 1; transform: none; }
+.aif-card > span { display: inline-flex; align-items: center; gap: .7cqw; }
+.aif-card small { color: rgb(255 255 255 / .45); font-weight: 600; }
+.aif-card em { margin-left: auto; color: rgb(255 255 255 / .62); font-size: 1.45cqw; font-style: normal; font-weight: 600; }
+
+/* ---------- Controls (outside the picture) ---------- */
+.aif-controls { position: absolute; left: 0; right: 0; bottom: 1.6cqw; z-index: 6; display: flex; align-items: center; justify-content: center; gap: 8px; pointer-events: none; }
+.aif-controls > * { pointer-events: auto; }
+.aif-play {
+  position: absolute; left: 2cqw; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%;
+  background: rgb(255 255 255 / .08); border: 1px solid rgb(255 255 255 / .14); color: rgb(255 255 255 / .8); cursor: pointer;
+}
+.aif-play:hover { background: rgb(255 255 255 / .14); color: #fff; }
+.aif-dots { display: flex; gap: 2px; }
+.aif-dots button { width: 28px; height: 24px; display: grid; place-items: center; cursor: pointer; }
+.aif-dots button::before { content: ""; width: 7px; height: 7px; border-radius: 4px; background: rgb(255 255 255 / .28); transition: width .3s var(--aif-ease), background-color .3s; }
+.aif-dots button[aria-selected=true]::before { width: 22px; background: var(--brand); }
+.aif :is(.aif-play, .aif-dots button):focus-visible { outline: 2px solid var(--brand-ink); outline-offset: 2px; }
+
+/* ---------- Narrow: taller picture, larger type ---------- */
+@container (max-width: 560px) {
+  .aif-screen { --aif-k: 1.55; }
+  .aif-screen { aspect-ratio: 4 / 5; border-radius: 5cqw; }
+  .aif-composer-wrap { top: 48%; width: 86cqw; gap: 3cqw; }
+  .aif-composer { padding: 3.4cqw 3.6cqw 2.6cqw; border-radius: 4cqw; }
+  .aif-ask { font-size: 4.6cqw; margin-bottom: 3cqw; }
+  .aif-mode { font-size: 3cqw; padding: 1cqw 2cqw; border-radius: 2cqw; gap: 1cqw; }
+  .aif-mode svg { width: 3.2cqw; height: 3.2cqw; }
+  .aif-send { width: 8.4cqw; height: 8.4cqw; border-radius: 2.2cqw; }
+  .aif-send > svg:first-child { width: 4.2cqw; height: 4.2cqw; }
+  .aif-cursor { width: 6cqw; height: 6cqw; }
+  .aif-chips { gap: 1.8cqw; }
+  .aif-chip { font-size: 2.8cqw; padding: 1.2cqw 2.4cqw; gap: 1cqw; }
+  .aif-chip svg { width: 3cqw; height: 3cqw; }
+  .aif-answer { width: 86cqw; gap: 3.2cqw; top: 47%; }
+  .aif-question { font-size: 3.6cqw; padding: 1.8cqw 3cqw; border-radius: 3cqw 3cqw 1cqw 3cqw; }
+  .aif-steps { gap: 1.4cqw; }
+  .aif-steps li { font-size: 3.3cqw; gap: 2cqw; }
+  .aif-step-mark { width: 4.4cqw; height: 4.4cqw; }
+  .aif-step-mark svg { width: 2.8cqw; height: 2.8cqw; }
+  .aif-name { font-size: 3.2cqw; gap: 1cqw; }
+  .aif-name svg { width: 3.4cqw; height: 3.4cqw; }
+  .aif-reply { gap: 2.2cqw; }
+  .aif-reply p { font-size: 5.2cqw; }
+  .aif-card { font-size: 3.2cqw; padding: 2.2cqw 2.8cqw; border-radius: 3cqw; gap: 2cqw; flex-wrap: wrap; }
+  .aif-card em { font-size: 2.8cqw; }
+  .aif-controls { bottom: 3cqw; }
+  .aif-play { left: 4cqw; }
+}
+
+/* ---------- Reduced motion: one still frame, no loops ---------- */
+.aif.is-calm :is(.aif-caret, .aif-w, .aif-steps li.is-run .aif-step-mark) { animation: none !important; }
+.aif.is-calm :is(.aif-card, .aif-word-inner > span) { transition: none; }

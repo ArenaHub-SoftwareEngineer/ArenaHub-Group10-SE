@@ -3,35 +3,39 @@ import { BRAND_COLOR } from '../../lib/brandColor';
 
 const ArenaStage = lazy(() => import('./ArenaStage'));
 
-const webglAvailable = () => {
+export const webglAvailable = () => {
   try {
     const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
+    const context = canvas.getContext('webgl2');
+    context?.getExtension('WEBGL_lose_context')?.loseContext();
+    return Boolean(context);
   } catch { return false; }
 };
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.motion === 'reduced';
+export const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.dataset.motion === 'reduced';
 /** Data saver or a slow mobile connection: keep the still poster instead of downloading the 3D engine (~250 kB gzipped). */
-const saveData = () => {
+export const saveData = () => {
   const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
   return Boolean(connection?.saveData || ['slow-2g', '2g', '3g'].includes(connection?.effectiveType || ''));
 };
 
-class StageBoundary extends Component<{ fallback: React.ReactNode; children: React.ReactNode }, { failed: boolean }> {
+export class StageBoundary extends Component<{ fallback: React.ReactNode; children: React.ReactNode; onError?: () => void }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onError?.(); }
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
 /**
  * The interactive 3D arena (ArenaStage) with everything that keeps it polite:
- * - a still poster first (the stage's own photo when present, else the drawn emblem), replaced when the first 3D frame is ready;
- * - no WebGL, data saver, or a scene error: the poster stays;
+ * - a lightweight emblem with drag support while the 3D scene loads or if WebGL is unavailable;
+ * - decorative instances use the still poster until the 3D scene is ready;
  * - reduced motion (device or the in-app setting): the scene renders without idle motion;
  * - off screen or in a background tab: rendering pauses.
  */
 export function ArenaHero({ className = '', label = 'ArenaHub emblem on the arena stage. Drag to spin it.', decorative = false }: { className?: string; label?: string; /** Background use: no hint, hidden from assistive technology. */ decorative?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
-  const [enabled] = useState(() => webglAvailable() && !saveData());
+  const drag = useRef<{ id: number; x: number } | null>(null);
+  const [enabled] = useState(() => !saveData() && webglAvailable());
   const [still, setStill] = useState(reducedMotion);
   const [lite] = useState(() => window.matchMedia('(max-width: 767px)').matches || (navigator.hardwareConcurrency || 8) <= 4);
   const [inView, setInView] = useState(true);
@@ -51,19 +55,38 @@ export function ArenaHero({ className = '', label = 'ArenaHub emblem on the aren
     return () => { attrs.disconnect(); media.removeEventListener('change', sync); document.removeEventListener('visibilitychange', onVisibility); io.disconnect(); };
   }, []);
 
-  const poster = <div className="ah-stage-poster" aria-hidden="true">
-    <img className="ah-stage-photo" src="/media/hero-stage.webp" alt="" onError={event => { event.currentTarget.hidden = true; }} />
-    <img className="ah-stage-emblem" src="/arenahub-logo.svg" alt="" width="424" height="508" />
+  const poster = <div className={`ah-stage-poster${decorative ? '' : ' ah-stage-fallback'}`} aria-hidden="true">
+    {decorative && <img className="ah-stage-photo" src="/media/hero-stage.webp" alt="" onError={event => { event.currentTarget.hidden = true; }} />}
+    <img className="ah-stage-emblem" src="/arenahub-logo.svg" alt="" width="424" height="508" draggable={false} />
     <span className="ah-stage-floor" />
   </div>;
 
-  return <div ref={host} className={`ah-stage${ready ? ' is-ready' : ''}${enabled ? ' is-interactive' : ''} ${className}`} {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}>
+  const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (drag.current?.id !== event.pointerId) return;
+    drag.current = null;
+    event.currentTarget.classList.remove('is-dragging');
+    event.currentTarget.style.removeProperty('--stage-turn');
+  };
+
+  return <div ref={host} className={`ah-stage${ready ? ' is-ready' : ''}${!decorative ? ' is-interactive' : ''} ${className}`}
+    {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': label })}
+    onPointerDown={event => {
+      if (decorative || ready || event.button !== 0) return;
+      drag.current = { id: event.pointerId, x: event.clientX };
+      event.currentTarget.setPointerCapture(event.pointerId);
+      event.currentTarget.classList.add('is-dragging');
+    }}
+    onPointerMove={event => {
+      if (drag.current?.id !== event.pointerId) return;
+      event.currentTarget.style.setProperty('--stage-turn', `${(event.clientX - drag.current.x) * 0.9}deg`);
+    }}
+    onLostPointerCapture={endDrag}>
     {poster}
-    {enabled && <StageBoundary fallback={null}>
+    {enabled && <StageBoundary fallback={null} onError={() => setReady(false)}>
       <Suspense fallback={null}>
-        <ArenaStage color={BRAND_COLOR} still={still} lite={lite} paused={!inView || !visible} onReady={() => setReady(true)} />
+        <ArenaStage color={BRAND_COLOR} still={still} lite={lite} paused={!inView || !visible} onReady={() => setReady(true)} onContextLost={() => setReady(false)} />
       </Suspense>
     </StageBoundary>}
-    {enabled && !decorative && <span className="ah-stage-hint" aria-hidden="true">Drag to spin</span>}
+    {!decorative && <span className="ah-stage-hint" aria-hidden="true">Drag to spin</span>}
   </div>;
 }

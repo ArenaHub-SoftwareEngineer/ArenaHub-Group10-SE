@@ -50,8 +50,13 @@ test('AI API rejects unconfigured, unauthenticated, cross-origin, malformed and 
   assert.equal(ok.status, 200);
   assert.match(ok.headers.get('content-type') || '', /text\/event-stream/);
   const stream = await events(ok);
-  assert.deepEqual(stream.map(([e]) => e), ['start', 'delta', 'done']);
-  assert.equal(stream[2][1].source, 'Live records', 'without a model key, the live records answer');
+  assert.deepEqual(stream.map(([e]) => e), ['step', 'step', 'start', 'delta', 'done']);
+  assert.match(stream[0][1].label, /No AI model is set up/);
+  assert.equal(stream.at(-1)![1].source, 'Live records', 'without a model key, the live records answer');
+
+  const quick = await post('/configured', { query: 'Who plays next?', mode: 'quick' }, as('student'));
+  assert.equal(quick.status, 200);
+  assert.deepEqual((await events(quick)).map(([e]) => e), ['start', 'delta', 'done']);
 });
 
 test('AI API streams model text, stops the model when the viewer leaves, and reports a broken answer', async t => {

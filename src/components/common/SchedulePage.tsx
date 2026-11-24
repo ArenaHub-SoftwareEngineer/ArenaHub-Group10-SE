@@ -1,96 +1,105 @@
 import React, { useState } from 'react';
 import type { BracketDraft, Match } from '../../lib/types';
 import { manilaToday } from '../../lib/calendar';
-import { matchLabel } from '../../lib/integrityChecks';
-import { publicationGameKey } from '../../lib/bracketPublication';
-import { scheduleMatches } from '../../lib/formats/placement';
-import { GAME_ARTWORK, GameArtworkTiles } from './GameArtworkTiles';
-import { CalendarDays } from '../ui/Icons';
+import { isScheduleMatch } from '../../lib/streamSchedule';
+import { CalendarDays, Edit2, Radio } from '../ui/Icons';
 import { Modal } from '../ui/Modal';
-import { calendarMonth, dayLabel, MatchCalendar, scheduledMatchesByDay } from './MatchCalendar';
+import { calendarMonth, MatchCalendar, ScheduleDayAgenda, scheduleDayTitle, scheduledMatchesByDay, scheduleMatchTitle } from './MatchCalendar';
+import { matchName } from '../../lib/matchName';
+import { scheduleTimeLabel } from '../../lib/matchTiming';
+import './schedule.css';
 
-export function PublishedScheduleDialog({ open, onClose, bracket, onSelect, choices, onChoose }: {
+const STATUS_LABEL: Record<Match['status'], string> = {
+  live: 'Live', upcoming: 'Upcoming', completed: 'Completed', alert: 'On hold', 'pre-match': 'Pre-match',
+};
+
+export function PublishedScheduleDialog({ open, onClose, bracket, onSelect, onManage }: {
   open: boolean;
   onClose: () => void;
-  bracket: BracketDraft | undefined;
-  choices?: BracketDraft[];
-  onChoose?: (id: string) => void;
+  bracket?: BracketDraft;
   onSelect: (match: Match) => void;
+  onManage?: (id: string) => void;
 }) {
-  return <Modal open={open} title="Match schedule" className="account-dialog viewer-schedule-dialog" onClose={onClose}
-    description={bracket ? `${bracket.gameName} · ${bracket.title} · Manila time` : 'Published match dates appear here.'}>
-    {choices && choices.length > 1 && <label className="module-form schedule-bracket-choice">Published bracket or mode
-      <select value={bracket?.id ?? ''} onChange={event => onChoose?.(event.target.value)}>
-        {choices.map(item => <option key={item.id} value={item.id}>{item.gameName} · {item.title}</option>)}
-      </select>
-    </label>}
-    {/* Mounted only while open, so each opening starts at the next scheduled date, even if the schedule changed since. */}
-    {!open ? null : bracket ? <PublishedCalendar key={bracket.id} matches={scheduleMatches(bracket)} onSelect={match => {
-      onClose();
-      onSelect(match);
-    }} /> : <p className="studio-muted">The organizer hasn’t published a schedule for this selection.</p>}
+  const [date, setDate] = useState('');
+  const close = () => { setDate(''); onClose(); };
+  return <Modal open={open} title={date ? scheduleDayTitle(date) : 'Match schedule'}
+    className={date ? 'schedule-day-dialog' : 'viewer-schedule-dialog'} onClose={close}
+    description={bracket ? `${bracket.title} · Manila time` : 'Manila time'}>
+    {open && bracket && <>
+      {onManage && !date && <div className="page-actions schedule-dialog-actions"><button type="button" className="arena-outline"
+        onClick={() => { close(); onManage(bracket.id); }}><Edit2 size={16} /> Manage schedule</button></div>}
+      <PublishedCalendar key={bracket.id} brackets={[bracket]} onSelect={match => { close(); onSelect(match); }} dialog={{ date, onDateChange: setDate }} />
+    </>}
+    {open && !bracket && <p className="schedule-empty">No published schedule is available for this bracket.</p>}
   </Modal>;
 }
 
-function PublishedCalendar({ matches, onSelect }: { matches: Match[]; onSelect: (match: Match) => void }) {
+function PublishedCalendar({ brackets, onSelect, dialog }: {
+  brackets: BracketDraft[];
+  onSelect: (match: Match) => void;
+  dialog?: { date: string; onDateChange: (date: string) => void };
+}) {
   const today = manilaToday();
-  const events = scheduledMatchesByDay(matches.filter(match => ![match.team1, match.team2].some(team => team?.isBye || team?.name === 'BYE')), today);
+  const events = scheduledMatchesByDay(brackets.flatMap(bracket => bracket.matches).filter(isScheduleMatch), today);
   const dates = [...events.keys()].sort();
-  const firstDay = dates.find(date => date >= today) ?? dates.at(-1) ?? today;
-  const [selectedDay, setSelectedDay] = useState(firstDay);
-  const [month, setMonth] = useState(() => calendarMonth(firstDay));
-  const entries = events.get(selectedDay) ?? [];
+  const first = dates.find(date => date >= today) ?? dates.at(-1) ?? today;
+  const [chosenMonth, setMonth] = useState<Date>();
+  const month = chosenMonth ?? calendarMonth(first);
+  const [date, setDate] = useState('');
+  const selectedDate = dialog?.date ?? date;
+  const selectDate = dialog?.onDateChange ?? setDate;
+  const dayMatches = events.get(selectedDate) ?? [];
+  const titlesByMatch = new Map(brackets.flatMap(bracket => bracket.matches.map(match => [match.id, bracket.title] as const)));
 
-  return <div className="viewer-schedule">
-    {events.size === 0 && <p className="settings-notice">The bracket is published. Match dates and times are still pending.</p>}
-    <MatchCalendar month={month} events={events} selectedDay={selectedDay} onSelectDay={setSelectedDay} onMonthChange={next => {
-      setMonth(next);
-      const prefix = next.toISOString().slice(0, 7);
-      setSelectedDay(dates.find(date => date.startsWith(prefix)) ?? (today.startsWith(prefix) ? today : `${prefix}-01`));
-    }} />
-    <section className="viewer-schedule-agenda" aria-label="Selected date">
-      <h3>{dayLabel.format(new Date(`${selectedDay}T00:00:00Z`))}</h3>
-      {entries.length ? <ul>{entries.map(match => <li key={match.id}>
-        <time>{match.scheduledTime}</time>
-        <div><strong>{matchLabel(match)}</strong><small>{match.lobby ? 'Battle Royale lobby' : `${match.roundName} · ${match.matchFormat}`}</small></div>
-        {/* A lobby has no broadcast to open; its results show in the Battle Royale standings. */}
-        {match.status === 'live' && !match.lobby ? <button type="button" className="arena-outline" onClick={() => onSelect(match)}>Open live match</button>
-          : <small>{match.status === 'completed' ? (match.lobby?.winner ? `Won by ${match.lobby.winner}` : 'Completed') : match.status === 'live' ? 'Playing now' : 'Not live yet'}</small>}
-      </li>)}</ul> : <p className="studio-muted">No matches scheduled for this date.</p>}
-    </section>
+  const agenda = <ScheduleDayAgenda count={dayMatches.length}>
+    <ul>{dayMatches.map(match => <li key={match.id} className="schedule-entry">
+      <time>{scheduleTimeLabel(match)}</time>
+      <div><strong>{scheduleMatchTitle(match)}</strong><small>{[brackets.length > 1 && titlesByMatch.get(match.id), matchName(match), match.lobby ? undefined : match.roundName, match.matchFormat].filter(Boolean).join(' · ')}</small></div>
+      {match.status === 'live' ? <button type="button" className="arena-outline arena-sm" onClick={() => onSelect(match)}><Radio size={14} /> Watch live</button>
+        : <small className="schedule-status" data-status={match.status}>{match.status === 'upcoming' && selectedDate < today ? 'Scheduled' : STATUS_LABEL[match.status]}</small>}
+    </li>)}</ul>
+  </ScheduleDayAgenda>;
+
+  if (dialog && selectedDate) return <>
+    <button type="button" className="arena-outline schedule-back" onClick={() => selectDate('')}>Back to calendar</button>
+    {agenda}
+  </>;
+
+  if (!dates.length) return <div className="schedule-empty schedule-empty-panel">
+    <CalendarDays size={24} aria-hidden="true" /><strong>No match times published yet</strong>
   </div>;
+
+  return <>
+    <MatchCalendar variant="browse" month={month} events={events} selectedDay={selectedDate} onSelectDay={selectDate} onMonthChange={setMonth} />
+    {!dialog && <Modal open={Boolean(date)} title={date ? scheduleDayTitle(date) : 'Match schedule'} description="Manila time"
+      className="schedule-day-dialog" onClose={() => setDate('')}>{agenda}</Modal>}
+  </>;
 }
 
-export function SchedulePage({ brackets, onSelect }: { brackets: BracketDraft[]; onSelect: (match: Match) => void }) {
-  const [gameId, setGameId] = useState<string | null>(null);
-  const [bracketId, setBracketId] = useState('');
-  const games = GAME_ARTWORK.map(game => ({
-    ...game,
-    brackets: brackets.filter(bracket => publicationGameKey(bracket) === `game-${game.id}`),
-  }));
-  const otherBrackets = brackets.filter(bracket => !games.some(game => game.brackets.includes(bracket)));
-  const choices = games.find(game => game.id === gameId)?.brackets
-    ?? otherBrackets.filter(bracket => `bracket:${bracket.id}` === gameId);
-  const bracket = choices.find(item => item.id === bracketId) ?? choices[0];
-
-  function openCalendar(id: string) {
-    setBracketId('');
-    setGameId(id);
-  }
-
-  return <div className="module-page">
-    <header className="dashboard-page-heading">
-      <h1>Match schedule</h1>
-      <p>Choose a game to open its calendar of published match times (Manila time).</p>
+export function SchedulePage({ brackets, onSelect, onManage }: {
+  brackets: BracketDraft[];
+  onSelect: (match: Match) => void;
+  onManage?: (id?: string) => void;
+}) {
+  const [filter, setFilter] = useState('');
+  const selected = brackets.find(bracket => bracket.id === filter);
+  const visible = selected ? [selected] : brackets;
+  return <div className="module-page schedule-page">
+    <header className="dashboard-page-heading with-actions">
+      <div>
+        <h1>Match schedule</h1>
+        <p>Published match dates and times in Manila time.</p>
+      </div>
+      {onManage && <div className="page-actions">
+        <button type="button" className="arena-primary" onClick={() => onManage(selected?.id)}><Edit2 size={16} /> Manage schedule</button>
+      </div>}
     </header>
-    <GameArtworkTiles label="Game calendars" opensDialog onSelect={openCalendar}
-      meta={Object.fromEntries(games.map(game => [game.id, game.brackets.length ? `${game.brackets.length} ${game.brackets.length === 1 ? "bracket" : "brackets"}` : "No schedule yet"]))}>
-      {otherBrackets.map(item => <button type="button" className="schedule-game-tile schedule-game-fallback" key={item.id}
-        aria-haspopup="dialog" onClick={() => openCalendar(`bracket:${item.id}`)}>
-        <CalendarDays size={28} /> <span>{item.gameName} · {item.title}</span>
-      </button>)}
-    </GameArtworkTiles>
-    <PublishedScheduleDialog open={gameId !== null} onClose={() => setGameId(null)} bracket={bracket}
-      choices={choices} onChoose={setBracketId} onSelect={onSelect} />
+    {brackets.length > 0 && <label className="module-form schedule-bracket-choice">Tournament
+      <select value={selected?.id || ''} onChange={event => setFilter(event.target.value)}>
+        <option value="">All tournaments</option>
+        {brackets.map(bracket => <option key={bracket.id} value={bracket.id}>{bracket.title} · {bracket.gameName}</option>)}
+      </select>
+    </label>}
+    <PublishedCalendar key={selected?.id ?? 'all'} brackets={visible} onSelect={onSelect} />
   </div>;
 }

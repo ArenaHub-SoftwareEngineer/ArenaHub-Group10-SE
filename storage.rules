@@ -15,6 +15,12 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'active';
     }
     function staff() { return active() && (request.auth.token.get('admin', false) == true || request.auth.token.get('role', '') in ['admin', 'organizer', 'school-admin', 'moderator']); }
+    // Broadcast thumbnails are public pictures on match cards; only staff upload them.
+    match /broadcastThumbnails/{matchId}/{fileId} {
+      allow read: if true;
+      allow create: if staff() && request.resource.size > 0 && request.resource.size <= 5242880
+        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+    }
     match /integrityEvidence/{uid}/{caseId}/{fileId} {
       allow read: if active() && (request.auth.uid == uid || staff());
       allow create: if active() && request.auth.uid == uid

@@ -27,5 +27,3 @@ button,a,input,select,textarea{-webkit-tap-highlight-color:transparent}
 
 @media(hover:hover){.artwork-picker .schedule-game-tile[data-game^=codm]:hover>img{filter:brightness(.58) saturate(.9)}}
 
-/* Marks demonstration data loaded by scripts/seed-demo.ts. */
-.demo-label { display: inline-block; margin-left: .6rem; padding: .1rem .45rem; border: 1px solid currentColor; border-radius: 999px; font-size: .7rem; font-weight: 700; vertical-align: middle; opacity: .8; }

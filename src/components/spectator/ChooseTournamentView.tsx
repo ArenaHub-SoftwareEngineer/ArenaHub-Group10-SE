@@ -2,19 +2,27 @@ import React, { useState } from 'react';
 import type { BracketDraft } from '../../lib/types';
 import { publicationGameKey } from '../../lib/bracketPublication';
 import { GAME_ARTWORK } from '../common/GameArtworkTiles';
-import { ArrowRight, GitBranch, Radio } from '../ui/Icons';
+import { ArrowRight, GitBranch, Plus, Radio } from '../ui/Icons';
 
-export function ChooseTournamentView({ brackets, onSelectBracket }: {
+export function ChooseTournamentView({ brackets, onSelectBracket, onCreateBracket }: {
   brackets: BracketDraft[];
   onSelectBracket: (bracket: BracketDraft) => void;
+  onCreateBracket?: () => void;
 }) {
   const [game, setGame] = useState('all');
   const visible = brackets.filter(bracket => game === 'all' || publicationGameKey(bracket) === `game-${game}`);
 
   return <div className="module-page">
-    <header className="dashboard-page-heading">
-      <h1>Brackets</h1>
-      <p>Choose a game to view its published bracket, scores, and live matches.</p>
+    <header className="dashboard-page-heading with-actions">
+      <div>
+        <h1>Brackets</h1>
+        <p>Choose a game to view its published bracket, scores, and live matches.</p>
+      </div>
+      {onCreateBracket && <div className="page-actions">
+        <button type="button" className="arena-primary" onClick={onCreateBracket}>
+          <Plus size={16} aria-hidden="true" /> Create bracket
+        </button>
+      </div>}
     </header>
     {/* One filter row, the same chips Match center uses; each count says whether a game has a bracket before you click. */}
     <div className="ah-chips" role="group" aria-label="Filter brackets by game">

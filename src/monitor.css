@@ -1,21 +1,10 @@
 /* Match monitor (admin). Uses the shared tokens so light and dark themes both work. */
 .monitor-page .operations-section-heading > div { min-width: 0; }
-.monitor-pair-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end; }
-.monitor-pair-form .feature-dialog-actions, .monitor-pair-form > .field-hint { grid-column: 1 / -1; }
-.monitor-pairing { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; margin-top: 18px; padding: 18px; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--surface-soft); }
-.monitor-pairing img { background:var(--surface); border-radius: 8px; padding: 6px; max-width: 100%; height: auto; }
-.monitor-pairing > div { min-width: 0; flex: 1 1 240px; }
 .monitor-code { font-family: ui-monospace, Consolas, monospace; font-size: clamp(26px, 7vw, 38px); letter-spacing: .18em; font-weight: 700; color: var(--text-primary); margin: 4px 0 8px; overflow-wrap: anywhere; }
 .monitor-command { display: block; margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: var(--bg-base); border: 1px solid var(--border); font-size: var(--fs-sm); overflow-wrap: anywhere; user-select: all; }
 .monitor-inline { display: flex; flex-direction: row; flex-wrap: wrap; gap: 10px; align-items: end; }
 .monitor-inline label { flex: 1 1 200px; }
 .monitor-inline > .field-hint { flex-basis: 100%; margin: 0; }
-.monitor-sessions { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.monitor-session { border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.monitor-session.watch { border-color: var(--info-border); background: var(--info-soft); }
-.monitor-session.review { border-color: var(--warning-border); background: var(--warning-soft); }
-.monitor-session.urgent { border-color: var(--danger-border); background: var(--danger-soft); }
-.monitor-session-risk { display: flex; gap: 10px; align-items: center; font-size: var(--fs-sm); color: var(--text-secondary); min-width: 0; }
 .monitor-risk { display: inline-flex; align-items: baseline; justify-content: center; min-width: 44px; padding: 4px 8px; border-radius: 10px; font-weight: 750; font-size: var(--fs-lg); background: var(--surface-soft); color: var(--text-primary); }
 .monitor-risk small { font-size: var(--fs-xs); font-weight: 500; color: var(--text-muted); }
 .monitor-risk.clear { color: var(--success); }
@@ -23,9 +12,6 @@
 .monitor-risk.review { color: var(--warning); }
 .monitor-risk.urgent { color: var(--on-brand); background: var(--danger); }
 .monitor-risk.urgent small { color: inherit; }
-.monitor-conn { font-size: var(--fs-xs); font-weight: 650; text-transform: none; padding: 4px 8px; border-radius: 20px; background: var(--surface-soft); color: var(--text-secondary); white-space: nowrap; }
-.monitor-conn.online { color: var(--success); }
-.monitor-conn.lost { color: var(--danger); }
 .monitor-risk-strip { display: flex; gap: 14px; align-items: center; }
 .monitor-risk-strip .monitor-risk { font-size: var(--fs-3xl); min-width: 76px; padding: 8px 12px; }
 .monitor-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin: 14px 0; }
@@ -44,48 +30,69 @@
 .monitor-media { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
 .monitor-media-item img, .monitor-media-item video { width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
 .monitor-media-item button { width: 100%; font-size: var(--fs-xs); }
-.monitor-thresholds { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
 .monitor-audit { font-size: var(--fs-sm); color: var(--text-secondary); padding-left: 18px; }
 .monitor-page details > summary { cursor: pointer; }
 .monitor-detail .module-notice .arena-outline { margin: 8px 8px 0 0; }
 
-/* Category colours, shared by the 3D arena, its legend and the session breakdown. */
+/* Category colours for the session breakdown. */
 .monitor-page, .monitor-detail { --cat-game-build: #7c3aed; --cat-cheat-tools: #dc2626; --cat-device: #d97706; --cat-connection: #2563eb; --cat-behaviour: #0d9488; }
 .cat-game-build { --c: var(--cat-game-build); } .cat-cheat-tools { --c: var(--cat-cheat-tools); } .cat-device { --c: var(--cat-device); }
 .cat-connection { --c: var(--cat-connection); } .cat-behaviour { --c: var(--cat-behaviour); }
 
-/* 3D match arena: plain CSS 3D transforms, no WebGL. */
-.monitor3d-frame { position: relative; overflow: hidden; perspective: 1100px; perspective-origin: 50% 40%; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-base); cursor: grab; touch-action: pan-y; user-select: none; }
-.monitor3d-frame:active { cursor: grabbing; }
-.monitor3d-scale { display: flex; justify-content: center; transform-origin: top center; transform-style: preserve-3d; }
-.monitor3d-floor { position: relative; flex: none; transform-style: preserve-3d; border-radius: 10px; border: 1px solid var(--border-strong);
-  background: repeating-linear-gradient(0deg, transparent 0 47px, var(--border) 47px 48px), repeating-linear-gradient(90deg, transparent 0 47px, var(--border) 47px 48px), var(--surface); }
-.monitor3d-team { position: absolute; font-size: var(--fs-sm); font-weight: 700; text-transform: none; color: var(--text-muted); white-space: nowrap; }
-.monitor3d-pillar { position: absolute; transform-style: preserve-3d; cursor: pointer; }
-.monitor3d-block { position: absolute; inset: 0; transform-style: preserve-3d; }
-.monitor3d-block.base { --c: var(--border-strong); }
-.monitor3d-face { position: absolute; display: block; background: var(--c); outline: 1px solid rgb(0 0 0 / .18); outline-offset: -1px; }
-.monitor3d-face.top { inset: 0; filter: brightness(1.12); }
-.monitor3d-face:is(.north, .south) { left: 0; width: 100%; transform-origin: top; transform: rotateX(90deg); filter: brightness(.86); }
-.monitor3d-face.north { top: 0; } .monitor3d-face.south { top: 100%; }
-.monitor3d-face:is(.west, .east) { top: 0; height: 100%; transform-origin: left; transform: rotateY(-90deg); filter: brightness(.7); }
-.monitor3d-face.west { left: 0; } .monitor3d-face.east { left: 100%; }
-.monitor3d-label { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-origin: 0 0; transform-style: preserve-3d; }
-.monitor3d-label button { position: absolute; left: 0; bottom: 0; transform: translateX(-50%); display: grid; justify-items: center; gap: 1px; min-width: 56px; min-height: 44px; padding: 4px 8px; border-radius: 10px;
-  border: 1px solid var(--border-strong); background: var(--surface-elevated, var(--surface)); color: var(--text-primary); font: inherit; cursor: pointer; white-space: nowrap; }
-.monitor3d-label strong { font-size: var(--fs-lg); line-height: 1; }
-.monitor3d-label span { font-size: var(--fs-xs); color: var(--text-secondary); max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
-.monitor3d-pillar.watch .monitor3d-label strong { color: var(--info); }
-.monitor3d-pillar.review .monitor3d-label strong { color: var(--warning); }
-.monitor3d-pillar.urgent .monitor3d-label button { background: var(--danger); border-color: var(--danger); color: var(--on-brand); }
-.monitor3d-pillar.urgent .monitor3d-label span { color: inherit; }
-.monitor3d-label button:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
-.monitor3d-controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; margin: 12px 0 6px; }
-.monitor3d-controls label { display: flex; align-items: center; gap: 10px; font-size: var(--fs-sm); color: var(--text-secondary); }
-.monitor3d-controls input[type=range] { width: 160px; accent-color: var(--brand); }
-.monitor3d-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 0; margin: 0; font-size: var(--fs-sm); color: var(--text-secondary); }
-.monitor3d-legend li { display: flex; align-items: center; gap: 6px; }
-.monitor3d-legend i { width: 12px; height: 12px; border-radius: 3px; background: var(--c); }
+/* Scan count chart. The chart buttons also make each column available to the keyboard. */
+.scan-overview { display: grid; gap: 16px; min-width: 0; }
+.scan-overview-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.scan-overview-header h2 { font-size: var(--fs-lg); font-weight: 700; }
+.scan-overview-header p, .scan-chart-heading span { font-size: var(--fs-sm); color: var(--text-muted); }
+.scan-overview-actions, .scan-chart-heading, .scan-chart-heading ul { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.scan-overview-filters, .scan-breakdown-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); gap: 10px; }
+.scan-overview-filters { max-width: 580px; }
+.scan-chart-heading { justify-content: space-between; }
+.scan-chart-heading > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 10px; }
+.scan-chart-heading ul { margin: 0; list-style: none; padding: 0; color: var(--text-secondary); font-size: var(--fs-xs); }
+.scan-chart-heading li { display: flex; align-items: center; gap: 5px; }
+.scan-chart-heading li i { width: 10px; height: 10px; border-radius: 2px; }
+.scan-chart-empty { color: var(--text-muted); padding: 16px 0 6px; }
+.scan-chart-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-base); }
+.scan-chart {
+  --scan-plot-height: 192px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  padding: 32px 12px 60px 2px;
+}
+.scan-axis { height: var(--scan-plot-height); position: relative; font-size: var(--fs-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.scan-axis span { position: absolute; inset-inline-end: 8px; transform: translateY(-50%); }
+.scan-plot { position: relative; height: var(--scan-plot-height); }
+.scan-gridlines, .scan-scene, .scan-chart-buttons, .scan-flat-plot { position: absolute; inset: 0; }
+.scan-gridlines i { position: absolute; inline-size: 100%; border-top: 1px solid var(--border); }
+.scan-chart-buttons, .scan-flat-plot { display: grid; }
+.scan-chart-buttons button { position: relative; min-width: 0; cursor: pointer; border-radius: 8px; }
+.scan-chart-buttons button:hover { background: color-mix(in srgb, var(--brand) 7%, transparent); }
+.scan-chart-buttons button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.scan-chart-buttons b { position: absolute; left: 50%; transform: translateX(-50%); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.scan-chart-buttons button > span { display: block; position: absolute; top: calc(100% + 6px); width: 100%; padding-inline: 2px; color: var(--text-primary); font-size: var(--fs-xs); font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; max-height: 48px; overflow: hidden; }
+.scan-chart-buttons small { display: block; color: var(--text-muted); font-size: var(--fs-xs); font-weight: 400; }
+.scan-flat-column { height: 100%; display: flex; flex-direction: column-reverse; width: min(53%, 58px); margin: auto; }
+.scan-flat-column i { display: block; flex-shrink: 0; box-shadow: inset -7px 0 rgb(0 0 0 / .18); }
+.scan-breakdown { display: grid; gap: 14px; }
+.scan-breakdown-list { list-style: none; display: grid; padding: 0; gap: 8px; max-height: min(52dvh, 480px); overflow: auto; }
+.scan-breakdown-list .monitor-session {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: var(--surface);
+}
+.scan-breakdown-list strong, .scan-breakdown-list small { display: block; overflow-wrap: anywhere; }
+.scan-breakdown-list small { font-size: var(--fs-xs); color: var(--text-muted); }
+@media (max-width: 600px) {
+  .scan-chart { --scan-plot-height: 152px; }
+  .scan-breakdown-list .monitor-session { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .scan-breakdown-list .monitor-session button { grid-column: 1 / -1; justify-self: start; }
+}
 
 /* Session breakdown by category, timeline and referee checklist. */
 .monitor-breakdown { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
@@ -115,8 +122,6 @@
 .monitor-alerts li > span:first-child { flex: 1 1 260px; min-width: 0; }
 .monitor-alert-actions { display: flex; gap: 8px; }
 .monitor-alert-actions button { min-height: 36px; padding: 0 14px; }
-.monitor-summary { grid-template-columns: repeat(4, 1fr); }
-@media (max-width: 640px) { .monitor-summary { grid-template-columns: repeat(2, 1fr); } }
 .monitor-conn.declined { color: var(--danger); }
 
 .monitor-online { color:var(--success, var(--success)); font-weight: 600; }
@@ -134,3 +139,30 @@
 
 /* Collector 3.2: long Dota file-list fingerprints wrap instead of widening the dialog. */
 .monitor-hash { overflow-wrap: anywhere; word-break: break-all; font-size: 0.8em; }
+
+/* Quick scan code: game chips, one name field, everything else under More options. */
+.monitor-quick { display: grid; gap: 12px; margin-top: 14px; }
+.monitor-quick-games { flex-wrap: wrap; }
+.monitor-quick-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.monitor-quick-name { flex: 1 1 220px; min-width: 0; }
+.monitor-quick-name select { width: 100%; min-height: 46px; }
+.monitor-quick-row .arena-primary { display: inline-flex; align-items: center; gap: 8px; min-height: 46px; flex: 0 0 auto; }
+.monitor-reach { margin-top: 10px; }
+.monitor-options { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+.monitor-options > summary { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; font-size: var(--fs-sm); color: var(--text-secondary); }
+.monitor-options[open] > summary { margin-bottom: 12px; }
+.monitor-options-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: end; }
+.scan-roster li > button { display: inline-flex; align-items: center; gap: 6px; }
+
+/* The QR dialog: big enough to scan from across the table, then the player's answer. */
+.monitor-qr { display: grid; justify-items: center; text-align: center; gap: 6px; }
+.monitor-qr img { width: min(260px, 70vw); height: auto; background: #fff; border-radius: 12px; padding: 10px; }
+.monitor-qr .monitor-code { margin: 6px 0 0; }
+.monitor-qr .monitor-command { text-align: left; width: 100%; }
+.monitor-qr > .arena-primary { width: 100%; margin-top: 10px; }
+.monitor-qr-wait { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.monitor-qr-state { display: grid; justify-items: center; gap: 6px; padding: 22px 12px; width: 100%; border-radius: 12px; border: 1px solid var(--border); }
+.monitor-qr-state strong { font-size: var(--fs-lg, 18px); color: var(--text-primary); }
+.monitor-qr-state span { font-size: var(--fs-sm); color: var(--text-secondary); }
+.monitor-qr-state.is-ok { background: var(--success-soft); border-color: var(--success-border); color: var(--success); }
+.monitor-qr-state.is-bad { background: var(--danger-soft); border-color: var(--danger-border); }

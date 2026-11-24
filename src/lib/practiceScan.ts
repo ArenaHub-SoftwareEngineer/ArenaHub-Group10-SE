@@ -1,10 +1,7 @@
 import { GAME_PLATFORMS, type MonitorConfig, type MonitorGame, type MonitorPlatform } from './integrityRisk';
 import { preMatchScan, type ScanReadiness } from './preMatchScan';
 
-// A practice scan lets a player check their own device before match day, with no scan code.
-// It applies exactly the same rules as the official scan, so "No cheats found" here means the
-// official scan would pass too (unless staff change the lists or the device changes).
-// It is never stored and never clears anyone for a match.
+// Practice scans report observations without requiring the game or granting match clearance.
 
 const STAMP = { challenge: '0'.repeat(48), policyVersion: '0'.repeat(64) };
 export const PRACTICE_NOTE = 'Practice result only. It does not clear you for a match: run the official scan with your code from staff on match day.';
@@ -20,7 +17,8 @@ export function practiceVerdict(game: MonitorGame, facts: unknown, config: Monit
   const platform = practicePlatform(game);
   if (!platform) throw new Error('This game has no device scan.');
   const stamped = facts && typeof facts === 'object' ? { ...facts, scan: STAMP } : facts;
-  const verdict = preMatchScan({ platform, game, status: 'active', lastSeen: now, expiresAt: now + 60_000, facts: stamped, challenge: STAMP.challenge, policyVersion: STAMP.policyVersion, config, now });
-  const detail = verdict.status === 'ready' ? 'Nothing on this device would stop the official scan.' : verdict.detail;
-  return { ...verdict, label: verdict.status === 'ready' ? 'No cheats found' : verdict.label, detail, validUntil: null, blockers: verdict.blockers.map(readable), warnings: verdict.warnings.map(readable) };
+  const verdict = preMatchScan({ platform, game, status: 'active', lastSeen: now, expiresAt: now + 60_000, facts: stamped, challenge: STAMP.challenge, policyVersion: STAMP.policyVersion, config, now, mode: 'practice' });
+  const label = verdict.status === 'ready' ? 'Practice scan complete' : verdict.label;
+  const detail = verdict.status === 'ready' ? 'The completed checks found no configured blockers.' : verdict.detail;
+  return { ...verdict, label, detail, validUntil: null, blockers: verdict.blockers.map(readable), warnings: verdict.warnings.map(readable) };
 }

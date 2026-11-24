@@ -15,6 +15,7 @@ import type { BracketDraft, Match, Player, Team } from '../types';
 import { publicationGameKey } from '../bracketPublication';
 import { safePlayerImage } from '../playerProfiles';
 import type { PlacementEvent } from '../formats/placement';
+import { teamBadgeColor, teamBadgeImage, type BracketAppearance } from '../bracketAppearance';
 
 export type TournamentStatus = 'published' | 'archived' | 'unpublished';
 export const MAX_DOC_BYTES = 900_000;
@@ -26,6 +27,7 @@ export interface PublicTeamRef {
 export type PublicMatch = Omit<Match, 'team1' | 'team2'> & { team1?: PublicTeamRef; team2?: PublicTeamRef };
 
 export interface TournamentDoc {
+  appearance?: BracketAppearance;
   id: string; title: string; gameId: string; gameName: string; gameKey: string;
   format: string; matchFormat: string; teamsCount: number; seedingRule: string; createdAt: string;
   status: TournamentStatus; revision: number; featured: boolean; demo?: boolean;
@@ -90,15 +92,35 @@ export function bracketTeams(bracket: BracketDraft): Team[] {
 }
 
 export function toTournamentDoc(bracket: BracketDraft, revision: number, options: { status?: TournamentStatus; featured?: boolean } = {}): TournamentDoc {
+  const appearance = publicBracketAppearance(bracket.appearance, bracket.matches);
   return clean({
     id: bracket.id, title: bracket.title, gameId: bracket.gameId || '', gameName: bracket.gameName,
     gameKey: publicationGameKey(bracket), format: bracket.format, matchFormat: bracket.matchFormat,
     teamsCount: bracket.teamsCount, seedingRule: bracket.seedingRule || '', createdAt: bracket.createdAt || '',
     status: options.status ?? 'published', revision, featured: options.featured === true,
     ...(bracket.demo ? { demo: true } : {}),
+    ...(appearance && { appearance }),
     matches: bracket.matches.map(publicMatch),
     ...(bracket.placement ? { placement: publicPlacement(bracket.placement) } : {}),
   });
+}
+
+function publicBracketAppearance(appearance: BracketAppearance | undefined, matches: Array<Pick<PublicMatch, 'team1' | 'team2'>>): BracketAppearance | undefined {
+  if (!appearance) return undefined;
+  const ids = new Set(matches.flatMap(match => [match.team1, match.team2]).filter(team => team && !team.isBye).map(team => team!.id));
+  const teams = Object.fromEntries(Object.entries(appearance.teams ?? {}).flatMap(([id, badge]) => {
+    if (!ids.has(id) || !badge) return [];
+    const color = teamBadgeColor(badge.color), image = teamBadgeImage(badge.image);
+    const motif = typeof badge.motif === 'string' ? badge.motif.trim().slice(0, 80) : '';
+    return color || image || motif ? [[id, { ...(color && { color }), ...(image && { image }), ...(motif && { motif }) }]] : [];
+  }));
+  const result: BracketAppearance = {
+    ...(appearance.theme === 'navy-gold' && { theme: appearance.theme }),
+    ...(appearance.wideImage === true && { wideImage: true }),
+    ...(appearance.exportFooter === true && { exportFooter: true }),
+    ...(Object.keys(teams).length && { teams }),
+  };
+  return Object.keys(result).length ? result : undefined;
 }
 
 /** Only the scoring fields leave the client; anything else on the object is dropped. */
@@ -115,8 +137,8 @@ function publicPlacement(event: PlacementEvent): PlacementEvent {
 }
 
 /** What counts as a content change when deciding whether a tournament needs saving. */
-export function contentFingerprint(doc: Pick<TournamentDoc, 'matches' | 'placement'>): string {
-  return fingerprint(doc.placement ? { matches: doc.matches, placement: doc.placement } : doc.matches);
+export function contentFingerprint(doc: Pick<TournamentDoc, 'matches' | 'placement' | 'appearance'>): string {
+  return fingerprint(doc.placement || doc.appearance ? { matches: doc.matches, placement: doc.placement, appearance: doc.appearance } : doc.matches);
 }
 
 export function toRosterDoc(bracket: BracketDraft): RosterDoc {
@@ -137,8 +159,30 @@ function hydrateTeam(ref: PublicTeamRef | undefined, rosters: Map<string, Public
   };
 }
 
+/** Older seeded records used a prefix in their display names. Keep their test-data flag for scoring. */
+export function normalizeSeededTournament(tournament: TournamentDoc): TournamentDoc {
+  if (!tournament.demo) return tournament;
+  const displayName = (name: string) => name.replace(/^DEMO\s+/i, '');
+  const renameTeam = <T extends { name: string },>(team: T): T => ({ ...team, name: displayName(team.name) });
+  const placement = tournament.placement;
+  return {
+    ...tournament,
+    title: displayName(tournament.title),
+    matches: (tournament.matches || []).map(match => ({
+      ...match,
+      ...(match.team1 && { team1: renameTeam(match.team1) }),
+      ...(match.team2 && { team2: renameTeam(match.team2) }),
+      ...(match.lobby?.teams && { lobby: { ...match.lobby, teams: match.lobby.teams.map(renameTeam) } }),
+      ...(match.streamTitle && { streamTitle: displayName(match.streamTitle).replace(/(\s+vs\s+)DEMO\s+/gi, '$1') }),
+    })),
+    ...(placement && { placement: { ...placement, teams: placement.teams.map(renameTeam) } }),
+  };
+}
+
 /** Rebuilds the in-app bracket from its public documents. */
-export function fromDocs(tournament: TournamentDoc, roster?: RosterDoc | null): BracketDraft {
+export function fromDocs(stored: TournamentDoc, roster?: RosterDoc | null): BracketDraft {
+  const tournament = normalizeSeededTournament(stored);
+  const appearance = publicBracketAppearance(tournament.appearance, tournament.matches || []);
   const rosters = new Map((roster?.teams || []).map(team => [team.id, team]));
   const matches: Match[] = (tournament.matches || []).map(match => ({
     ...match, team1: hydrateTeam(match.team1, rosters), team2: hydrateTeam(match.team2, rosters),
@@ -152,6 +196,7 @@ export function fromDocs(tournament: TournamentDoc, roster?: RosterDoc | null): 
     parsedParams: { game: tournament.gameName, format: tournament.format, seeding: tournament.seedingRule, constraint: 'None', teamsCount: tournament.teamsCount, matchFormat: (tournament.matchFormat as any) || 'Bo3' },
     rawPrompt: '', createdAt: tournament.createdAt, status: 'published',
     ...(tournament.demo ? { demo: true } : {}),
+    ...(appearance && { appearance }),
     ...(tournament.placement ? { placement: tournament.placement, rosterTeams: tournament.placement.teams.map((t, i) => hydrateTeam({ id: t.id, name: t.name, collegeId: '', collegeCode: t.collegeCode, gameId: 'game-codm-br', gameMode: 'br', seed: i + 1 }, rosters)!), teams: tournament.placement.teams.map((t, i) => ({ id: t.id, name: t.name, college: t.collegeCode, seed: i + 1 })) } : {}),
   };
 }
@@ -179,7 +224,7 @@ export function announcementChanges(before: PublicMatch[], after: PublicMatch[])
     // Byes advance automatically; nobody played, so there is no schedule, result or live start to announce.
     const automatic = match.scheduledTime === 'Automatic Advance' || match.inactive === true || match.team1?.isBye === true || match.team2?.isBye === true;
     if (!old || automatic) return [];
-    const scheduleChanged = old.scheduledDate !== match.scheduledDate || old.scheduledTime !== match.scheduledTime;
+    const scheduleChanged = old.scheduledDate !== match.scheduledDate || old.scheduledTime !== match.scheduledTime || (old.scheduledEndTime || '') !== (match.scheduledEndTime || '');
     const resultChanged = match.status === 'completed' && (old.status !== match.status || fingerprint(old.score) !== fingerprint(match.score));
     const started = match.status === 'live' && old.status !== 'live';
     if (!scheduleChanged && !resultChanged && !started) return [];

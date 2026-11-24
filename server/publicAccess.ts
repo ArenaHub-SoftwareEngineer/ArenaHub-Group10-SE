@@ -4,8 +4,17 @@
 import type express from 'express';
 
 const PLAYER_PATHS = [
+  /^\/pov\.(html|js|css)$/,
+  /^\/api\/integrity\/device\/pov\/(info|token)$/,
+  /^\/vendor\/livekit-client\.umd\.js$/,
+  /^\/api\/integrity\/device\/checkin\/[A-Za-z0-9_-]{12}\/matches$/,
   /^\/join\.html$/,
+  /^\/player-check-in$/,
+  /^\/assets\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]{8}\.(js|css)$/,
+  /^\/arenahub-logo\.svg$/,
+  /^\/fonts\/google-sans-flex-latin\.woff2$/,
   /^\/api\/integrity\/device\/[a-z]+(\/[A-Za-z0-9]{1,12})?$/,
+  /^\/api\/integrity\/device\/checkin\/[A-Za-z0-9_-]{12}$/,
   /^\/api\/integrity\/downloads\/[a-z0-9.-]+$/,
   /^\/api\/integrity\/practice\/(policy|check)$/,
   /^\/api\/integrity\/dota\/gsi$/,
@@ -36,6 +45,10 @@ export function publicAccessGuard(env: Record<string, string | undefined>): expr
 
 /** The player's real address for rate limits. Behind the tunnel every request arrives from this laptop. */
 export function clientAddress(req: express.Request) {
+  // Vercel overwrites x-real-ip with the visitor's address, so on Vercel it can be trusted. Without it,
+  // every player would share the proxy's address and one room would hit the rate limit together.
+  const vercel = process.env.VERCEL === '1' ? req.get('x-real-ip') : undefined;
+  if (vercel && /^[0-9a-fA-F:.]{3,45}$/.test(vercel)) return vercel;
   const loopback = /^(::1|127\.|::ffff:127\.)/.test(req.socket.remoteAddress || '');
   const forwarded = loopback ? req.get('cf-connecting-ip') : undefined;
   return forwarded && /^[0-9a-fA-F:.]{3,45}$/.test(forwarded) ? forwarded : String(req.ip);

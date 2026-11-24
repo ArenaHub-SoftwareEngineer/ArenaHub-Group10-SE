@@ -1,7 +1,7 @@
 // Scripted provider for browser tests on the demo-arenahub emulators (ARENA_AI_PROVIDER=fake).
 // It uses the real tools, so a test sees real records flow through the real pipeline and streaming,
 // without a network call or an API key. aiConfig() refuses it for any other project.
-import { extractTeamsFromPrompt } from '../../src/lib/bracketUtils.ts';
+import { parseBracketPromptLocally } from '../../src/lib/bracketRequest.ts';
 import { runTool, type Provider } from './provider.ts';
 
 const pause = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -43,9 +43,7 @@ export function fakeProvider(): Provider {
       for (const word of words(reply)) { await pause(15, request.signal); yield word; }
     },
     async json(request) {
-      const teams = extractTeamsFromPrompt(request.prompt).map(t => ({ name: t.name, college: t.college || null }));
-      const game = /\bmlbb\b|mobile legends/i.test(request.prompt) ? 'Mobile Legends: Bang Bang' : /\bdota\b/i.test(request.prompt) ? 'Dota 2' : null;
-      return { title: null, game, format: /double/i.test(request.prompt) ? 'Double elimination' : null, matchFormat: null, finalMatchFormat: null, teams, seeding: null, constraints: [] };
+      return parseBracketPromptLocally(request.prompt);
     },
   };
 }

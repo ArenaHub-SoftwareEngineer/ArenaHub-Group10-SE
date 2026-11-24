@@ -69,10 +69,13 @@ async function readRange(path: string, size: number): Promise<Buffer> {
 
 interface Candidate { path: string; name: string; folder: SweepFolder; traits: FileTraits; sha256?: string }
 
-export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, options: { limits?: Partial<SweepLimits>; signatures?: SignatureCheck; onProgress?: (state: { phase: string; entries: number; bytes: number; root: string }) => void } = {}): Promise<{ findings: SweepFinding[]; status: Status; stats: { entries: number; bytes: number; deferred: number; signatureChecks: number } }> {
+export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, options: { limits?: Partial<SweepLimits>; signatures?: SignatureCheck; onProgress?: (state: { phase: string; entries: number; bytes: number; root: string }) => void } = {}): Promise<{ findings: SweepFinding[]; paths: string[]; status: Status; stats: { entries: number; bytes: number; deferred: number; signatureChecks: number } }> {
   const limits = { ...DEFAULT_LIMITS, ...options.limits };
   const lists = { processes: policy.blockedProcesses, applications: policy.blockedApplications };
   const findings: SweepFinding[] = [];
+  // Where each finding is, same order as findings. Kept on this PC (paths contain the Windows user name), so the
+  // agent can drop a finding as soon as the player deletes the file.
+  const paths: string[] = [];
   const unsigned: Candidate[] = [];
   const deferred: Array<{ path: string; name: string; folder: SweepFolder }> = [];
   const visited = new Set<string>();
@@ -80,9 +83,9 @@ export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, opti
   let entries = 0, bytes = 0, readable = 0, status: Status = 'complete';
   const out = () => Date.now() > deadline;
 
-  const add = (finding: SweepFinding) => {
+  const add = (finding: SweepFinding, at: string) => {
     if (findings.length >= 50) { status = 'partial'; return; }
-    if (!findings.some(item => item.name === finding.name && item.folder === finding.folder && item.reason === finding.reason)) findings.push({ ...finding, name: finding.name.slice(0, 160) });
+    if (!findings.some(item => item.name === finding.name && item.folder === finding.folder && item.reason === finding.reason)) { findings.push({ ...finding, name: finding.name.slice(0, 160) }); paths.push(at); }
   };
 
   // A small worker pool: file reads overlap, directory walking stays ordered.
@@ -105,7 +108,7 @@ export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, opti
     finally { await handle.close(); }
     const kind = sniff(head);
     if (kind === 'other') {
-      if (/\.cetrainer$/i.test(name) && /dota/i.test(name)) add({ name, folder, reason: 'Cheat Engine trainer named for Dota 2', severity: 'high' });
+      if (/\.cetrainer$/i.test(name) && /dota/i.test(name)) add({ name, folder, reason: 'Cheat Engine trainer named for Dota 2', severity: 'high' }, path);
       return;
     }
     if (kind === 'text' && (info.size > MAX_TEXT_BYTES || !WORTH_READING.test(head.toString(head[0] === 0xff ? 'utf16le' : 'utf8')))) return;
@@ -120,13 +123,13 @@ export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, opti
     let digest: string | undefined;
     const fingerprint = () => traits.kind !== 'text' && whole ? (digest ??= createHash('sha256').update(content).digest('hex')) : undefined;
     const listed = policy.blockedFileHashes.length ? fingerprint() : undefined;
-    if (listed && policy.blockedFileHashes.includes(listed)) add({ name, folder, reason: 'Matches a staff file fingerprint', sha256: listed, severity: 'high' });
+    if (listed && policy.blockedFileHashes.includes(listed)) add({ name, folder, reason: 'Matches a staff file fingerprint', sha256: listed, severity: 'high' }, path);
     if (traits.kind === 'zip') {
-      for (const verdict of judgeArchive(name, traits, lists)) add({ name: verdict.name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity });
+      for (const verdict of judgeArchive(name, traits, lists)) add({ name: verdict.name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity }, path);
       return;
     }
     // Name and internal-identity verdicts do not depend on a signature; behaviour verdicts wait for it.
-    for (const verdict of judgeTraits(name, traits, lists, 'valid')) { const sha256 = fingerprint(); add({ name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity, ...(sha256 ? { sha256 } : {}) }); }
+    for (const verdict of judgeTraits(name, traits, lists, 'valid')) { const sha256 = fingerprint(); add({ name, folder, reason: verdict.reason, ...(verdict.listedAs ? { listedAs: verdict.listedAs } : {}), severity: verdict.severity, ...(sha256 ? { sha256 } : {}) }, path); }
     // The content is released after this function, so a file still waiting for its signature check keeps its fingerprint.
     if (needsSignature(traits)) { const sha256 = fingerprint(); unsigned.push({ path, name, folder, traits, ...(sha256 ? { sha256 } : {}) }); }
   };
@@ -147,7 +150,7 @@ export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, opti
       const childPath = join(path, child.name);
       if (child.isDirectory()) {
         if (SKIP_DIRS.has(lower) || (inAppData && SKIP_APPDATA.has(lower))) continue;
-        if (lists.applications.some(match => matchesEntry(child.name, { match }))) add({ name: child.name, folder: root.folder, reason: 'Folder named like a listed tool', listedAs: child.name, severity: 'high' });
+        if (lists.applications.some(match => matchesEntry(child.name, { match }))) add({ name: child.name, folder: root.folder, reason: 'Folder named like a listed tool', listedAs: child.name, severity: 'high' }, childPath);
         if (relative.length < limits.maxDepth) await visit(root, childPath, [...relative, child.name]);
         continue;
       }
@@ -185,10 +188,10 @@ export async function sweepFolders(roots: SweepRoot[], policy: SweepPolicy, opti
       const result = results.find(row => row.path.toLowerCase() === item.path.toLowerCase());
       if (!checked || !result || result.status === 'Unreadable') { status = 'partial'; continue; }
       const signature: SignatureState = result.status === 'Valid' ? 'valid' : 'unsigned';
-      for (const verdict of judgeTraits(item.name, { ...item.traits, identity: undefined }, { processes: [], applications: [] }, signature)) add({ name: item.name, folder: item.folder, reason: verdict.reason, severity: verdict.severity, ...(item.sha256 ? { sha256: item.sha256 } : {}) });
+      for (const verdict of judgeTraits(item.name, { ...item.traits, identity: undefined }, { processes: [], applications: [] }, signature)) add({ name: item.name, folder: item.folder, reason: verdict.reason, severity: verdict.severity, ...(item.sha256 ? { sha256: item.sha256 } : {}) }, item.path);
     }
   }
   const stats = { entries, bytes, deferred: deferred.length, signatureChecks: unsigned.length };
-  if (!readable) return { findings, status: 'failed', stats };
-  return { findings, status, stats };
+  if (!readable) return { findings, paths, status: 'failed', stats };
+  return { findings, paths, status, stats };
 }

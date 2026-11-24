@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Share your game · ArenaHub</title><link rel="stylesheet" href="/pov.css"><script src="/vendor/livekit-client.umd.js" defer></script><script src="/pov.js" defer></script></head>
+<body><main><img src="/arenahub-logo.svg" alt="ArenaHub" width="48" height="48"><h1>Share your game</h1>
+<p id="identity"></p><p id="match"></p>
+<p id="status" role="status">Checking your match…</p>
+<section id="paused" role="alert" hidden><strong>The referee paused this match.</strong><span id="pausedNote">Stop playing and pause the game now. Keep sharing until the referee resumes.</span></section>
+<section id="controls" hidden>
+<p>Your match facilitators watch your screen live during the match. Only staff can see it. Other players, including your opponents, cannot. Audio is off.</p>
+<div id="pc" hidden><p class="hint">Choose <strong>Entire screen</strong> so a full-screen game stays visible. A window share can turn black when the game goes full screen.</p>
+<button id="start" type="button">Share my screen</button><button id="stop" type="button" hidden>Stop sharing</button>
+<video muted playsinline id="preview" hidden aria-label="What staff see"></video></div>
+<div id="android" hidden><a id="androidApp">Share with the Android Companion</a><a href="/api/integrity/downloads/arenahub-companion.apk">Download the Android Companion</a><p>If the link does not open the app, copy your private link and paste it into <strong>Share game screen</strong> in the companion.</p></div>
+<div id="ios" hidden><p>An iPhone cannot share its screen from a web page. If your organizer installed the ArenaHub POV app on this iPhone, copy your private link below and paste it there. Otherwise your facilitator watches you from the in-game observer slot. Tell them you are ready.</p></div>
+<details><summary>Share a mirrored phone from a computer</summary><p>Open your private link on the capture computer, then share the mirror window.</p>
+<ul><li>iPhone with Windows: connect a compatible iPhone video adapter to an HDMI capture card. In OBS, add the card as a Video Capture Device and open its windowed projector.</li>
+<li>iPhone with Mac: connect by USB, open QuickTime Player, choose New Movie Recording, and select the iPhone as the source. Leave the preview open.</li>
+<li>Android: open the player-approved scrcpy mirror with <code>scrcpy --no-control --no-audio</code>.</li></ul></details>
+<button id="copy" type="button">Copy private sharing link</button></section></main></body></html>

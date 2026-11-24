@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, unlink, rmdir } from 'node:fs/promises';
+import { mkdtemp, unlink, rmdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
@@ -21,19 +21,25 @@ test('the built app accepts a server and code interactively and honors decline b
   const app = express();
   app.post('/api/integrity/device/decline', (_req, res) => { declined++; res.json({ ok: true }); });
   app.post('/api/integrity/device/claim', (_req, res) => { scans++; res.status(500).json({ error: 'Must not pair after decline' }); });
+  app.get('/api/integrity/device/pairing/:code', (_req, res) => { res.json({ platform: 'pc', game: 'dota2', gameLabel: 'Dota 2', playerName: 'Harmless fixture', matchLabel: 'Decline test', record: false, folderCheck: false }); });
   const server = app.listen(0, '127.0.0.1'); await new Promise<void>(resolve => server.on('listening', resolve));
-  const child = spawn(resolve('dist-agent/arenahub-agent.exe'), ['--interactive'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-  t.after(async () => { child.kill(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); });
+  // No remembered server from this PC's real profile: the agent must ask for one.
+  const appData = await mkdtemp(join(tmpdir(), 'arenahub-appdata-'));
+  const child = spawn(resolve('dist-agent/arenahub-agent.exe'), ['--interactive'], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, APPDATA: appData } });
+  t.after(async () => { child.kill(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(appData, { recursive: true, force: true }); });
   let output = '', stage = 0;
   child.stdout.on('data', chunk => {
     output += String(chunk);
-    if (stage === 0 && output.includes('Tournament server address:')) { stage++; child.stdin.write(`http://127.0.0.1:${(server.address() as AddressInfo).port}\n`); }
-    else if (stage === 1 && output.includes('Your 8-character match scan code:')) { stage++; child.stdin.write('ABCD2345\n'); }
-    else if (stage === 2 && output.includes('Type YES to agree')) { stage++; child.stdin.write('NO\n'); }
+    // A plain double-click offers the official scan (1) or a practice scan (2) first.
+    if (stage === 0 && output.includes('Type 1 or 2:')) { stage++; child.stdin.write('1\n'); }
+    else if (stage === 1 && output.includes('Tournament server address:')) { stage++; child.stdin.write(`http://127.0.0.1:${(server.address() as AddressInfo).port}\n`); }
+    else if (stage === 2 && output.includes('Your 8-character match scan code:')) { stage++; child.stdin.write('ABCD2345\n'); }
+    else if (stage === 3 && output.includes('Type YES to agree')) { stage++; child.stdin.write('NO\n'); }
   });
   const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
   assert.equal(code, 0);
-  assert.equal(stage, 3);
+  assert.equal(stage, 4);
+  assert.ok(output.includes('This scan code is for Harmless fixture'), 'the player sees whose scan it is before agreeing');
   assert.equal(declined, 1);
   assert.equal(scans, 0);
   assert.ok(output.includes('You declined.'));
@@ -113,6 +119,7 @@ test('Windows registered-software inspection reports only a selected local test 
 test('the PC agent stops at its local consent deadline without a server expiry response', { skip: process.platform !== 'win32', timeout: 15_000 }, async t => {
   const app = express(); app.use(express.json());
   app.post('/api/integrity/device/claim', (_req, res) => res.json({ token: 'isolated-test-token', game: 'dota2', gameLabel: 'Dota 2', playerName: 'Harmless fixture', matchLabel: 'Local deadline test', expiresAt: Date.now() + 1500, heartbeatSeconds: 15, record: false, monitor: { blockedProcesses: [], blockedApplications: [], blockedFileHashes: [] } }));
+  app.get('/api/integrity/device/pairing/:code', (_req, res) => { res.json({ platform: 'pc', game: 'dota2', gameLabel: 'Dota 2', playerName: 'Harmless fixture', matchLabel: 'Local deadline test', record: false, folderCheck: false }); });
   // Simulate an unreachable reporting response. The client must not wait for a server-side 410.
   app.post('/api/integrity/device/heartbeat', (_req, _res) => {});
   const server = app.listen(0, '127.0.0.1');

@@ -4,6 +4,7 @@ import { Check, RotateCcw, Send, Sparkles } from 'lucide-react';
 import { CollegeLogo } from '../common/CollegeLogo';
 import { FAIR_PLAY_GAMES } from '../../lib/fairPlayGames';
 import { formatViewers } from '../../lib/presence';
+import './showcase.css';
 
 /**
  * Interactive previews for the welcome page's feature pop-ups. Everything here is sample data that shows how
@@ -251,13 +252,5 @@ export function AiDemo() {
         {index === i && <motion.span layoutId="fd-ai-pill" className="fd-segment-pill" transition={spring} />}<span>{item.tab}</span>
       </button>)}
     </div>
-  </div>;
-}
-
-/** Card-sized preview for the Arena AI card: a question and an answer arriving. */
-export function AiPreview() {
-  return <div className="lp-ai" aria-hidden="true">
-    <span className="fd-bubble is-user">Who plays next in MLBB?</span>
-    <span className="fd-bubble is-ai lp-ai-answer"><span className="fd-ai-name"><img src="/arenahub-logo.svg" alt="" width="12" height="14" />Arena AI</span><TypingDots /></span>
   </div>;
 }

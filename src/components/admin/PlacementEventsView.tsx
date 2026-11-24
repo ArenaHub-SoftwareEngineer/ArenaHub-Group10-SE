@@ -13,6 +13,7 @@ import { useToast } from '../ui/Toast';
 import { Req } from '../ui/Req';
 import { Plus, Save, Trophy } from '../ui/Icons';
 import { errorMessage } from '../../lib/errors';
+import { TimeField } from '../ui/TimeField';
 import '../spectator/placement.css';
 
 type Row = { placement: string; kills: string };
@@ -198,7 +199,7 @@ export const PlacementEventsView: React.FC<{ brackets: BracketDraft[] }> = ({ br
           </select>
         </label>
         <label>Date<input type="date" value={when.date} onChange={e => { dirty.current = true; setWhen(w => ({ ...w, date: e.target.value })); }} /></label>
-        <label>Time<input type="time" value={when.time} onChange={e => { dirty.current = true; setWhen(w => ({ ...w, time: e.target.value })); }} /></label>
+        <label>Time<TimeField value={when.time} onChange={time => { dirty.current = true; setWhen(w => ({ ...w, time })); }} /></label>
       </div>
       <table className="placement-entry-table">
         <thead><tr><th scope="col">Squad</th><th scope="col">Placement (1 to {teamCount})</th><th scope="col">Eliminations</th></tr></thead>

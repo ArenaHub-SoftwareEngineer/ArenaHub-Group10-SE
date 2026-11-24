@@ -8,13 +8,16 @@ import { TournamentBracketCanvas } from './TournamentBracketCanvas';
 import { PlacementStandingsView } from './PlacementStandingsView';
 import { PublishedScheduleDialog } from '../common/SchedulePage';
 import { FAIR_PLAY_GAMES } from '../../lib/fairPlayGames';
-import { ArrowLeft, Calendar, Check, ChevronDown, ChevronRight, Radio } from '../ui/Icons';
+import { ArrowLeft, Calendar, Check, ChevronDown, ChevronRight, Plus, Radio } from '../ui/Icons';
+import { matchName } from '../../lib/matchName';
 
 interface BracketsViewProps {
   tournament: Tournament;
   matches: Match[];
   colleges: College[];
   onBack: () => void;
+  onCreateBracket?: () => void;
+  onManageSchedule?: (id: string) => void;
   onSelectMatch: (m: Match) => void;
   initialBracketId?: string | null;
 }
@@ -24,6 +27,8 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
   matches: initialMatches,
   colleges,
   onBack,
+  onCreateBracket,
+  onManageSchedule,
   onSelectMatch,
   initialBracketId,
 }) => {
@@ -101,7 +106,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
   const liveMatches = currentBracketMatches.filter((m) => m.status === 'live');
 
   return (
-    <div className="space-y-6 max-w-7xl animate-in fade-in duration-150">
+    <div className="space-y-6 min-w-0 animate-in fade-in duration-150">
       {activeBracket.status !== 'published' && tournament.format !== 'single-elimination' && <p className="field-hint">The organizer hasn’t published a full bracket yet. These are the scheduled matches.</p>}
       {/* Top Bar with Back and Real-time badge */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -113,18 +118,21 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           <span>All tournaments</span>
         </button>
 
-        <div className="flex items-center gap-2 text-xs">
-          <span className="w-2 h-2 rounded-full bg-(--success) animate-pulse" />
-          <span className="text-(--success) font-semibold text-xs">
+        <div className="page-actions">
+          <span className="flex items-center gap-2 text-(--success) font-semibold text-xs">
+            <span className="w-2 h-2 rounded-full bg-(--success) animate-pulse" />
             {activeBracket.status === 'published' ? 'Published organizer bracket' : 'Sample bracket'}
           </span>
+          {onCreateBracket && <button type="button" className="arena-primary" onClick={onCreateBracket}>
+            <Plus size={16} aria-hidden="true" /> Create bracket
+          </button>}
         </div>
       </div>
 
       <section className="arena-panel viewer-bracket-heading">
         <div>
           <p className="viewer-bracket-game">{activeBracket.gameName}</p>
-          <h1>{activeBracket.title || tournament.title}{activeBracket.demo && <span className="demo-label" title="Demonstration data, not a real event">DEMO</span>}</h1>
+          <h1>{activeBracket.title || tournament.title}</h1>
           <p className="studio-muted">{activeBracket.format} · {activeBracket.teamsCount} {activeBracket.placement ? 'squads' : 'teams'} · {activeBracket.placement ? `${activeBracket.placement.games.length} games` : `${currentBracketMatches.length} matches`}</p>
         </div>
         <button type="button" className="arena-outline" onClick={() => setShowScheduleModal(true)}>
@@ -190,7 +198,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
           )}
 
           {/* ── Dynamic Horizontal Tournament Grid ── */}
-          <div className="viewer-bracket-board"><TournamentBracketCanvas key={activeBracket.id} rounds={rounds} onSelectMatch={onSelectMatch} /></div>
+          <div className="viewer-bracket-board"><TournamentBracketCanvas key={activeBracket.id} rounds={rounds} appearance={activeBracket.appearance} onSelectMatch={onSelectMatch} /></div>
           {false && <div className="p-5 rounded-[6px] bg-(--surface) border border-(--border) shadow-xl overflow-x-auto">
             <div className="flex items-start gap-6 min-w-max pb-3">
               {rounds.map((roundMatches, roundIdx) => {
@@ -241,7 +249,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
                           >
                             {/* Match Header Badge */}
                             <div className="flex items-center justify-between text-xs mb-2 tabular-nums">
-                              <span className="text-(--text-muted) font-bold">{match.matchNumber}</span>
+                              <span className="text-(--text-muted) font-bold">{matchName(match)}</span>
                               {isByeMatch ? (
                                 <span className="px-1.5 py-0.2 rounded bg-(--success)/15 text-(--success) font-bold text-xs">
                                   BYE ADVANCE
@@ -337,7 +345,7 @@ export const BracketsView: React.FC<BracketsViewProps> = ({
       </>}
 
       <PublishedScheduleDialog open={showScheduleModal} onClose={() => setShowScheduleModal(false)}
-        bracket={activeBracket.status === 'published' ? activeBracket : undefined} onSelect={onSelectMatch} />
+        bracket={activeBracket.status === 'published' ? activeBracket : undefined} onSelect={onSelectMatch} onManage={onManageSchedule} />
     </div>
   );
 };

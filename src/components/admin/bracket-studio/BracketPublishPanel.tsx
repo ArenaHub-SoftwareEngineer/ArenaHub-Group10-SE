@@ -7,11 +7,14 @@ import { scheduleDate, timeOrder } from '../../../lib/calendar';
 import { Req } from '../../ui/Req';
 import { Check, Plus } from '../../ui/Icons';
 import { errorMessage } from '../../../lib/errors';
+import { matchName } from '../../../lib/matchName';
+import { scheduleTimeLabel } from '../../../lib/matchTiming';
 
 // ── Publish Bracket to Game Modal ─────────────────────────────────────────────
 export interface PublishBracketModalProps {
   isOpen: boolean;
   draft: BracketDraft | null;
+  publishedBrackets: BracketDraft[];
   onClose: () => void;
   onConfirm: (gameName: string, gameId: string) => Promise<void>;
 }
@@ -29,6 +32,7 @@ export const CODM_MODES = [
 export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
   isOpen,
   draft,
+  publishedBrackets,
   onClose,
   onConfirm,
 }) => {
@@ -60,12 +64,18 @@ export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
   const finalGameName = isCustom
     ? customGameName.trim() || 'Custom Esports'
     : activeGame?.name || 'Mobile Legends: Bang Bang';
+  const gameId = isCustom ? 'game-custom' : selectedGameId;
+  const canPublish = isCustom ? Boolean(customGameName.trim()) : Boolean(activeGame);
+  const gameKey = publicationGameKey({ gameName: finalGameName, gameId });
+  const replacingBracket = canPublish && publishedBrackets.find(bracket =>
+    bracket.id !== draft.id && publicationGameKey(bracket) === gameKey
+  );
 
   const submitPublish = async () => {
-    if (publishing || (!isCustom && selectedGameId === 'codm')) return;
+    if (publishing || !canPublish) return;
     setPublishing(true); setPublishError('');
     try {
-      await onConfirm(finalGameName, isCustom ? 'game-custom' : selectedGameId);
+      await onConfirm(finalGameName, gameId);
     } catch (error) {
       setPublishError(errorMessage(error, 'Publishing failed. Try again.'));
     } finally { setPublishing(false); }
@@ -107,7 +117,6 @@ export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
                   {CODM_MODES.map(mode => <option key={mode.id} value={mode.id}>{mode.label}</option>)}
                 </select>
               </label>
-              {codmMode?.id === 'game-codm-br' && <p className="module-notice">This publishes the bracket and schedule under Battle Royale. This bracket uses head-to-head match results. For lobby games scored by placement and eliminations, create the event on the Battle Royale page instead.</p>}
             </div>}
 
             {/* Custom Game toggle */}
@@ -154,11 +163,12 @@ export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
               <dd>{scheduledMatches.length} · Manila time</dd>
             </dl>
           </section>
+          {replacingBracket && <p className="module-notice">Publishing will replace “{replacingBracket.title}” as the current bracket for this game. You can restore it from Versions.</p>}
           {scheduledMatches.length > 0 && <details className="studio-publish-summary">
             <summary>Review match times</summary>
             <ul className="stream-schedule-preview">
               {scheduledMatches.map(match => <li key={match.id}>
-                <strong>{match.matchNumber}</strong><span>{match.scheduledDate} · {match.scheduledTime}</span>
+                <strong>{matchName(match)}</strong><span>{match.scheduledDate} · {scheduleTimeLabel(match)}</span>
               </li>)}
             </ul>
           </details>}
@@ -179,7 +189,7 @@ export const PublishBracketModal: React.FC<PublishBracketModalProps> = ({
 
           <button
             type="button"
-            disabled={publishing || (isCustom ? !customGameName.trim() : selectedGameId === 'codm')}
+            disabled={publishing || !canPublish}
             onClick={submitPublish}
             className="arena-primary"
           >

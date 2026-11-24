@@ -102,7 +102,9 @@ test('Arena AI answers about the match the viewer came from and links back to it
   await page.getByRole('button', { name: 'Send message' }).click();
   const reply = page.locator('article.chat-message.from-assistant').last();
   await expect(reply.locator('.chat-response-actions small')).toHaveText('Live records', { timeout: 20_000 });
-  await expect(reply.locator('.chat-assistant-text')).toContainText(matchup);
+  for (const team of matchup.split(' vs ')) {
+    await expect(reply.locator('.chat-assistant-text')).toContainText(team);
+  }
 
   // The record it checked is a link back to the match.
   await reply.locator('.chat-reference').first().click();

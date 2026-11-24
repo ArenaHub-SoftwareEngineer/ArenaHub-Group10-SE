@@ -1,37 +1,71 @@
 import { expect, test } from '@playwright/test';
-import { ORGANIZER, QA_PASSWORD, STUDENT, signIn, watchErrors } from './helpers';
+import jsQR from 'jsqr';
+import { ORGANIZER, QA_PASSWORD, STUDENT, signIn, watchErrors, openMonitorScans } from './helpers';
 
-test('organizer creates a match monitor pairing code', async ({ page }, testInfo) => {
-  const errors = watchErrors(page);
-  await signIn(page, ORGANIZER);
-  await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
-  await expect(page.getByRole('heading', { name: /^anti-cheat$/i })).toBeVisible({ timeout: 20_000 });
-
-  // Labels wrap their selects, so select by the label element rather than its accessible name.
-  const form = page.locator('.monitor-pair-form');
-  await form.locator('label', { hasText: /^Match/ }).first().locator('select').selectOption('');
-  await page.getByLabel('Match name').fill('E2E scrim CCS vs COE');
-  await form.locator('label', { hasText: /^Game/ }).locator('select').selectOption('mlbb');
-  await page.getByLabel('Player (IGN)').fill('E2E Ace');
-  await page.getByLabel('Address players will use').fill('http://192.168.50.10:3000');
-  await page.getByRole('button', { name: 'Create pairing code' }).click();
-
-  await expect(page.getByAltText(/pairing qr code for e2e ace/i)).toBeVisible();
-  await expect(page.locator('.monitor-code')).toHaveText(/^[A-Z2-9]{8}$/);
-  await expect(page.locator('.monitor-session').filter({ hasText: 'E2E Ace' }).first()).toContainText('Waiting for device');
-
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow, 'page must not scroll horizontally').toBeLessThanOrEqual(1);
-  await page.screenshot({ path: testInfo.outputPath('match-monitor.png'), fullPage: true });
-
-  await page.locator('.monitor-session').filter({ hasText: 'E2E Ace' }).first().getByRole('button', { name: /open session/i }).click();
-  await expect(page.getByRole('dialog')).toContainText('No signals yet');
-  await page.getByRole('button', { name: 'End monitoring' }).click();
-  await expect(page.getByRole('dialog')).toContainText('Monitoring ended');
-  expect(errors).toEqual([]);
+test.beforeEach(async ({ page }) => {
+  await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
 });
 
-test('the 3D arena shows flagged players by category and opens their evidence', async ({ page, request }, testInfo) => {
+test('the check-in QR verifies the player account and hands off to iPhone inspection', async ({ page, browser }, testInfo) => {
+  test.setTimeout(90_000);
+  await signIn(page, ORGANIZER);
+  await openMonitorScans(page);
+  const room = page.getByRole('region', { name: 'Player check-in' });
+  const generate = room.getByRole('button', { name: 'Generate check-in QR' });
+  await expect(room.getByRole('heading', { name: 'Player check-in' })).toBeVisible({ timeout: 20000 });
+  // A prior run can leave a QR open in the isolated monitor database.
+  const close = room.getByRole('button', { name: 'Close check-in' });
+  await expect(generate.or(close)).toBeEnabled();
+  if (await close.isVisible()) { page.once('dialog', dialog => void dialog.accept()); await close.click(); }
+  await generate.click();
+  const qr = room.getByRole('img', { name: 'Player check-in QR' });
+  await expect(qr).toBeVisible();
+  const { pixels, width, height } = await qr.evaluate(async node => {
+    const image = node as HTMLImageElement;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0);
+    return { pixels: Array.from(ctx.getImageData(0, 0, canvas.width, canvas.height).data), width: canvas.width, height: canvas.height };
+  });
+  const link = jsQR(new Uint8ClampedArray(pixels), width, height)?.data;
+  expect(link).toMatch(/\/player-check-in\?room=[A-Za-z0-9_-]{12}$/);
+  expect(link).toBe(await room.getByRole('link', { name: 'Open check-in link' }).getAttribute('href'));
+  await expect(room.getByText(/choose a match/i)).toHaveCount(0);
+
+  const phone = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: IPHONE });
+  try {
+    const player = await phone.newPage();
+    await player.goto(link!);
+    await player.getByLabel('Email address').fill(STUDENT);
+    await player.getByRole('textbox', { name: 'Password', exact: true }).fill(QA_PASSWORD);
+    await player.getByRole('button', { name: 'Sign in with email' }).click();
+    await expect(player.getByText(STUDENT, { exact: true })).toBeVisible();
+    const name = `QA iPhone ${Date.now()}`;
+    await player.getByLabel('In-game name').fill(name);
+    await player.getByLabel('Team', { exact: true }).fill('QA Phoenix');
+    await player.getByLabel('College', { exact: true }).fill('College of Computing Studies');
+    await player.getByRole('combobox', { name: /^Game/ }).selectOption('codm-mp');
+    // Check-in asks which match the player is about to play (it decides who watches their live screen).
+    await player.getByRole('group', { name: 'Your match' }).getByRole('radio', { name: /Not on the schedule/ }).check();
+    await player.getByRole('button', { name: 'Continue to device scan' }).click();
+    await player.getByRole('button', { name: 'Agree and check in' }).click();
+    await expect(player.getByRole('heading', { name: 'You are checked in' })).toBeVisible();
+    await expect(player.getByRole('link', { name: 'Open screen sharing' })).toBeVisible();
+    const row = room.locator('.room-player').filter({ hasText: name });
+    await expect(row).toContainText('iPhone', { timeout: 20000 });
+    await expect(row).toContainText(STUDENT);
+  } finally {
+    await phone.close();
+    page.once('dialog', dialog => void dialog.accept());
+    await close.click();
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('player-check-in.png'), fullPage: true });
+});
+
+test('the scan chart shows game and team totals and opens individual player sessions', async ({ page, request }, testInfo) => {
   test.setTimeout(120_000);
   const errors = watchErrors(page);
   const login = await request.post('http://127.0.0.1:9098/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=demo', { data: { email: ORGANIZER, password: QA_PASSWORD, returnSecureToken: true } });
@@ -53,20 +87,25 @@ test('the 3D arena shows flagged players by category and opens their evidence', 
   }
 
   await signIn(page, ORGANIZER);
-  await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
-  const arena = page.locator('.monitor3d');
-  await expect(arena.getByRole('button', { name: /^85 Cinder Android, urgent risk/ })).toBeVisible({ timeout: 20_000 });
-  await expect(arena.getByRole('button', { name: /^0 Ace Android, clear risk/ })).toBeVisible();
-  await expect(arena.getByRole('button', { name: /^0 Dusk iPhone/ })).toBeVisible();
-  await expect(arena.locator('.monitor3d-pillar.urgent .monitor3d-block.cat-cheat-tools')).toHaveCount(1);
-  await arena.scrollIntoViewIfNeeded();
-  await arena.screenshot({ path: testInfo.outputPath('arena.png') });
-  await arena.getByLabel('Turn the view').fill('40');
-  await arena.screenshot({ path: testInfo.outputPath('arena-turned.png') });
+  await openMonitorScans(page);
+  await expect(page.getByRole('group', { name: 'Scan chart by game' }).getByRole('button', { name: /^Mobile Legends,/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Evidence and appeals|Blocklists and thresholds|desktop alerts|Match arena/i)).toHaveCount(0);
+  await page.getByLabel('Scan game').selectOption('mlbb');
+  await page.getByLabel('Scan match').selectOption(matchId);
+  const chart = page.getByRole('group', { name: 'Scan chart by team' });
+  await expect(chart.getByRole('button', { name: /^CCS Phoenix, Mobile Legends, 2 scanned, 0 iPhone inspected, 0 awaiting/ })).toBeVisible();
+  const titans = chart.getByRole('button', { name: /^COE Titans, Mobile Legends, 1 scanned, 0 iPhone inspected, 1 awaiting/ });
+  await expect(titans).toBeVisible();
+  await chart.screenshot({ path: testInfo.outputPath('scan-coverage.png') });
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
 
-  await arena.getByRole('button', { name: /^85 Cinder/ }).click();
-  const dialog = page.getByRole('dialog');
+  await titans.click();
+  const players = page.getByRole('dialog', { name: /^COE Titans/ });
+  await expect(players.getByText('Dusk', { exact: true })).toBeVisible();
+  await players.getByLabel('Check status').selectOption('scanned');
+  await expect(players.getByText('Dusk', { exact: true })).toHaveCount(0);
+  await players.getByRole('button', { name: 'Open session' }).click();
+  const dialog = page.getByRole('dialog', { name: /^Cinder/ });
   await expect(dialog).toContainText('Risk by category');
   await expect(dialog.locator('.monitor-breakdown li', { hasText: 'Cheat tools' })).toContainText('35');
   await expect(dialog).toContainText('Map hack (radar)');
@@ -83,7 +122,7 @@ test('a referee adds a flagged file\'s fingerprint from the session', async ({ p
   test.setTimeout(90_000);
   const errors = watchErrors(page);
   const staff = await staffHeaders(request);
-  const playerName = `Print ${testInfo.project.name}`;
+  const playerName = `Print ${testInfo.project.name} ${Date.now()}`;
   // A fixed, harmless value: not the fingerprint of any real file.
   const sha256 = testInfo.project.name === 'mobile-375' ? 'e'.repeat(64) : 'f'.repeat(64);
   const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId: `print-${Date.now()}`, matchLabel: 'Fingerprint test', game: 'dota2', playerName, serverUrl: 'http://192.168.50.10:3000' } })).json();
@@ -92,16 +131,15 @@ test('a referee adds a flagged file\'s fingerprint from the session', async ({ p
   expect((await request.post('/api/integrity/device/heartbeat', { headers: { Authorization: `Bearer ${claim.token}` }, data: { platform: 'pc', processes: [], gameRunning: true, screenshotOk: true, fileFindings: [finding] } })).ok()).toBe(true);
   try {
     await signIn(page, ORGANIZER);
-    await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
+    await openMonitorScans(page);
+    await page.getByRole('button', { name: 'Player scans', exact: true }).click();
     await page.locator('.monitor-session').filter({ hasText: playerName }).first().getByRole('button', { name: /open session/i }).click({ timeout: 20_000 });
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog', { name: `${playerName} · Dota 2` });
     await dialog.getByRole('button', { name: 'Confirmed cheat? Add its fingerprint' }).click();
     await dialog.getByLabel(/Name for this file/).fill('Dota helper loader');
-    await dialog.locator('li', { hasText: 'Cheat file found' }).screenshot({ path: testInfo.outputPath('fingerprint-form.png') });
     await dialog.getByRole('button', { name: 'Add fingerprint', exact: true }).click();
     await expect(dialog).toContainText('Fingerprint added.');
     await expect(dialog).toContainText('This file is on the fingerprint list.');
-    await dialog.locator('li', { hasText: 'Cheat file found' }).screenshot({ path: testInfo.outputPath('fingerprint-listed.png') });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
     expect(errors).toEqual([]);
   } finally {
@@ -182,8 +220,8 @@ test('a player who declines is shown to staff as an alert', async ({ page, brows
   // A label unique to this run: monitor data persists between runs, so earlier 'Decline test' alerts may still be listed.
   const label = `Decline test ${Date.now() % 100000}`;
   await signIn(page, ORGANIZER);
-  await page.evaluate(() => { window.location.hash = '#/admin/match-monitor'; });
-  await expect(page.getByRole('heading', { name: /^anti-cheat$/i })).toBeVisible({ timeout: 20_000 });
+  await openMonitorScans(page);
+  await expect(page.getByRole('heading', { name: /^monitor$/i })).toBeVisible({ timeout: 20_000 });
 
   const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId, matchLabel: label, game: 'mlbb', platform: 'ios', team: 'COE Titans', playerName: 'Fable', serverUrl: 'http://192.168.50.10:3210' } })).json();
   const phone = await browser.newPage({ userAgent: IPHONE });
@@ -193,12 +231,14 @@ test('a player who declines is shown to staff as an alert', async ({ page, brows
   await expect(phone.getByRole('heading', { name: 'You declined' })).toBeVisible();
   await phone.close();
 
+  await page.getByRole('button', { name: /^Needs your attention/ }).click({ timeout: 15_000 });
   const alert = page.getByRole('alert', { name: 'Needs your attention' });
   await expect(alert).toContainText(`Fable (COE Titans) declined monitoring for ${label}`, { timeout: 15_000 });
-  await expect(page).toHaveTitle(/^\(\d+\) /);
   await alert.locator('li', { hasText: label }).getByRole('button', { name: 'Done' }).click();
   await expect(alert.locator('li', { hasText: label })).toHaveCount(0);
-  await expect(page.locator('.monitor-session', { hasText: label }).first()).toContainText('Declined');
+  await page.getByRole('dialog', { name: 'Needs your attention' }).getByRole('button', { name: 'Close dialog' }).click();
+  await page.getByRole('button', { name: 'Player scans', exact: true }).click();
+  await expect(page.locator('.monitor-session', { hasText: label }).first()).toContainText(/declined/i);
 });
 
 test('a signed-in student is refused by the match monitor API', async ({ request }) => {

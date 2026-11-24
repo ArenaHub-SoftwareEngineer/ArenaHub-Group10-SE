@@ -270,7 +270,7 @@ export function createWindowsScanner(provider: WindowsScanProvider = windowsProv
     for (const item of pending) {
       const row = signed.find(entry => entry.path.toLowerCase() === item.path.toLowerCase());
       const state: SignatureState = !row || row.status === 'Unreadable' ? 'unknown' : row.status === 'Valid' ? 'valid' : 'unsigned';
-      for (const verdict of judgeTraits(item.name, { ...item.traits, identity: undefined }, { processes: [], applications: [] }, state, 'running')) pushProgram(observation, { name: item.name, ...verdict, sha256: item.sha256 });
+      for (const verdict of judgeTraits(item.name, { ...item.traits, identity: undefined }, { processes: [], applications: [] }, state)) pushProgram(observation, { name: item.name, ...verdict, sha256: item.sha256 });
     }
   }
   function pushProgram(observation: WindowsObservation, finding: WindowsObservation['suspiciousPrograms'][number]) {

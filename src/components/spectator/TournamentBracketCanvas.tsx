@@ -1,14 +1,25 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { Check, Maximize2, Minus, Plus, Radio } from '../ui/Icons';
 import { bracketScheduleLabel } from '../../lib/calendar';
 import { Match } from '../../lib/types';
-import { CARD_H, CARD_W, CHAMP_H, CHAMP_W, COL_GAP, layoutBracket } from '../../lib/bracketLayout';
+import { bracketFitZoom, CARD_H, CARD_W, CHAMP_H, CHAMP_W, COL_GAP, layoutBracket } from '../../lib/bracketLayout';
 import { CollegeLogo } from '../common/CollegeLogo';
+import { matchName } from '../../lib/matchName';
+import { canBroadcastMatch } from '../../lib/streamUtils';
+import type { BracketAppearance, TeamBadgeStyle } from '../../lib/bracketAppearance';
+import { BracketTeamBadge } from '../common/BracketTeamBadge';
 
 interface Props {
+  appearance?: BracketAppearance;
   rounds: Match[][];
-  broadcast?: { selectedMatchId: string; schedule: (match: Match) => string };
+  broadcast?: {
+    selectedMatchId: string; schedule: (match: Match) => string;
+    /** Scroll to this match and open at a readable zoom (the broadcast wizard's "Up next"). */
+    focusMatchId?: string;
+    /** A small label on a card, such as "Up next". */
+    badge?: (match: Match) => string | undefined;
+  };
   onSelectMatch: (match: Match) => void;
 }
 
@@ -17,7 +28,7 @@ interface Props {
  * and Swiss (rounds as columns), all ending in a Champion card. Layout comes from lib/bracketLayout.ts.
  * Drag to pan, zoom with the buttons; a live match opens its watch page.
  */
-export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch, broadcast }) => {
+export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, onSelectMatch, broadcast }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -33,18 +44,25 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
   const sourceLabel = (match: Match, side: 0 | 1) => {
     const source = match.sources?.[side];
     if (!source) return undefined;
-    return `${source.result === 'winner' ? 'Winner' : 'Loser'} of ${byId.get(source.matchId)?.matchNumber || 'an earlier match'}`;
+    return `${source.result === 'winner' ? 'Winner' : 'Loser'} of ${matchName(byId.get(source.matchId)) || 'an earlier match'}`;
   };
-  // Open zoomed to fit the width, so the whole path and the Champion card are in view (never below 55%).
   const fitZoom = () => {
-    const width = viewportRef.current?.clientWidth;
-    return width ? Math.max(.55, Math.min(1, +((width - 8) / layout.width).toFixed(2))) : 1;
+    return bracketFitZoom(viewportRef.current?.clientWidth ?? 0, layout.width);
   };
   useLayoutEffect(() => { setZoom(fitZoom()); }, [layout.width]);
+  // Bring the focused match into the middle of the view (smoothly, unless the person prefers reduced motion).
+  const focusId = broadcast?.focusMatchId;
+  useEffect(() => {
+    const view = viewportRef.current, spot = focusId && layout.placed.find(item => item.match.id === focusId);
+    if (!view || !spot) return;
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const timer = setTimeout(() => view.scrollTo({ left: Math.max(0, (spot.x + CARD_W / 2) * zoom - view.clientWidth / 2), top: Math.max(0, spot.y * zoom - view.clientHeight / 2), behavior: smooth ? 'smooth' : 'auto' }), 60);
+    return () => clearTimeout(timer);
+  }, [focusId, layout, zoom]);
   const reset = () => { setZoom(fitZoom()); viewportRef.current?.scrollTo({ left: 0, top: 0, behavior: 'smooth' }); };
 
   return (
-    <section className="stage bracket-canvas overflow-hidden rounded-2xl border border-[var(--border)] bg-(--bg-base)">
+    <section className="stage bracket-canvas overflow-hidden rounded-2xl border border-[var(--border)] bg-(--bg-base)" data-bracket-theme={appearance?.theme}>
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-(--text-primary)">{title}</h2>
@@ -63,7 +81,8 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
 
       <div
         ref={viewportRef}
-        className={`bracket-canvas-viewport relative ${broadcast ? 'stream-canvas-viewport' : 'h-[640px]'} overflow-auto ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`bracket-board-viewport bracket-canvas-viewport relative ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        tabIndex={0} role="region" aria-label="Bracket rounds"
         onMouseDown={(e) => {
           if (!viewportRef.current || (e.target as HTMLElement).closest('button')) return;
           dragRef.current = { x: e.clientX, y: e.clientY, left: viewportRef.current.scrollLeft, top: viewportRef.current.scrollTop };
@@ -104,7 +123,7 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
               const bye = firstBye || secondBye;
               const live = match.status === 'live';
               const ifNeeded = Boolean(match.inactive);
-              const locked = !broadcast && !live && !bye;
+              const locked = broadcast ? !canBroadcastMatch(match) : !live && !bye;
               const lockedMessage = ifNeeded ? 'Played only if needed' : match.status === 'completed' ? 'Match has ended' : 'Match is not live yet';
               const final = lane === 'final' || layout.headers.some(h => h.final && h.x === x && h.lane === lane);
               const selected = (broadcast?.selectedMatchId ?? selectedId) === match.id;
@@ -115,27 +134,33 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
                   disabled={bye || ifNeeded}
                   aria-disabled={locked || undefined}
                   aria-pressed={!locked ? selected : undefined}
+                  aria-haspopup={broadcast && !locked ? 'dialog' : undefined}
+                  aria-label={broadcast ? `${matchName(match)}: ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}` : undefined}
                   title={locked ? lockedMessage : undefined}
                   onClick={() => { if (locked) return; setSelectedId(match.id); onSelectMatch(match); }}
                   data-live={live}
-                  className={`viewer-bracket-match absolute overflow-hidden rounded-xl border text-left transition-all duration-150 ${ifNeeded ? 'is-if-needed' : ''} ${selected ? (broadcast ? 'border-[var(--brand)] ring-2 ring-(color:--brand)/40' : 'border-white/70 ring-2 ring-white/10') : live ? 'border-[var(--brand)]' : final ? 'border-[var(--brand)]/55' : 'border-[var(--border)]'} ${bye || ifNeeded ? 'cursor-default bg-(--surface)' : 'bg-[var(--surface)] hover:-translate-y-0.5 hover:border-white/35 hover:bg-[var(--surface-soft)]'}`}
+                  data-final={final}
+                  data-selected={selected}
+                  className={`bracket-match-card viewer-bracket-match absolute text-left ${ifNeeded ? 'is-if-needed' : ''}`}
                   style={{ left: x, top: y - CARD_H / 2, width: CARD_W, height: CARD_H }}
                 >
-                  <div className="flex h-8 items-center justify-between border-b border-[var(--border)] px-3 text-xs text-[var(--text-muted)]">
-                    <span>{match.matchNumber}</span>
-                    {ifNeeded ? <span>If needed</span> : bye ? <span>Automatic advance</span> : live ? <span className="flex items-center gap-1 font-semibold text-[var(--brand-hover)]"><Radio className="h-3 w-3" /> Live</span> : match.status === 'completed' ? <span>Final</span> : broadcast ? <span>{match.streamUrl ? 'Broadcast linked' : match.status.replace('-', ' ')}</span> : <span>Upcoming</span>}
+                  <div className="bracket-match-card-header">
+                    <span className="flex items-center gap-1.5">{matchName(match)} <span>{(match.matchFormat || 'Bo3').toUpperCase()}</span>{broadcast?.badge?.(match) && <span className="bracket-badge">{broadcast.badge(match)}</span>}</span>
+                    {ifNeeded ? <span>If needed</span> : bye ? <span>Automatic advance</span> : live ? <span className="flex items-center gap-1 font-semibold text-[var(--brand-ink)]"><Radio className="h-3 w-3" aria-hidden="true" /> Live</span> : <span>{match.status === 'completed' ? 'Final' : match.status === 'alert' ? 'On hold' : match.status === 'pre-match' ? 'Pre-match' : 'Upcoming'}</span>}
                   </div>
-                  <div className="stream-canvas-time">{bye ? 'Advanced by BYE' : ifNeeded ? 'Only if the lower-bracket team wins' : broadcast?.schedule(match) ?? bracketScheduleLabel(match)}</div>
-                  <TeamRow seed={match.team1?.seed} name={match.team1?.name || sourceLabel(match, 0) || 'Awaiting winner'} sub={match.team1?.name ? sourceLabel(match, 0) : undefined}
+                  <div className="bracket-match-time">{bye ? 'Advanced by BYE' : ifNeeded ? 'Only if the lower-bracket team wins' : broadcast?.schedule(match) ?? bracketScheduleLabel(match)}</div>
+                  <TeamRow seed={match.team1?.seed} name={match.team1?.name || 'TBD'} sub={firstBye ? undefined : sourceLabel(match, 0) || (match.team1 ? undefined : 'Awaiting winner')}
+                    badge={match.team1 && appearance?.teams?.[match.team1.id]}
                     score={bye ? undefined : match.score.team1Score} winner={Boolean(match.team1 && match.winnerId === match.team1.id) || secondBye} muted={firstBye || !match.team1?.name} />
-                  <TeamRow seed={match.team2?.seed} name={secondBye ? 'BYE' : match.team2?.name || sourceLabel(match, 1) || 'Awaiting winner'} sub={match.team2?.name && !secondBye ? sourceLabel(match, 1) : undefined}
+                  <TeamRow seed={match.team2?.seed} name={secondBye ? 'BYE' : match.team2?.name || 'TBD'} sub={secondBye ? undefined : sourceLabel(match, 1) || (match.team2 ? undefined : 'Awaiting winner')}
+                    badge={match.team2 && appearance?.teams?.[match.team2.id]}
                     score={bye ? undefined : match.score.team2Score} winner={Boolean(match.team2 && match.winnerId === match.team2.id) || firstBye} muted={secondBye || !match.team2?.name} />
-                  {locked && <span className="viewer-match-lock-note">{lockedMessage}</span>}
                 </button>
               );
             })}
 
             {layout.champion && <ChampionCard x={layout.champion.x} y={layout.champion.y} name={layout.champion.team?.name} code={layout.champion.team?.collegeCode}
+              badge={layout.champion.team && appearance?.teams?.[layout.champion.team.id]}
               byStandings={layout.champion.byStandings} />}
           </div>
         </div>
@@ -145,7 +170,7 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, onSelectMatch
 };
 
 /** The end of every bracket: a trophy, then the champion once the deciding result is saved. */
-function ChampionCard({ x, y, name, code, byStandings }: { x: number; y: number; name?: string; code?: string; byStandings: boolean }) {
+function ChampionCard({ x, y, name, code, badge, byStandings }: { x: number; y: number; name?: string; code?: string; badge?: TeamBadgeStyle; byStandings: boolean }) {
   const reduced = Boolean(useReducedMotion()) || document.documentElement.dataset.motion === 'reduced';
   const decided = Boolean(name);
   return <div className={`bracket-champion${decided ? ' is-decided' : ''}`} style={{ left: x, top: y - CHAMP_H / 2, width: CHAMP_W, height: CHAMP_H }}>
@@ -154,7 +179,7 @@ function ChampionCard({ x, y, name, code, byStandings }: { x: number; y: number;
       <TrophyArt decided={decided} />
     </motion.div>
     <span className="bracket-champion-label">{byStandings ? 'Champion · by standings' : 'Champion'}</span>
-    {decided ? <strong className="bracket-champion-name">{code && <CollegeLogo code={code} size="sm" />}<span>{name}</span></strong>
+    {decided ? <strong className="bracket-champion-name">{badge ? <BracketTeamBadge name={name} badge={badge} /> : code && <CollegeLogo code={code} size="sm" />}<span>{name}</span></strong>
       : <span className="bracket-champion-tbd">{byStandings ? 'Decided when every match is played' : 'To be decided'}</span>}
   </div>;
 }
@@ -175,16 +200,17 @@ function TrophyArt({ decided }: { decided: boolean }) {
   </svg>;
 }
 
-function TeamRow({ seed, name, sub, score, winner, muted = false }: { seed?: number; name: string; sub?: string; score?: number; winner: boolean; muted?: boolean }) {
+function TeamRow({ seed, name, sub, score, winner, badge, muted = false }: { seed?: number; name: string; sub?: string; score?: number; winner: boolean; badge?: TeamBadgeStyle; muted?: boolean }) {
   return (
-    <div className={`flex h-10 items-center gap-2 px-3 ${muted ? 'text-[var(--text-muted)]' : winner ? 'text-(--text-primary)' : 'text-[var(--text-secondary)]'}`}>
+    <div className={`bracket-match-team flex items-center gap-2 px-3 ${muted ? 'text-[var(--text-muted)]' : 'text-(--text-primary)'}`} data-winner={winner}>
       <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-white/[.06] text-xs tabular-nums text-[var(--text-muted)]">{seed ?? '–'}</span>
+      <BracketTeamBadge name={name} badge={badge} empty={muted} />
       <span className="min-w-0 flex-1 leading-tight">
-        <span className={`block truncate text-xs ${winner ? 'font-semibold' : 'font-medium'}`}>{name}</span>
+        <span className="bracket-viewer-team-name block truncate text-sm font-semibold" title={name}>{name}</span>
         {sub && <span className="block truncate text-xs text-[var(--text-muted)]">{sub}</span>}
       </span>
       {winner && <Check className="h-3.5 w-3.5 text-[var(--brand)]" strokeWidth={2.5} />}
-      {score !== undefined && <span className={`w-5 text-right text-sm font-semibold tabular-nums ${winner ? 'text-(--text-primary)' : 'text-[var(--text-muted)]'}`}>{score}</span>}
+      {score !== undefined && <span className={`bracket-viewer-score text-sm font-semibold tabular-nums ${winner ? 'text-(--text-primary)' : 'text-[var(--text-muted)]'}`}>{score}</span>}
     </div>
   );
 }

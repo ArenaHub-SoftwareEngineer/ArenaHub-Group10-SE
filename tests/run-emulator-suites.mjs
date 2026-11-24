@@ -18,6 +18,7 @@ const suites = [
   ['migration', 'npx tsx --test tests/migration.integration.test.ts'],
   ['roles', 'npx tsx --test tests/set-role.integration.test.ts'],
   ['server auth', 'npx tsx --test tests/server-auth.integration.test.ts'],
+  ['hosted match monitor', 'npx tsx --test tests/firestore-monitor.integration.test.ts'],
 ];
 
 if (process.argv.includes('--inside')) {

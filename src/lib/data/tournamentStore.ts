@@ -9,7 +9,7 @@ import type { BracketDraft } from '../types';
 import { publicationGameKey } from '../bracketPublication';
 import { notificationRecord } from '../notificationService';
 import {
-  announcementChanges, placementAnnouncementChanges, assertDocSize, contentFingerprint, fromDocs, toRosterDoc, toTournamentDoc,
+  announcementChanges, placementAnnouncementChanges, assertDocSize, contentFingerprint, fromDocs, normalizeSeededTournament, toRosterDoc, toTournamentDoc,
   type RosterDoc, type TournamentDoc,
 } from './tournamentDocs';
 
@@ -93,9 +93,17 @@ export async function saveTournament(bracket: BracketDraft, expectedRevision: nu
     const next = toTournamentDoc(bracket, expectedRevision + 1, { featured: current.featured });
     assertDocSize(next, 'This bracket');
     tx.set(ref, { ...next, updatedAt: serverTimestamp() });
-    for (const { match, kind } of announcementChanges(current.matches, next.matches)) {
+    const matchChanges = announcementChanges(current.matches, next.matches);
+    const scheduleCount = matchChanges.filter(change => change.kind === 'schedule').length;
+    const bulkSchedule = scheduleCount > 20;
+    if (bulkSchedule) announce(tx, 'schedule', 'Match schedule updated', `${next.title} · ${scheduleCount} match schedules changed`, 'schedule', bracket.id);
+    for (const { match, kind } of matchChanges) {
       const names = `${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}`;
-      if (kind === 'schedule') announce(tx, 'schedule', 'Match schedule updated', `${names} · ${match.scheduledDate}, ${match.scheduledTime}`, 'schedule', match.id);
+      if (kind === 'schedule') {
+        if (bulkSchedule) continue;
+        if (match.scheduledDate && match.scheduledTime) announce(tx, 'schedule', 'Match schedule updated', `${names} · ${match.scheduledDate}, ${match.scheduledTime}${match.scheduledEndTime ? ` to ${match.scheduledEndTime}` : ''}`, 'schedule', match.id);
+        else announce(tx, 'schedule', 'Match removed from schedule', names, 'schedule', match.id);
+      }
       else if (kind === 'result') announce(tx, 'result', 'Match result published', `${names} · ${match.score.team1Score}–${match.score.team2Score}`, 'schedule', match.id);
       else announce(tx, 'live', 'A match is live', `${names} · ${match.roundName}`, 'current-live', match.id);
     }
@@ -143,7 +151,7 @@ export async function restoreTournament(expected: BracketDraft): Promise<Bracket
     const pubSnap = await tx.get(publicationRef(key));
     const prevT = await tx.get(previousRef(key, 'tournament')), prevR = await tx.get(previousRef(key, 'rosters'));
     if (!prevT.exists()) throw new Error('There is no previous published version for this game.');
-    const previous = prevT.data() as TournamentDoc;
+    const previous = normalizeSeededTournament(prevT.data() as TournamentDoc);
     if (previous.id !== expected.id || contentFingerprint(previous) !== contentFingerprint(toTournamentDoc(expected, 0))) {
       throw new Error('The previous version changed. Reopen Bracket Studio before restoring.');
     }

@@ -163,7 +163,7 @@ export const needsSignature = (traits: FileTraits) => traits.kind === 'pe' && (t
  * programs. A valid signature clears only the behaviour rules (Dota reference, injector functions, protector):
  * a signed copy of a listed tool is still that tool.
  */
-export function judgeTraits(name: string, traits: FileTraits, lists: ListPatterns, signature: SignatureState, context: 'disk' | 'running' = 'disk'): Verdict[] {
+export function judgeTraits(name: string, traits: FileTraits, lists: ListPatterns, signature: SignatureState): Verdict[] {
   const verdicts: Verdict[] = [];
   const unsignedNote = signature === 'unknown' ? ' (signature not checked)' : '';
   if (traits.kind === 'pe') {
@@ -178,11 +178,9 @@ export function judgeTraits(name: string, traits: FileTraits, lists: ListPattern
       const behaviour: string[] = [];
       if (traits.referencesDota) behaviour.push('targets dota2.exe');
       if (traits.injectionApis) behaviour.push('contains DLL-injection functions');
-      if (STRONG_PROTECTORS.has(traits.protector || '')) behaviour.push(`is wrapped in ${traits.protector}, which cheat sellers use to hide code`);
-      // Targeting Dota is strong evidence anywhere. Injector functions or a protector alone also appear in ordinary
-      // software (Java's attach.dll, debuggers, cracked-game launchers): on disk they are a staff warning, while
-      // running during the match they block. Without a signature result only a Dota target is reported.
-      if (behaviour.length && (traits.referencesDota || signature !== 'unknown')) verdicts.push({ reason: `Unsigned program that ${behaviour.join(', ')}${unsignedNote}`, severity: traits.referencesDota ? 'high' : context === 'running' ? 'medium' : 'low' });
+      if (STRONG_PROTECTORS.has(traits.protector || '')) behaviour.push(`is wrapped in ${traits.protector}`);
+      // Generic protector and debugger features appear in legitimate software and warrant review.
+      if (behaviour.length && (traits.referencesDota || signature !== 'unknown')) verdicts.push({ reason: `Unsigned program that ${behaviour.join(', ')}${unsignedNote}`, severity: traits.referencesDota ? 'high' : 'low' });
     }
   } else if (traits.kind === 'text') {
     if (traits.cheatTable) verdicts.push({ reason: 'Cheat Engine table that targets dota2.exe', severity: 'high' });

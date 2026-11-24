@@ -14,9 +14,10 @@ import { apiUrl } from './apiBase';
 import { firestoreService } from './firestore';
 import type { BracketDraft } from './types';
 import { createBracketFromTeams } from './bracketUtils';
+import { teamNameKey } from './teamNames';
 import { answerTournamentQuestion, knowledgeSnapshot, type KnowledgeReference } from './tournamentKnowledge';
 import { screenQuestion } from './aiGuard';
-import { parseBracketPromptLocally, resolveBracketRequest, type BracketRequest, type Resolution } from './bracketRequest';
+import { parseBracketPromptLocally, readTeamNameRequest, resolveBracketRequest, type BracketRequest, type Resolution } from './bracketRequest';
 import { parseSse } from './sse';
 import { parseBlocks, type AnswerBlock } from './aiBlocks';
 import type { AiMode } from './chatHistory';
@@ -63,13 +64,15 @@ async function idToken() {
 const withTimeout = (ms: number, signal?: AbortSignal) => signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms);
 
 class AIService {
+  private readonly lastDraws = new Map<string, string[]>();
+
   /** On-device answer from the loaded brackets. Same engine and refusals as the server. */
   localAnswer(query: string, history: History = [], focus?: AskFocus | null) {
     const screen = screenQuestion(query);
-    if (screen.kind === 'refuse') return { text: screen.text, references: [] as KnowledgeReference[] };
+    if (screen.kind === 'refuse') return { text: screen.text, references: [] as KnowledgeReference[], steps: [] as string[] };
     const snapshot = knowledgeSnapshot(firestoreService.getPublishedBrackets(), 0, new Date().toISOString(), 'loaded');
     const answer = answerTournamentQuestion(snapshot, query, history, focus ? { bracketId: focus.bracketId, ...(focus.matchId ? { matchId: focus.matchId } : {}) } : null);
-    return { text: answer.text, references: answer.references };
+    return { text: answer.text, references: answer.references, steps: answer.steps || [] };
   }
 
   /**
@@ -128,6 +131,8 @@ class AIService {
     }
     stopped();
     const local = this.localAnswer(query, history, focus);
+    // Think and Deep say why no model answered and show how the question was read, instead of an unexplained instant reply.
+    if (mode !== 'quick') for (const step of ['Arena AI’s server could not be reached, so this answer comes from the records loaded on this device', ...local.steps]) yield { delta: '', done: false, source: OFFLINE_SOURCE, step };
     yield { delta: local.text, done: true, source: OFFLINE_SOURCE, references: local.references };
   }
 
@@ -156,6 +161,7 @@ class AIService {
 
   /** Reads a bracket prompt into parameters or a clarifying question. Never builds the bracket. */
   public async readBracketPrompt(prompt: string, signal?: AbortSignal): Promise<DraftResolution> {
+    const generation = readTeamNameRequest(prompt);
     const token = await idToken();
     if (token) {
       try {
@@ -166,7 +172,12 @@ class AIService {
           signal: withTimeout(45_000, signal),
         });
         const body = response.ok ? await response.json() : null;
-        if (body && ['ready', 'question', 'battle-royale'].includes(body.kind)) return body as DraftResolution;
+        if (body?.kind === 'ready') {
+          // Older APIs could return instruction lines as teams for a naming prompt.
+          if (!generation || body.request?.generatedNames === true) return body as DraftResolution;
+        } else if (body?.kind === 'question' || body?.kind === 'battle-royale') {
+          return body as DraftResolution;
+        }
       } catch {
         if (signal?.aborted) throw new Error('Stopped.');
       }
@@ -200,12 +211,25 @@ class AIService {
 
   /** Builds the confirmed request. Only called after the organizer has seen the parameters. */
   public buildBracket(request: BracketRequest, prompt = ''): BracketDraft {
+    const drawKey = request.seeding === 'Random draw' && !request.openingMatches?.length
+      ? JSON.stringify([request.game, request.format, request.teamsCount, request.teams.map(team => teamNameKey(team.name)).sort()])
+      : null;
     const draft = createBracketFromTeams({
       title: request.title, teams: request.teams, gameName: request.game, format: request.format,
       matchFormat: request.matchFormat, finalMatchFormat: request.finalMatchFormat,
       seedingRule: request.seeding, explicitBracketSize: request.teamsCount,
+      openingMatches: request.openingMatches,
+      previousDraw: drawKey ? this.lastDraws.get(drawKey) : undefined,
     });
-    return { ...draft, rawPrompt: prompt.slice(0, 6000) };
+    if (drawKey) this.lastDraws.set(drawKey, draft.teams.map(team => team.name));
+    const badges = Object.fromEntries(draft.matches.flatMap(match => [match.team1, match.team2]).flatMap(team => {
+      const style = team && request.teamStyles?.[team.name.toLowerCase()];
+      return team && style && !team.isBye ? [[team.id, style]] : [];
+    }));
+    const appearance = request.appearance || Object.keys(badges).length
+      ? { ...request.appearance, ...(Object.keys(badges).length && { teams: badges }) }
+      : undefined;
+    return { ...draft, ...(appearance && { appearance }), rawPrompt: prompt.slice(0, 6000) };
   }
 }
 

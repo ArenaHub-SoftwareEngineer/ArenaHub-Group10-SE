@@ -5,6 +5,7 @@ import { dismissFeedback, watchAiFeedback, type AiFeedback } from '../../lib/aiF
 import { Modal } from '../ui/Modal';
 import { ThumbsDown, ThumbsUp } from '../ui/Icons';
 import { useToast } from '../ui/Toast';
+import './adminOverview.css';
 
 export function AIFeedbackReview() {
   const { showToast } = useToast();
@@ -29,8 +30,8 @@ export function AIFeedbackReview() {
       </div>
       {!shown.length && !error && <p className="studio-muted">{show === 'down' ? 'Nothing marked not helpful.' : 'No ratings yet.'}</p>}
       <ul className="ai-feedback-list">
-        {shown.map(item => <li key={item.id}>
-          <p className="ai-feedback-meta">{item.rating === 'up' ? <ThumbsUp size={13} /> : <ThumbsDown size={13} />}<span>{item.source || 'Unknown source'}</span>{item.createdAt && <time dateTime={new Date(item.createdAt).toISOString()}>{new Date(item.createdAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' })}</time>}</p>
+        {shown.map(item => <li key={item.id} className={`fb-ai ov-tone is-${item.rating === 'up' ? 'success' : 'danger'}`}>
+          <p className="ai-feedback-meta"><span className="fb-type">{item.rating === 'up' ? <><ThumbsUp size={13} /> Helpful</> : <><ThumbsDown size={13} /> Not helpful</>}</span><span>{item.source || 'Unknown source'}</span>{item.createdAt && <time dateTime={new Date(item.createdAt).toISOString()}>{new Date(item.createdAt).toLocaleString('en-PH', { timeZone: 'Asia/Manila', dateStyle: 'medium', timeStyle: 'short' })}</time>}</p>
           <p className="ai-feedback-question">{item.question || '(question not saved)'}</p>
           <p className="ai-feedback-answer">{item.answer}</p>
           {item.references.length > 0 && <p className="studio-muted">Checked: {item.references.join(' · ')}</p>}

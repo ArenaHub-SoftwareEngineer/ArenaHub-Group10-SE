@@ -11,6 +11,8 @@ import { Req } from '../ui/Req';
 import { scheduleMatches } from '../../lib/formats/placement';
 import { matchLabel } from '../../lib/integrityChecks';
 import { errorMessage } from '../../lib/errors';
+import { TournamentPicker, useRecentlyUpdated } from './TournamentPicker';
+import { BracketPulse, DeskSteps, type DeskStep } from './DeskStatus';
 import './FeatureDialogs.css';
 
 const when = (value: any) => value?.toDate?.().toLocaleString('en-PH', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) || 'Not set';
@@ -93,13 +95,41 @@ export function TournamentOperations({ brackets, staff = false, initialEntityId 
   };
   const submit = (event: FormEvent, action: () => Promise<unknown>, message: string) => { event.preventDefault(); void perform(action, message); };
   const locked = scoped.filter(r => r.status === 'locked' && r.sanction !== 'disqualified');
+  const { recent, lastChanged } = useRecentlyUpdated(brackets);
+  const expected = selectedTeams.length || bracket?.teamsCount || 0;
+  const needWindow = matches.filter(m => ['upcoming', 'pre-match'].includes(m.status) && !m.inactive && matchTeamIds(m).length >= 2);
+  const windowed = needWindow.filter(m => scopedWindows.some(w => w.matchId === m.id)).length;
+  const goTo = (next: string) => { setTab(next); requestAnimationFrame(() => document.querySelector('.operations-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
+  const rawSteps: Array<Omit<DeskStep, 'state'> & { done: boolean; title: string; body: string }> = !bracket ? [] : staff ? [
+    { id: 'rules', label: 'Registration rules', detail: policy ? `${policy.playersRequired} starters · ${policy.registrationOpen ? 'open' : 'closed'}` : 'Not set yet', done: !!policy,
+      title: 'Set registration rules', body: 'Choose starters and substitutes, then open registration so captains can submit rosters.', action: () => open('policy'), actionLabel: 'Set rules' },
+    { id: 'rosters', label: 'Rosters in', detail: `${scoped.length} of ${expected} teams`, done: expected > 0 && scoped.length >= expected,
+      title: 'Collect team rosters', body: 'Captains submit from My team. Review each roster as it arrives.', action: () => goTo('rosters'), actionLabel: 'Open registration desk' },
+    { id: 'locked', label: 'Rosters locked', detail: `${locked.length} of ${expected} locked`, done: expected > 0 && locked.length >= expected,
+      title: 'Approve and lock rosters', body: 'A team can only check in once its roster is locked.', action: () => goTo('rosters'), actionLabel: 'Review rosters' },
+    { id: 'check-in', label: 'Check-in', detail: needWindow.length ? `${windowed} of ${needWindow.length} matches scheduled` : 'No upcoming matches', done: needWindow.length ? windowed >= needWindow.length : scopedWindows.length > 0 || locked.length >= expected && expected > 0,
+      title: 'Schedule check-in', body: 'Open a check-in window for each upcoming match. Captains are notified.', action: () => { goTo('readiness'); setSelectedMatch(''); setOpens(''); setCloses(''); open('window'); }, actionLabel: 'Plan check-in windows' },
+  ] : [
+    { id: 'register', label: 'Register', detail: scoped.length ? 'Roster sent' : policy?.registrationOpen ? 'Registration open' : 'Not open yet', done: scoped.length > 0,
+      title: 'Register your team', body: policy?.registrationOpen ? 'Submit your roster. Organizers check it against enrollment and game records.' : 'Registration opens once an organizer sets the rules.', action: () => editRoster(), actionLabel: 'Start registration', disabled: !policy?.registrationOpen },
+    { id: 'approved', label: 'Approved', detail: scoped[0]?.status || 'Waiting', done: scoped.some(r => ['approved', 'locked'].includes(r.status)),
+      title: 'Wait for approval', body: scoped.some(r => r.status === 'rejected') ? 'Your roster was returned. Open it, fix it and resubmit.' : 'Your inbox gets the organizer decision.', action: () => goTo('rosters'), actionLabel: 'View my registration' },
+    { id: 'locked', label: 'Locked', detail: locked.length ? 'Roster locked' : 'Not yet', done: locked.length > 0,
+      title: 'Wait for the roster lock', body: 'Organizers lock approved rosters before check-in opens.', action: () => goTo('rosters'), actionLabel: 'View my registration' },
+    { id: 'checked-in', label: 'Checked in', detail: checkIns.some(c => scoped.some(r => r.id === c.registrationId) && c.status === 'confirmed') ? 'Confirmed' : 'Not yet', done: checkIns.some(c => scoped.some(r => r.id === c.registrationId) && c.status === 'confirmed'),
+      title: 'Check in for your match', body: 'Confirm the players in the lobby when your check-in window opens.', action: () => { goTo('readiness'); startCheckIn(); }, actionLabel: 'Go to check-in', disabled: !locked.length },
+  ];
+  const firstOpen = rawSteps.findIndex(step => !step.done);
+  const steps: DeskStep[] = rawSteps.map((step, index) => ({ ...step, state: step.done ? 'done' : index === firstOpen ? 'active' : 'todo' }));
   const titles: Record<Exclude<Dialog, null>, string> = { policy: 'Registration rules', 'roster-edit': 'Submit your team roster', 'roster-view': viewedReg?.teamName || 'Private roster', window: 'Schedule check-in', 'check-in': 'Confirm your match lineup', readiness: 'Review match readiness', decision: 'Record a tournament decision' };
   return <div className="operations-page module-page">
     <header className="dashboard-page-heading"><h1>{staff ? 'Tournament desk' : 'My team'}</h1><p>{staff ? 'Manage registration, rosters, and check-in for published tournaments.' : 'Register your team, manage your roster, and check in for matches.'}</p></header>
     {!staff && !hasCampusEmail(firebaseUser?.email) ? <p className="module-notice">Team registration and check-in are for verified {CAMPUS_SHORT_NAME} members. You can submit private match evidence from Fair play.</p> : <>
-      <label className="module-form operations-tournament">Published tournament<select value={bracket?.id || ''} onChange={e => setBracketId(e.target.value)}>{!brackets.length && <option value="">No tournament published yet</option>}{brackets.map(b => <option key={b.id} value={b.id}>{b.gameName} · {b.title}</option>)}</select></label>
+      <h2 className="tp-heading">Published tournaments <span>{brackets.length}</span></h2>
+      <TournamentPicker brackets={brackets} value={bracket?.id || ''} onChange={setBracketId} recent={recent} />
       {!bracket && <p className="module-notice">Publish a bracket before setting registration rules or match check-in.</p>}
-      <div className="feature-summary" aria-label="Tournament overview"><div><strong>{scoped.length}</strong><span>{staff ? 'Submitted teams' : 'Your registrations'}</span></div><div><strong>{locked.length}</strong><span>Locked rosters</span></div><div><strong>{scopedWindows.length}</strong><span>Check-in windows</span></div></div>
+      {bracket && <DeskSteps steps={steps} next={firstOpen >= 0 ? { title: rawSteps[firstOpen].title, body: rawSteps[firstOpen].body } : undefined} />}
+      {bracket && <BracketPulse bracket={bracket} updatedAt={lastChanged[bracket.id]} />}
       <div className="module-tabs">{[['rosters', staff ? 'Registration desk' : 'My registrations'], ['readiness', staff ? 'Match readiness' : 'Check in'], ...(staff ? [['decisions', 'Tournament decisions']] : [])].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</button>)}</div>
       {error && <p className="field-error" role="alert">{error}</p>}{success && <p className="module-notice" role="status">{success}</p>}
       {tab === 'rosters' && <section className="operations-section"><div className="feature-section-bar"><div><h2>{staff ? 'Submitted rosters' : 'Your roster status'}</h2><p className="field-hint">{policy ? `${policy.playersRequired} starters · up to ${policy.maxSubstitutes} substitutes · Registration ${policy.registrationOpen ? 'open' : 'closed'}` : 'An organizer must set registration rules first.'}</p></div>{staff ? <button className="arena-outline" aria-haspopup="dialog" disabled={!bracket} onClick={() => open('policy')}><Users size={16} /> Registration rules</button> : <button className="arena-primary" aria-haspopup="dialog" disabled={!policy?.registrationOpen} onClick={() => editRoster()}>Register a team</button>}</div>

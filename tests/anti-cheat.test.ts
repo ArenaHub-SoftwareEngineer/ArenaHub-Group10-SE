@@ -7,7 +7,33 @@ import { createHash } from 'node:crypto';
 import { createWindowsScanner, executableHash, listedApplications, parseInventory } from '../tools/integrity-agent/windowsScan';
 import { DEFAULT_MONITOR_CONFIG, evaluateFacts, inspectionCoverage, monitorConfigSchema, pcFactsSchema, type PcFacts } from '../src/lib/integrityRisk';
 import { monitorAddress } from '../src/lib/monitorAddress';
+import { groupScanSessions, latestScanSessions, type ScanChartSession } from '../src/lib/monitorScanCounts';
 import { gsiConfig } from '../tools/integrity-agent/agentCore';
+
+test('scan chart counts recent players by game and team without counting retries twice', () => {
+  const session: ScanChartSession = {
+    id: 'first', matchId: 'match-1', matchLabel: 'Round 1', playerKey: 'player-1', playerName: 'Ace',
+    team: 'Phoenix', game: 'mlbb', gameLabel: 'Mobile Legends', platform: 'android', createdAt: 1,
+  };
+  const players = latestScanSessions([
+    session,
+    { ...session, id: 'retry', createdAt: 2, inspection: { status: 'limited' } },
+    { ...session, id: 'phone', playerKey: 'player-2', platform: 'ios', iosClearance: { reviewedAt: 2 } },
+    { ...session, id: 'pending', playerKey: 'player-3', platform: 'ios', inspection: { status: 'reported' }, team: 'Titans' },
+    { ...session, id: 'other-match', matchId: 'match-2', platform: 'pc', passedAt: 2 },
+    { ...session, id: 'other-game', game: 'dota2', gameLabel: 'Dota 2', platform: 'pc' },
+  ]);
+  assert.deepEqual(players.map(player => player.id), ['retry', 'phone', 'pending', 'other-match', 'other-game']);
+  assert.deepEqual(groupScanSessions(players, false).map(group => [group.label, group.counts]), [
+    ['Dota 2', { scanned: 0, inspected: 0, awaiting: 1 }],
+    ['Mobile Legends', { scanned: 2, inspected: 1, awaiting: 1 }],
+  ]);
+  assert.deepEqual(groupScanSessions(players.filter(player => player.game === 'mlbb' && player.matchId === 'match-1'), true)
+    .map(group => [group.label, group.counts]), [
+    ['Phoenix', { scanned: 1, inspected: 1, awaiting: 0 }],
+    ['Titans', { scanned: 0, inspected: 0, awaiting: 1 }],
+  ]);
+});
 
 test('installed software is distinct from execution and unrelated inventory never leaves the scanner', async () => {
   const scanner = createWindowsScanner({ processes: async () => [{ name: 'dota2.exe', pid: 10 }, { name: 'personal-tool.exe', pid: 11 }], applications: async () => [{ name: 'Private mail client' }, { name: 'Cheat Engine 7.5', version: '7.5' }], hash: async () => { throw new Error('Hashing must be opt-in.'); } });

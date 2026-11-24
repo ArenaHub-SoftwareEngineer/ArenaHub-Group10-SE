@@ -51,7 +51,7 @@ export function upNext(brackets: BracketDraft[], currentId: string, limit = 12):
   return [...live, ...waiting, ...upcoming].slice(0, limit);
 }
 
-const short = (name?: string) => (name || 'TBD').replace(/^DEMO\s+/i, '');
+const short = (name?: string) => name || 'TBD';
 /** The rail's compact form of a live match: "CN Pulse vs CA Echo", the game, and the score. */
 export function liveRailItem(card: WatchCard) {
   return {
