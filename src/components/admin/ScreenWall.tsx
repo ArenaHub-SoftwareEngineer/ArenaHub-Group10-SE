@@ -1,6 +1,7 @@
 // Live player screens, step by step: choose a game, choose a match, then watch every player's screen at once.
 // The video itself is in LiveWall (loaded only when a match opens, because the LiveKit client is large).
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { antiCheatCall } from '../../lib/antiCheatApi';
 import { errorMessage } from '../../lib/errors';
 import { FAIR_PLAY_GAMES, belongsToFairPlayGame } from '../../lib/fairPlayGames';
@@ -96,14 +97,15 @@ export function ScreenWall({ brackets, onOpenSession }: { brackets: BracketDraft
     return [id, sharing ? `${sharing} sharing now` : list.length ? `${list.length} match${list.length === 1 ? '' : 'es'}` : 'No matches'];
   }));
 
-  if (open && status) return <section className="operations-section lw-section" aria-labelledby="pov-heading">
-    <h2 id="pov-heading" className="lw-sr">Live player screens</h2>
-    <Suspense fallback={<p role="status" className="field-hint">Opening the live wall…</p>}>
+  // The open wall covers the whole screen like a call. It is rendered on <body>, because page sections animate
+  // with transforms, and a transformed ancestor would trap a fixed overlay inside the section.
+  if (open && status) return createPortal(<section className="lw-portal" aria-label="Live player screens">
+    <Suspense fallback={<div className="lw-stage lw-call is-message"><div className="lw-area lw-message"><p role="status">Opening the live wall…</p></div></div>}>
       <LiveWall match={open} manage={status.manage} facilitators={status.staff[open.key] || []} onBack={() => setOpenKey('')}
         onEditFacilitators={status.manage ? () => setEditing(open) : undefined} onOpenSession={onOpenSession} />
     </Suspense>
     {editing && <FacilitatorDialog match={editing} emails={status.staff[editing.key] || []} onClose={() => setEditing(null)} onSaved={() => void refresh()} />}
-  </section>;
+  </section>, document.body);
 
   return <section className="operations-section lw-section" aria-labelledby="pov-heading">
     <div className="operations-section-heading"><div><h2 id="pov-heading">Live player screens</h2>

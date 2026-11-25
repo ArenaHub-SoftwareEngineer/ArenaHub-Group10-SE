@@ -5,7 +5,9 @@ import type express from 'express';
 
 const PLAYER_PATHS = [
   /^\/pov\.(html|js|css)$/,
-  /^\/api\/integrity\/device\/pov\/(info|token)$/,
+  /^\/api\/integrity\/device\/pov\/(info|token|relay|relay\/status)$/,
+  // The iPhone relay (a cloud VM) asks this server before every publish and view.
+  /^\/api\/integrity\/relay\/auth$/,
   /^\/vendor\/livekit-client\.umd\.js$/,
   /^\/api\/integrity\/device\/checkin\/[A-Za-z0-9_-]{12}\/matches$/,
   /^\/join\.html$/,

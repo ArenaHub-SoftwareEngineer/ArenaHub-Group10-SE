@@ -38,7 +38,9 @@
     "demo": "node scripts/demo.mjs",
     "audit:contrast": "node scripts/contrast-audit.cjs",
     "postbuild": "node scripts/check-production-build.mjs",
-    "test:pre-match": "tsx --test tests/pre-match-api.test.ts"
+    "test:pre-match": "tsx --test tests/pre-match-api.test.ts",
+    "bundle:api": "node scripts/bundle-vercel-api.mjs",
+    "deploy:api": "node scripts/bundle-vercel-api.mjs && npx vercel deploy --prod --yes"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -83,6 +85,9 @@
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "@grpc/grpc-js": "^1.13.6"
+    "@grpc/grpc-js": "^1.13.6",
+    "jwks-rsa": {
+      "jose": "5.10.0"
+    }
   }
 }

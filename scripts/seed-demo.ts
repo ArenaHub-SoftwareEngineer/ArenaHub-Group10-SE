@@ -15,8 +15,16 @@ import { DEFAULT_CATEGORIES, DEFAULT_GAMES } from '../src/lib/catalogDefaults';
 import { INSTITUTION_COLLEGES } from '../src/lib/colleges';
 import type { BracketDraft, Match, MatchFormat } from '../src/lib/types';
 
-if (!process.env.FIRESTORE_EMULATOR_HOST) {
-  console.error('seed-demo writes only to the Firestore emulator. Set FIRESTORE_EMULATOR_HOST=127.0.0.1:8085.');
+// A real project only on purpose: --project <id> --confirm-production, with GOOGLE_APPLICATION_CREDENTIALS set to its
+// service-account key. Fixtures are marked demo, so they stay out of leaderboards and can be archived later.
+const projectFlag = process.argv.indexOf('--project');
+const productionProject = projectFlag > 0 && process.argv.includes('--confirm-production') ? process.argv[projectFlag + 1] : '';
+if (productionProject) {
+  if (process.env.FIRESTORE_EMULATOR_HOST) { console.error('Unset FIRESTORE_EMULATOR_HOST to seed a real project.'); process.exit(1); }
+  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) { console.error('Set GOOGLE_APPLICATION_CREDENTIALS to the project service-account key.'); process.exit(1); }
+  process.env.GCLOUD_PROJECT = productionProject;
+} else if (!process.env.FIRESTORE_EMULATOR_HOST) {
+  console.error('seed-demo writes only to the Firestore emulator. Set FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 (or pass --project <id> --confirm-production).');
   process.exit(1);
 }
 

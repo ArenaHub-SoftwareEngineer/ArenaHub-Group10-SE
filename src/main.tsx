@@ -5,6 +5,7 @@ import './index.css';
 import './dashboard.css';
 import './operations.css';
 import './auth.css';
+import './authSignup.css';
 import './interactions.css';
 // Design system last: it is the single source of truth for tokens, type and motion (see the file header).
 import './design.css';

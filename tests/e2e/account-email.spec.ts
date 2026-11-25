@@ -25,8 +25,9 @@ async function signUp(page: Page, email: string) {
   await page.getByRole('button', { name: /sign in to arenahub/i }).first().click();
   await page.getByRole('tab', { name: 'Sign up' }).click();
   // Every field the player must fill in is marked with a red asterisk.
-  await expect(page.locator('.auth-flow-form .required-mark')).toHaveCount(4);
-  await page.getByLabel('Full name').fill('QA Verify');
+  await expect(page.locator('.auth-flow-form .required-mark')).toHaveCount(5);
+  await page.getByLabel('First name').fill('QA');
+  await page.getByLabel('Last name').fill('Verify');
   await page.getByLabel('Email address').fill(email);
   await page.getByRole('textbox', { name: 'Password', exact: true }).fill(QA_PASSWORD);
   await page.getByLabel('Confirm password').fill(QA_PASSWORD);

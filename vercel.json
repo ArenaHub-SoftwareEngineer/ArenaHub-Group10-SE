@@ -5,7 +5,7 @@
   "buildCommand": "node scripts/build-vercel.mjs",
   "outputDirectory": "dist-vercel",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 300,
       "includeFiles": "public/{join.html,arenahub-logo.svg,fonts/**,pov.html,pov.js,pov.css,vendor/livekit-client.umd.js}"
     }

@@ -106,7 +106,10 @@ import {
   Tv as TvVector,
   Flame as FlameVector,
   Zap as ZapVector,
-  Skull as SkullVector
+  Skull as SkullVector,
+  Minimize2 as Minimize2Vector,
+  MonitorUp as MonitorUpVector,
+  MonitorOff as MonitorOffVector
 } from 'lucide-react';
 import { PlatformLogo } from './PlatformLogo';
 
@@ -223,3 +226,6 @@ export const Zap = icon(ZapVector);
 export const Skull = icon(SkullVector);
 export const Youtube = ({size=20,className=''}:LucideProps)=><PlatformLogo platform="youtube" size={size} className={className}/>;
 export const Facebook = ({size=20,className=''}:LucideProps)=><PlatformLogo platform="facebook" size={size} className={className}/>;
+export const Minimize2 = icon(Minimize2Vector);
+export const MonitorUp = icon(MonitorUpVector);
+export const MonitorOff = icon(MonitorOffVector);

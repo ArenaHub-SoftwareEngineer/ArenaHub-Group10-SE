@@ -73,7 +73,7 @@ test('players share their screens over WebRTC; staff choose game and match, watc
     await wall.screenshot({ path: info.outputPath('wall-grid.png') });
 
     await wall.getByRole('button', { name: 'Spotlight Player Bravo' }).click();
-    await expect(wall.locator('.lw-spotlight > .lw-tile[data-player="Player Bravo"]')).toBeVisible();
+    await expect(wall.locator('.lw-spotlight-main > .lw-tile[data-player="Player Bravo"]')).toBeVisible();
     await expect(wall.locator('.lw-strip .lw-tile[data-player="Player Alpha"]')).toBeVisible();
     await wall.screenshot({ path: info.outputPath('wall-spotlight.png') });
     await wall.getByRole('button', { name: 'Grid', exact: true }).click();

@@ -87,6 +87,27 @@
     catch { status('Clipboard unavailable. Return to check-in and copy the screen sharing link.'); }
   };
 
+  // iPhones send their screen from a free streaming app to the ArenaHub relay (see server/iphoneRelay.ts).
+  function showIphoneSetup() {
+    api('relay').then(target => {
+      el('rtmpServer').textContent = target.server;
+      el('rtmpKey').textContent = target.streamKey;
+      el('iosRelay').hidden = false;
+      // The streaming app replaces the private link and the mirroring options on iPhone.
+      el('mirror').hidden = true; el('copy').hidden = true;
+      status('');
+    }).catch(e => {
+      el('iosNone').hidden = false;
+      status(/not set up/.test(e.message) ? 'Your facilitator watches iPhone players in game.' : e.message);
+    });
+  }
+  document.addEventListener('click', async event => {
+    const id = event.target instanceof HTMLElement && event.target.dataset.copy;
+    if (!id) return;
+    try { await navigator.clipboard.writeText(el(id).textContent); event.target.textContent = 'Copied'; setTimeout(() => { event.target.textContent = 'Copy'; }, 1500); }
+    catch { status('Clipboard unavailable. Press and hold the value to copy it.'); }
+  });
+
   const ios = /iPhone|iPad/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const android = /Android/i.test(navigator.userAgent);
   api('info').then(info => {
@@ -96,9 +117,10 @@
     if (!info.ready) { status('Live screens are not switched on for this event yet. Tell your organizer.'); return; }
     el('android').hidden = !android;
     el('ios').hidden = !ios;
+    if (ios) showIphoneSetup();
     // Phone browsers cannot share the screen (no getDisplayMedia), so only desktops get the button.
     el('pc').hidden = android || ios || !navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia || !window.LivekitClient;
     if (android) el('androidApp').href = 'intent://pov?s=' + encodeURIComponent(location.origin) + '&key=' + encodeURIComponent(key) + '#Intent;scheme=arenahub;package=ph.edu.wmsu.arenahub.companion;end';
-    status(android ? 'Open the Android Companion to share your game.' : ios ? 'Your facilitator watches iPhone players in game.' : el('pc').hidden ? 'Open this link in Chrome or Edge on your playing PC.' : 'Ready to share.');
+    status(android ? 'Open the Android Companion to share your game.' : ios ? 'Checking iPhone sharing…' : el('pc').hidden ? 'Open this link in Chrome or Edge on your playing PC.' : 'Ready to share.');
   }).catch(e => status(e.message));
 })();

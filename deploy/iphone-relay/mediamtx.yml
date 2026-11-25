@@ -1,0 +1,43 @@
+# ArenaHub iPhone relay (MediaMTX). setup.sh fills in the three __PLACEHOLDERS__.
+# iPhones publish RTMP from a streaming app; the staff wall plays them over WebRTC (WHEP). No re-encoding.
+logLevel: info
+logDestinations: [stdout]
+
+# Every publish, view and API call is checked by the ArenaHub API. Nothing is open by default.
+authMethod: http
+authHTTPAddress: __AUTH_URL__
+authHTTPExclude: []
+
+# Who is live: the ArenaHub API reads this through Caddy (https://<host>/v3/...), still checked by the API above.
+api: true
+apiAddress: 127.0.0.1:9997
+apiTrustedProxies: [127.0.0.1]
+
+metrics: false
+pprof: false
+playback: false
+rtsp: false
+hls: false
+srt: false
+moq: false
+
+# iPhones send here (PRISM / Streamlabs "Custom RTMP").
+rtmp: true
+rtmpAddress: :1935
+
+# The wall plays here. Caddy adds HTTPS in front of 8889; media flows on 8189 (UDP, or TCP when UDP is blocked).
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+webrtcTrustedProxies: [127.0.0.1]
+webrtcAllowOrigins: [__ALLOWED_ORIGINS__]
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts: [__PUBLIC_IP__]
+
+pathDefaults:
+  # A phone that drops for a moment can reconnect with the same key.
+  overridePublisher: true
+
+paths:
+  all_others:

@@ -6,6 +6,7 @@
 import express from 'express';
 import { bearer, callerVerifier, type VerifyCaller } from './auth.ts';
 import { defaultScreenKey, screenCredential, screenWallRouter } from './screenWall.ts';
+import { iphoneRelayFromEnv, type IphoneRelay } from './iphoneRelay.ts';
 import { liveScreensFromEnv, matchScreenKey, roomScreenKey, screenMatches, type LiveScreens } from './liveScreens.ts';
 import { networkInterfaces } from 'node:os';
 import { resolve } from 'node:path';
@@ -80,7 +81,7 @@ const checkInInput = z.object({
   matchId: z.string().min(1).max(80).optional(),
 });
 
-type Deps = { screens?: LiveScreens | null; store?: MonitorStore; dataDir?: string; verifyCaller?: VerifyCaller; verifyStaff?: (token: string | undefined) => Promise<string>; fetcher?: typeof fetch; published?: PublishedReader; rosterEmails?: RosterEmailReader };
+type Deps = { screens?: LiveScreens | null; relay?: IphoneRelay | null; store?: MonitorStore; dataDir?: string; verifyCaller?: VerifyCaller; verifyStaff?: (token: string | undefined) => Promise<string>; fetcher?: typeof fetch; published?: PublishedReader; rosterEmails?: RosterEmailReader };
 type StaffRequest = express.Request & { staffUid?: string };
 type Handler = (req: express.Request, res: express.Response, next: express.NextFunction) => unknown;
 /** Express 4 does not catch rejected promises; this passes them to the error handler. */
@@ -149,7 +150,9 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   // Live screens run through LiveKit, so they work on the laptop server and on the hosted (Vercel) API alike.
   const screens = deps.screens !== undefined ? deps.screens : liveScreensFromEnv(env);
   const verifyCaller = deps.verifyCaller || callerVerifier(env, fetcher);
-  router.use(screenWallRouter(store, verifyCaller, screens, req => originAllowed(req, env)));
+  // iPhone screens arrive through a separate free relay, because Safari cannot share the screen (iphoneRelay.ts).
+  const relay = deps.relay !== undefined ? deps.relay : iphoneRelayFromEnv(env, fetcher);
+  router.use(screenWallRouter(store, verifyCaller, screens, req => originAllowed(req, env), relay));
   const lastCall = new Map<string, number>();
   // Code lookups allow short bursts (a page reload, Chrome's app fallback) but still stop guessing: 10 per 10 seconds per address.
   const lookups = new Map<string, number[]>();

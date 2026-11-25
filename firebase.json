@@ -6,7 +6,7 @@
     "rules": "firestore.rules"
   },
   "hosting": {
-    "site": "arenahub-platform",
+    "site": "arenahub-esports",
     "public": "dist",
     "ignore": [
       "firebase.json",

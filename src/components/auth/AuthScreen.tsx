@@ -4,7 +4,7 @@ import { auth } from '../../lib/firebase';
 import { useAuth } from '../../lib/authContext';
 import { hasCampusEmail, pendingSpectatorInvite } from '../../lib/campusAccess';
 import { CAMPUS_DOMAIN, CAMPUS_NAME } from '../../lib/institution';
-import { validateAuthFields } from '../../lib/authValidation';
+import { passwordStrength, validateAuthFields } from '../../lib/authValidation';
 import { authErrorMessage } from '../../lib/authMessages';
 import { SpectatorQRReader } from './SpectatorQRReader';
 import { Eye, EyeOff, QrCode, CheckCircle2 } from '../ui/Icons';
@@ -20,12 +20,25 @@ const TABS = [{ id: 'signin', label: 'Sign in' }, { id: 'signup', label: 'Sign u
 function GoogleMark() {
   return <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.94-6.16-4.54H2.15v2.85A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.09a6.6 6.6 0 0 1 0-4.18V7.06H2.15a11 11 0 0 0 0 9.88z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A10.54 10.54 0 0 0 12 1a11 11 0 0 0-9.85 6.06l3.69 2.85C6.71 7.31 9.14 5.38 12 5.38z"/></svg>;
 }
+const STRENGTH = ['', 'Weak', 'Fair', 'Good', 'Strong'] as const;
+function PasswordMeter({ id, password }: { id: string; password: string }) {
+  const score = passwordStrength(password);
+  return <div id={id} className="auth-strength" data-score={score}>
+    <div className="auth-strength-bars" aria-hidden="true">{[1, 2, 3, 4].map(bar => <span key={bar} className={bar <= score ? 'is-on' : ''} />)}</div>
+    <small aria-live="polite">{score ? <><strong>{STRENGTH[score]}</strong>{score < 3 ? ' · add length, capitals or a number' : ''}</> : 'Use at least 6 characters.'}</small>
+  </div>;
+}
+/** The three steps every new account goes through; the verification screen shows the same strip at step 2. */
+export function SignupSteps({ current }: { current: 0 | 1 | 2 }) {
+  const steps = ['Your details', 'Verify email', 'Enter ArenaHub'];
+  return <ol className="auth-steps" aria-label={`Step ${current + 1} of 3`}>{steps.map((label, index) => <li key={label} className={index < current ? 'is-done' : index === current ? 'is-current' : ''} aria-current={index === current ? 'step' : undefined}><span className="auth-steps-dot" aria-hidden="true">{index < current ? <CheckCircle2 size={14} /> : index + 1}</span>{label}</li>)}</ol>;
+}
 export function AuthScreen({ initialTab = 'signin', initialNotice = '', onSuccess, onTabChange, playerCheckIn = false }: AuthScreenProps) {
   const { signInWithGoogle, signInWithGoogleRedirect, signInWithEmail, signUpWithEmail, authError, isConfigured } = useAuth();
   const { showToast } = useToast(), id = useId(), tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const flow = useRef<HTMLDivElement>(null), form = useRef<HTMLFormElement>(null);
   const [tab, setTab] = useState<'signin' | 'signup' | 'qr' | 'reset'>(initialTab);
-  const [name, setName] = useState(''), [college, setCollege] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirmation, setConfirmation] = useState('');
+  const [firstName, setFirstName] = useState(''), [middleName, setMiddleName] = useState(''), [lastName, setLastName] = useState(''), [college, setCollege] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirmation, setConfirmation] = useState('');
   const [showPassword, setShowPassword] = useState(false), [busy, setBusy] = useState(false), [googlePending, setGooglePending] = useState(false), [redirectAvailable, setRedirectAvailable] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({}), [error, setError] = useState(''), [notice, setNotice] = useState(initialNotice), [invited, setInvited] = useState(() => !!pendingSpectatorInvite());
   useEffect(() => setTab(initialTab), [initialTab]);
@@ -43,7 +56,7 @@ export function AuthScreen({ initialTab = 'signin', initialNotice = '', onSucces
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); setError(''); setNotice('');
-    const fields: Record<string, string> = tab === 'reset' ? (validateAuthFields({ email, password: 'unused' }, false) as Record<string, string>) : validateAuthFields({ name, email, password, campus: hasCampusEmail(email) ? college || CAMPUS_NAME : 'Spectator' }, tab === 'signup');
+    const fields: Record<string, string> = tab === 'reset' ? (validateAuthFields({ email, password: 'unused' }, false) as Record<string, string>) : validateAuthFields({ nameParts: { first: firstName, middle: middleName, last: lastName }, email, password, campus: hasCampusEmail(email) ? college || CAMPUS_NAME : 'Spectator' }, tab === 'signup');
     if (tab === 'signup' && confirmation !== password) fields.confirmation = 'Passwords do not match.';
     setErrors(fields); if (Object.keys(fields).length) return;
     setBusy(true);
@@ -54,7 +67,7 @@ export function AuthScreen({ initialTab = 'signin', initialNotice = '', onSucces
         setNotice('If an account uses this email, you’ll receive a password reset link. Check your inbox and spam folder.'); return;
       }
       if (tab === 'signup') {
-        const result = await signUpWithEmail(email, password, name, college);
+        const result = await signUpWithEmail(email, password, { first: firstName, middle: middleName, last: lastName }, college);
         if (result.error) setError(result.error);
         else { showToast(result.verificationSent ? 'Account created. Check your email to verify it.' : 'Account created. Resend verification from the next screen.', 'info'); onSuccess?.(); }
       } else {
@@ -112,13 +125,18 @@ export function AuthScreen({ initialTab = 'signin', initialNotice = '', onSucces
       )}
       {tab === 'qr' && <><SpectatorQRReader onVerified={() => setInvited(true)} /><div className="auth-qr-next"><p>Next, use your own account</p><div><button type="button" className="arena-primary" onClick={() => changeTab('signup')}>Sign up</button><button type="button" className="arena-outline" onClick={() => changeTab('signin')}>Log in</button></div></div></>}
       {tab !== 'qr' && <>
-        <p className="auth-flow-intro">{tab === 'reset' ? 'We’ll email you a link to reset your password.' : tab === 'signup' ? 'Create your own ArenaHub account.' : 'Welcome back. Sign in to your account.'}</p>
+        {tab === 'signup' ? <SignupSteps current={0} /> : <p className="auth-flow-intro">{tab === 'reset' ? 'We’ll email you a link to reset your password.' : 'Welcome back. Sign in to your account.'}</p>}
 
-        <form ref={form} noValidate onSubmit={submit} className="auth-flow-form" aria-busy={busy}>
-          {tab === 'signup' && <label><Req>Full name</Req><input aria-required="true" autoComplete="name" maxLength={80} value={name} onChange={e => setName(e.target.value)} disabled={disabled} aria-invalid={!!errors.name} aria-describedby={errors.name ? `${id}-name-error` : undefined} />{fieldError('name')}</label>}
-          <label><Req>Email address</Req><input aria-required="true" type="email" autoComplete="email" inputMode="email" maxLength={254} value={email} onChange={e => setEmail(e.target.value)} disabled={disabled} placeholder={`you@${CAMPUS_DOMAIN}`} aria-invalid={!!errors.email} aria-describedby={errors.email ? `${id}-email-error` : undefined} />{fieldError('email')}</label>
+        <form ref={form} noValidate onSubmit={submit} onInput={event => { const field = (event.target as HTMLInputElement).name; if (field && errors[field]) setErrors(({ [field]: _cleared, ...rest }) => rest); }} className="auth-flow-form" aria-busy={busy}>
+          {tab === 'signup' && <fieldset className="auth-name-fields" disabled={disabled}>
+            <legend className="sr-only">Your name</legend>
+            <label><Req>First name</Req><input aria-required="true" name="firstName" autoComplete="given-name" autoCapitalize="words" maxLength={40} value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Juan" aria-invalid={!!errors.firstName} aria-describedby={errors.firstName ? `${id}-firstName-error` : undefined} />{fieldError('firstName')}</label>
+            <label><Req>Last name</Req><input aria-required="true" name="lastName" autoComplete="family-name" autoCapitalize="words" maxLength={40} value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Dela Cruz" aria-invalid={!!errors.lastName} aria-describedby={errors.lastName ? `${id}-lastName-error` : undefined} />{fieldError('lastName')}</label>
+            <label className="auth-name-middle"><span className="auth-label-row">Middle name<span className="auth-optional">Optional</span></span><input name="middleName" autoComplete="additional-name" autoCapitalize="words" maxLength={40} value={middleName} onChange={e => setMiddleName(e.target.value)} placeholder="Santos" aria-invalid={!!errors.middleName} aria-describedby={errors.middleName ? `${id}-middleName-error` : undefined} />{fieldError('middleName')}</label>
+          </fieldset>}
+          <label><Req>Email address</Req><input aria-required="true" name="email" type="email" autoComplete="email" inputMode="email" maxLength={254} value={email} onChange={e => setEmail(e.target.value)} disabled={disabled} placeholder={`you@${CAMPUS_DOMAIN}`} aria-invalid={!!errors.email} aria-describedby={errors.email ? `${id}-email-error` : undefined} />{fieldError('email')}</label>
           {tab === 'signup' && hasCampusEmail(email) && <label>College (optional)<select value={college} onChange={e => setCollege(e.target.value)} disabled={disabled}><option value="">Choose your college</option>{COLLEGES.map(value => <option key={value}>{value}</option>)}</select></label>}
-          {tab !== 'reset' && <><div className="auth-password-label"><label htmlFor={`${id}-password`}><Req>Password</Req></label>{tab === 'signin' && <button type="button" className="auth-flow-text" disabled={disabled} onClick={() => changeTab('reset')}>Forgot password?</button>}</div><div className="auth-password-input"><input aria-required="true" id={`${id}-password`} type={showPassword ? 'text' : 'password'} autoComplete={tab === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} disabled={disabled} aria-invalid={!!errors.password} aria-describedby={errors.password ? `${id}-password-error` : tab === 'signup' ? `${id}-password-help` : undefined} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>{fieldError('password')}{tab === 'signup' && <><small id={`${id}-password-help`} className="auth-flow-hint">Use at least 6 characters.</small><label><Req>Confirm password</Req><input aria-required="true" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={disabled} aria-invalid={!!errors.confirmation} aria-describedby={errors.confirmation ? `${id}-confirmation-error` : undefined} />{fieldError('confirmation')}</label></>}</>}
+          {tab !== 'reset' && <><div className="auth-password-label"><label htmlFor={`${id}-password`}><Req>Password</Req></label>{tab === 'signin' && <button type="button" className="auth-flow-text" disabled={disabled} onClick={() => changeTab('reset')}>Forgot password?</button>}</div><div className="auth-password-input"><input aria-required="true" name="password" id={`${id}-password`} type={showPassword ? 'text' : 'password'} autoComplete={tab === 'signup' ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} disabled={disabled} aria-invalid={!!errors.password} aria-describedby={errors.password ? `${id}-password-error` : tab === 'signup' ? `${id}-password-help` : undefined} /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></div>{fieldError('password')}{tab === 'signup' && <><PasswordMeter id={`${id}-password-help`} password={password} /><label><Req>Confirm password</Req><input aria-required="true" type={showPassword ? 'text' : 'password'} name="confirmation" autoComplete="new-password" value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={disabled} aria-invalid={!!errors.confirmation} aria-describedby={errors.confirmation ? `${id}-confirmation-error` : undefined} />{fieldError('confirmation')}</label></>}</>}
           {tab === 'signup' && !playerCheckIn && !hasCampusEmail(email) && <p className="auth-flow-hint">{invited ? 'Your student invitation will be checked again after email verification.' : <>Using a personal email? <button type="button" className="auth-flow-text" onClick={() => changeTab('qr')}>Add a student invitation</button> before creating your spectator account.</>}</p>}
           <button type="submit" className="arena-primary auth-submit" disabled={!isConfigured || disabled}>{busy ? 'Please wait…' : tab === 'reset' ? 'Send reset link' : tab === 'signup' ? 'Create account' : 'Sign in with email'}</button>
           {tab === 'reset' && <button type="button" className="auth-flow-text" disabled={disabled} onClick={() => changeTab('signin')}>Back to sign in</button>}

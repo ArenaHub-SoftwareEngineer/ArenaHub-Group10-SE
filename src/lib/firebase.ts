@@ -66,9 +66,12 @@ try {
 // The production build is mode "production" with the real project, so it can never reach this.
 export const useFirebaseEmulators = (import.meta.env.DEV || import.meta.env.MODE === 'test')
   && import.meta.env.VITE_FIREBASE_EMULATORS === 'true' && rawProjectId === 'demo-arenahub';
+// A phone on the same Wi-Fi opens the test site at the laptop's address, so it reaches the emulators there too.
+export const emulatorHost = typeof window !== 'undefined' && /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname)
+  ? window.location.hostname : '127.0.0.1';
 if (useFirebaseEmulators) {
-  connectAuthEmulator(auth, 'http://127.0.0.1:9098', { disableWarnings: true });
-  connectFirestoreEmulator(db, '127.0.0.1', 8085);
+  connectAuthEmulator(auth, `http://${emulatorHost}:9098`, { disableWarnings: true });
+  connectFirestoreEmulator(db, emulatorHost, 8085);
 }
 
 export { app, auth, db };

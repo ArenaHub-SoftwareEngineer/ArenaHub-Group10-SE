@@ -7,6 +7,7 @@ import { hasCampusEmail } from '../src/lib/institution.ts';
 import { GAME_LABEL } from '../src/lib/integrityRisk.ts';
 import { roomOpen, type RoomRow, type SessionRow, type MonitorStore } from './monitorStore.ts';
 import { SCREEN_KEY, roomScreenKey, type LiveScreens, type ScreenRoomState } from './liveScreens.ts';
+import type { IphoneRelay, RelayAuthRequest } from './iphoneRelay.ts';
 
 const MAX_STAFF_PER_MATCH = 4;
 function sign(room: RoomRow, purpose: string, value: string) {
@@ -43,8 +44,17 @@ function canShare(row: SessionRow, room: RoomRow, now: number) {
 }
 const MANAGERS = ['admin', 'school-admin', 'organizer'];
 const staffName = (email: string) => email.split('@')[0].slice(0, 60) || 'Staff';
+/**
+ * A local LiveKit (ws://localhost:7880) is "localhost" only on the laptop. A phone that opened the site at the
+ * laptop's Wi-Fi address gets that address instead, so it can reach the same media server.
+ */
+export function clientLiveUrl(url: string, requestHost: string | undefined) {
+  const host = (requestHost || '').replace(/:\d+$/, '');
+  if (!/^ws:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(url) || !/^(\d{1,3}\.){3}\d{1,3}$/.test(host) || host === '127.0.0.1') return url;
+  return url.replace(/^ws:\/\/(localhost|127\.0\.0\.1)/, 'ws://' + host);
+}
 
-export function screenWallRouter(store: MonitorStore, verify: VerifyCaller, screens: LiveScreens | null, allowOrigin: (req: express.Request) => boolean) {
+export function screenWallRouter(store: MonitorStore, verify: VerifyCaller, screens: LiveScreens | null, allowOrigin: (req: express.Request) => boolean, relay: IphoneRelay | null = null) {
   const router = express.Router();
   router.use('/screenwall', (req, res, next) => {
     if (allowOrigin(req)) next();
@@ -79,7 +89,36 @@ export function screenWallRouter(store: MonitorStore, verify: VerifyCaller, scre
     lastToken.set(row.id, Date.now());
     if (lastToken.size > 5000) lastToken.clear();
     const token = await live.publisherToken(key, { sessionId: row.id, name: row.player_name, team: row.team, platform: row.platform, game: row.game });
-    res.json({ url: live.url, token, name: row.player_name, match: row.match_label });
+    res.json({ url: clientLiveUrl(live.url, req.get('host')), token, name: row.player_name, match: row.match_label });
+  }));
+
+  // iPhones share through a streaming app (PRISM, Streamlabs) and the relay, not through LiveKit (see iphoneRelay.ts).
+  router.post('/device/pov/relay', route(async (req, res) => {
+    const { row, key } = await publisher(req);
+    if (!relay) throw new ScreenError(503, 'iPhone screen sharing is not set up on this server yet. Tell your organizer.');
+    res.json({ ...relay.publishTarget(key, row.id), name: row.player_name, match: row.match_label });
+  }));
+  // The iPhone setup page asks this while the player starts the broadcast, so it can say "Your screen is live".
+  router.post('/device/pov/relay/status', route(async (req, res) => {
+    const { row, key } = await publisher(req);
+    if (!relay) throw new ScreenError(503, 'iPhone screen sharing is not set up on this server yet. Tell your organizer.');
+    let streams: Awaited<ReturnType<IphoneRelay['streams']>> = [];
+    try { streams = await relay.streams(key); }
+    catch { res.json({ live: false, error: 'The iPhone relay did not answer. Try again in a moment.' }); return; }
+    res.json({ live: streams.some(stream => stream.sessionId === row.id) });
+  }));
+  // The relay asks before every publish, view and API call. Anything this server did not sign is refused.
+  router.post('/relay/auth', express.json({ limit: '4kb' }), route(async (req, res) => {
+    const ask = (req.body || {}) as RelayAuthRequest;
+    const user = String(ask.user || ''), pass = String(ask.password || ''), path = String(ask.path || ''), now = store.now();
+    let allowed = false;
+    if (relay && ask.action === 'publish') {
+      const owner = relay.publisherOf(path), row = owner && await store.session(owner.sessionId);
+      const room = row?.room_id ? await store.room(row.room_id) : undefined;
+      allowed = !!(row && room && roomOpen(room, now) && Object.values(room.joined).some(s => s.sessionId === row.id) && canShare(row, room, now));
+    } else if (relay && (ask.action === 'read' || ask.action === 'playback')) allowed = relay.canRead(user, pass, path, now);
+    else if (relay && ask.action === 'api') allowed = relay.canUseApi(user, pass);
+    res.status(allowed ? 200 : 401).json(allowed ? { ok: true } : { error: 'Not allowed.' });
   }));
 
   // ---------- Staff ----------
@@ -106,6 +145,16 @@ export function screenWallRouter(store: MonitorStore, verify: VerifyCaller, scre
       try { live = Object.fromEntries(Object.entries(await screens.live()).filter(([key]) => visible(key))); }
       catch { liveError = 'The live screen server did not answer. Check that LiveKit is running.'; }
     }
+    // iPhones share through the relay, so they are added to each match's sharing count here.
+    if (relay) {
+      try {
+        for (const [key, count] of Object.entries(await relay.counts())) {
+          if (!visible(key)) continue;
+          const current = live[key] as { publishers: number; state: ScreenRoomState } | undefined;
+          live[key] = { publishers: (current?.publishers || 0) + count, state: current?.state || { paused: false } };
+        }
+      } catch { liveError = liveError || 'The iPhone relay did not answer. Check that it is running.'; }
+    }
     // Scrim and test check-ins have no scheduled match, so they are listed as their own screen rooms.
     const scrims = (await store.rooms()).filter(room => roomOpen(room, now) && !room.match_id && !room.verified_checkin)
       .map(room => ({ key: roomScreenKey(room.id), label: room.label, game: room.game || null, gameLabel: room.game ? GAME_LABEL[room.game] : 'Any game', players: room.players.map(player => ({ name: player.name, team: player.team })) }))
@@ -125,7 +174,20 @@ export function screenWallRouter(store: MonitorStore, verify: VerifyCaller, scre
   router.post('/screenwall/:key/watch', route(async (req, res) => {
     const { person, key, manage, email } = await watcher(req);
     const live = requireScreens();
-    res.json({ url: live.url, token: await live.viewerToken(key, { uid: person.uid, name: staffName(email) }), manage });
+    res.json({ url: clientLiveUrl(live.url, req.get('host')), token: await live.viewerToken(key, { uid: person.uid, name: staffName(email) }), manage });
+  }));
+  // iPhone screens that are live in this match, with a short-lived pass to play them from the relay.
+  router.get('/screenwall/:key/relay', route(async (req, res) => {
+    const { key } = await watcher(req);
+    if (!relay) { res.json({ configured: false, streams: [] }); return; }
+    let streams: Awaited<ReturnType<IphoneRelay['streams']>> = [], error = '';
+    try { streams = await relay.streams(key); }
+    catch { error = 'The iPhone relay did not answer. Check that it is running.'; }
+    const named = await Promise.all(streams.map(async stream => {
+      const row = await store.session(stream.sessionId);
+      return row ? { ...stream, name: row.player_name, team: row.team } : null;
+    }));
+    res.json({ configured: true, error, web: relay.web, ...relay.readerCredentials(key, store.now()), streams: named.filter(Boolean) });
   }));
   router.post('/screenwall/:key/pause', express.json({ limit: '1kb' }), route(async (req, res) => {
     const { key, email } = await watcher(req);

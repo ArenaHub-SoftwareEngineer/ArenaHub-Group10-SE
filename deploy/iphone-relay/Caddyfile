@@ -1,0 +1,13 @@
+# HTTPS for the iPhone relay. The wall runs on https, so the relay must be https too.
+# setup.sh sets RELAY_HOST to <public-ip-with-dashes>.sslip.io, a free name that points at this VM.
+{$RELAY_HOST} {
+	encode gzip
+	# Who is live (the ArenaHub API asks; MediaMTX checks its password with ArenaHub).
+	handle /v3/* {
+		reverse_proxy 127.0.0.1:9997
+	}
+	# WHEP playback for the staff wall.
+	handle {
+		reverse_proxy 127.0.0.1:8889
+	}
+}

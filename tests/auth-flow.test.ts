@@ -45,3 +45,18 @@ test('Google authentication accepts only verified exact institutional domains', 
   assert.equal(acceptsGoogleAccount({ email: 'student@wmsu.edu.ph', emailVerified: false }), false);
   assert.deepEqual(institutionalGoogleProvider().getCustomParameters(), { prompt: 'select_account', hd: CAMPUS_DOMAIN });
 });
+
+test('sign-up names: first and last are required, middle is optional, and the display name joins them', async () => {
+  const { validateNameParts, composeName, nameInitials, passwordStrength } = await import('../src/lib/authValidation');
+  assert.deepEqual(validateNameParts({ first: 'Juan', last: 'Dela Cruz' }), {});
+  assert.equal(validateNameParts({ first: '', last: 'Cruz' }).firstName, 'Enter your first name.');
+  assert.equal(validateNameParts({ first: 'Juan', last: ' ' }).lastName, 'Enter your last name.');
+  assert.equal(validateNameParts({ first: 'Juan', middle: '123', last: 'Cruz' }).middleName, 'Use letters, spaces, hyphens or apostrophes.');
+  assert.deepEqual(validateNameParts({ first: 'Ma. Niña', middle: "O'Neil", last: 'Santos-Reyes' }), {});
+  assert.equal(composeName({ first: ' Juan ', middle: '', last: 'Dela  Cruz' }), 'Juan Dela Cruz');
+  assert.equal(composeName({ first: 'Juan', middle: 'Santos', last: 'Cruz' }), 'Juan Santos Cruz');
+  assert.equal(nameInitials({ first: 'juan', middle: 'Santos', last: 'cruz' }), 'JC');
+  assert.equal(passwordStrength(''), 0);
+  assert.equal(passwordStrength('abcdef'), 1);
+  assert.equal(passwordStrength('Abcdefgh12!x'), 4);
+});

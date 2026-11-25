@@ -37,6 +37,7 @@ import { CAMPUS_NAME, hasCampusEmail } from './campusAccess';
 import { validateEmail, validateProfile } from './profileValidation';
 import { authErrorMessage } from './authMessages';
 import { registerEmailAccount } from './accountRegistration';
+import { composeName, type NameParts } from './authValidation';
 import { institutionalGoogleProvider, enforceGoogleInstitution } from './googleAuth';
 import { GOOGLE_DOMAIN_ERROR } from './institution';
 import { sendWithReturn } from './emailLinks';
@@ -168,7 +169,7 @@ interface AuthContextType {
   signUpWithEmail: (
     email: string,
     password: string,
-    displayName: string,
+    name: NameParts,
     collegeName?: string
   ) => Promise<{ error?: string; code?: string; verificationSent?: boolean }>;
   signInWithEmail: (
@@ -335,9 +336,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     async (
       email: string,
       password: string,
-      displayName: string,
+      nameParts: NameParts,
       collegeName?: string
     ): Promise<{ error?: string; code?: string; verificationSent?: boolean }> => {
+      const displayName = composeName(nameParts);
       const normalizedEmail = email.trim().toLowerCase();
       const school = hasCampusEmail(normalizedEmail) ? collegeName?.trim() || CAMPUS_NAME : 'Spectator';
       const invalid = validateEmail(normalizedEmail) || validateProfile(displayName, school);
@@ -346,7 +348,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!isFirebaseConfigured) return { error: 'Authentication is not configured.' };
       setAffiliationPending(true); setVerificationNotice('');
       try {
-        const result = await registerEmailAccount(normalizedEmail, password, displayName, collegeName);
+        const result = await registerEmailAccount(normalizedEmail, password, nameParts, collegeName);
         if (!result.verificationSent) setVerificationNotice('Your account was created, but the verification email could not be sent. Use Resend verification email to try again.');
         return { verificationSent: result.verificationSent };
       } catch (err: unknown) {

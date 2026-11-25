@@ -12,6 +12,7 @@ import type { AccountPanel } from './components/common/ProfileMenu';
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Loader2 } from './components/ui/Icons';
+import { AccountRestricted } from './components/auth/AccountRestricted';
 
 import { useAuth, AuthProvider } from './lib/authContext';
 import { Brand } from './components/ui/Brand';
@@ -446,7 +447,7 @@ function AppGate() {
   // Not signed in → show auth screen
   if (!firebaseUser || affiliationPending) return checkIn ? <PlayerCheckIn /> : <AuthEntry />;
   if (profileError) return <div className="auth-status-screen"><section className="auth-status-card"><Brand /><h1>Finish account setup</h1><p role="alert" className="auth-flow-error">{profileError}</p><button className="arena-primary auth-submit" onClick={() => void retryProfile()}>Retry loading profile</button><button className="auth-flow-text" onClick={() => void logout()}>Return to sign-in</button></section></div>;
-  if (ahUser && ahUser.status !== 'active') return <div className="auth-status-screen"><div className="auth-status-card"><Brand /><h1 className="text-2xl mb-3">Account access restricted</h1><p className="text-sm text-[var(--text-muted)] mb-5">Contact your tournament organizer about your account status.</p><button className="arena-primary" onClick={logout}>Sign out</button></div></div>;
+  if (ahUser && ahUser.status !== 'active') return <AccountRestricted status={ahUser.status} email={firebaseUser.email || ahUser.email} onSignOut={() => void logout()} />;
 
   if (firebaseUser.isAnonymous) {
     return <div className="auth-status-screen">

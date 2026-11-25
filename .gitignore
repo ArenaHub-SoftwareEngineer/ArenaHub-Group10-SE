@@ -36,3 +36,11 @@ graphify-out/
 
 .vercel
 .env*
+
+# Generated Vercel function bundle (scripts/bundle-vercel-api.mjs)
+api/index.js
+
+# local TLS cert/key and scratch output
+auto.crt
+auto.key
+r.txt

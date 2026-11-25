@@ -158,6 +158,6 @@ test('the deploy smoke script passes against a correctly configured API and fail
   assert.equal(noCors.status, 1);
   assert.match(noCors.stdout, /FAIL  GET \/api\/health answers.*add it to CORS_ORIGINS/);
   // The serverless entry point is an API-only app.
-  const entry = (await import('../api/index')).default;
+  const entry = (await import('../server/vercelEntry')).default;
   assert.equal(typeof entry, 'function');
 });

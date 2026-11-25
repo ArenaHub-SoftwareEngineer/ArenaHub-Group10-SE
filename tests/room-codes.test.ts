@@ -16,6 +16,7 @@ import type { PublishedData } from '../server/data';
 import type { RosterEmails } from '../server/privateRoster';
 import { liveScreensFromEnv, parseState, type LiveScreens } from '../server/liveScreens';
 import { TokenVerifier } from 'livekit-server-sdk';
+import { createIphoneRelay, type IphoneRelay } from '../server/iphoneRelay';
 
 const signer = 'c'.repeat(64);
 function fixture(): PublishedData {
@@ -27,14 +28,14 @@ const rosterEmails = async (tournamentId: string): Promise<RosterEmails> => {
   return new Map([['alpha', new Map([['alpha ace', emailHash('Alpha.Ace@wmsu.edu.ph')]])], ['bravo', new Map([['bravo ace', emailHash('bravo@wmsu.edu.ph')]])]]);
 };
 
-async function setup(t: any, screens?: LiveScreens | null) {
+async function setup(t: any, screens?: LiveScreens | null, relay?: IphoneRelay | null) {
   const dir = await mkdtemp(join(tmpdir(), 'arenahub-rooms-'));
   // Start inside a window, past the grace period, so the previous code is not accepted by accident.
   let now = Math.floor(Date.now() / ROOM_WINDOW_MS) * ROOM_WINDOW_MS + 2 * ROOM_GRACE_MS;
   const store = new IntegrityStore(dir, () => now);
   const config = store.config(); config.android.games.mlbb.trustedCertSha256 = [signer]; store.saveConfig(config, 'fixture');
   const app = express();
-  app.use('/api/integrity', createIntegrityRouter({}, { ...(screens !== undefined ? { screens } : {}), store, published: async () => fixture(), rosterEmails,
+  app.use('/api/integrity', createIntegrityRouter({}, { ...(screens !== undefined ? { screens } : {}), ...(relay !== undefined ? { relay } : {}), store, published: async () => fixture(), rosterEmails,
     verifyCaller: async token => {
       if (!token || !['staff', 'ref', 'other', 'student', 'visitor'].includes(token)) throw new AuthError(401, 'Sign in');
       const campus = token !== 'visitor', staff = ['staff', 'ref', 'other'].includes(token);
@@ -351,4 +352,69 @@ test('typed names, scrim rooms where the player picks the game, and closing or e
   assert.equal((await call(`/rooms/${again.id}/close`, {})).body.open, false);
   assert.equal((await call('/device/room', { code: fresh }, null)).status, 404);
   assert.equal((await call(`/rooms/${again.id}`)).body.code, null, 'a closed room shows no code');
+});
+
+test('iPhone relay: private stream keys, relay checks for publish, view and API, and the wall list', async t => {
+  const listed: string[] = [];
+  let live: Array<{ name: string; ready: boolean; readyTime: string }> = [];
+  const relay = createIphoneRelay({ rtmp: 'rtmp://relay.example:1935', web: 'https://relay.example', secret: 's'.repeat(32) }, (async (url: string, init: RequestInit) => {
+    listed.push(String(url) + ' ' + (init.headers as Record<string, string>).Authorization);
+    return new Response(JSON.stringify({ items: live }), { status: 200 });
+  }) as typeof fetch);
+  const { store, call, join, tick } = await setup(t, null, relay);
+  const room = (await call('/rooms', { matchId: 'match' })).body;
+  const entered = await join({ code: room.code, slot: 'p1', email: 'alpha.ace@wmsu.edu.ph', college: 'CAL', platform: 'ios' });
+  const key: string = entered.body.screenKey;
+  const sessionId = store.room(room.id)!.joined.p1.sessionId;
+
+  // The player's streaming app gets an RTMP server and a stream key bound to this match and this player.
+  assert.equal((await call('/device/pov/relay', {}, null)).status, 401);
+  const target = (await call('/device/pov/relay', {}, key)).body;
+  assert.equal(target.server, 'rtmp://relay.example:1935/m-match');
+  assert.match(target.streamKey, new RegExp('^' + sessionId + '-[A-Za-z0-9_-]{22}$'));
+  assert.equal(target.url, target.server + '/' + target.streamKey);
+  const path = 'm-match/' + target.streamKey;
+  const ask = (body: Record<string, unknown>) => call('/relay/auth', body, null);
+
+  assert.equal((await ask({ action: 'publish', path, protocol: 'rtmp' })).status, 200, 'the signed key publishes');
+  assert.equal((await ask({ action: 'publish', path: path.slice(0, -1) + (path.endsWith('A') ? 'B' : 'A') })).status, 401, 'a changed key does not');
+  assert.equal((await ask({ action: 'publish', path: 'm-other/' + target.streamKey })).status, 401, 'nor the key moved to another match');
+  assert.equal((await ask({ action: 'read', path })).status, 401, 'nobody watches without a staff pass');
+  assert.equal((await ask({ action: 'api', user: 'arenahub-api', password: 'guess' })).status, 401);
+  assert.equal((await ask({ action: 'pprof' })).status, 401);
+
+  // Facilitators get a short pass for their own match only.
+  assert.equal((await call('/screenwall/m-match/relay', undefined, 'ref')).status, 403, 'unassigned facilitator');
+  live = [{ name: path, ready: true, readyTime: new Date().toISOString() }, { name: 'm-match/forged-AAAAAAAAAAAAAAAAAAAAAA', ready: true, readyTime: '' }, { name: 'm-other/' + target.streamKey, ready: true, readyTime: '' }];
+  const wall = (await call('/screenwall/m-match/relay')).body;
+  assert.equal(wall.configured, true);
+  assert.equal(wall.web, 'https://relay.example');
+  assert.deepEqual(wall.streams.map((s: { path: string; name: string; team: string; sessionId: string }) => [s.path, s.name, s.team, s.sessionId]), [[path, 'alpha ace', 'ALPHA', sessionId]], 'only signed streams of this match');
+  assert.equal((await call('/device/pov/relay/status', {}, key)).body.live, true, 'the player sees their own broadcast is live');
+  assert.equal((await call('/device/pov/relay/status', {}, null)).status, 401);
+  const listing = (await call('/screenwall/status')).body;
+  assert.deepEqual(listing.live['m-match'], { publishers: 1, state: { paused: false } }, 'iPhones count as sharing in the match list');
+  assert.equal(listing.live['m-other'], undefined, 'a key moved to another match is not counted');
+  const apiAuth = Buffer.from(listed[0].split('Basic ')[1], 'base64').toString().split(':');
+  assert.equal((await ask({ action: 'api', user: apiAuth[0], password: apiAuth[1] })).status, 200, 'the relay lets this server list streams');
+  assert.equal((await ask({ action: 'read', path, user: wall.user, password: wall.pass })).status, 200);
+  assert.equal((await ask({ action: 'read', path: 'm-other/' + target.streamKey, user: wall.user, password: wall.pass })).status, 401, 'the pass is for this match only');
+  assert.equal((await ask({ action: 'read', path, user: wall.user.replace('m-match', 'm-other'), password: wall.pass })).status, 401);
+  tick(31 * 60_000);
+  assert.equal((await ask({ action: 'read', path, user: wall.user, password: wall.pass })).status, 401, 'passes expire');
+
+  // Ending the check-in ends publishing.
+  await call('/rooms/' + room.id + '/close', {});
+  assert.equal((await ask({ action: 'publish', path })).status, 401);
+});
+
+test('iPhone relay: not configured', async t => {
+  const { call, join, store } = await setup(t, null, null);
+  const room = (await call('/rooms', { matchId: 'match' })).body;
+  const entered = await join({ code: room.code, slot: 'p1', email: 'alpha.ace@wmsu.edu.ph', college: 'CAL', platform: 'ios' });
+  assert.ok(store.room(room.id));
+  assert.equal((await call('/device/pov/relay', {}, entered.body.screenKey)).status, 503);
+  assert.equal((await call('/device/pov/relay/status', {}, entered.body.screenKey)).status, 503);
+  assert.deepEqual((await call('/screenwall/m-match/relay')).body, { configured: false, streams: [] });
+  assert.equal((await call('/relay/auth', { action: 'publish', path: 'm-match/x-AAAAAAAAAAAAAAAAAAAAAA' }, null)).status, 401);
 });
