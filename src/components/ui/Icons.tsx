@@ -109,7 +109,12 @@ import {
   Skull as SkullVector,
   Minimize2 as Minimize2Vector,
   MonitorUp as MonitorUpVector,
-  MonitorOff as MonitorOffVector
+  Monitor as MonitorVector,
+  Smartphone as SmartphoneVector,
+  MonitorOff as MonitorOffVector,
+  BellOff as BellOffVector,
+  MoreHorizontal as MoreHorizontalVector,
+  Keyboard as KeyboardVector
 } from 'lucide-react';
 import { PlatformLogo } from './PlatformLogo';
 
@@ -228,4 +233,9 @@ export const Youtube = ({size=20,className=''}:LucideProps)=><PlatformLogo platf
 export const Facebook = ({size=20,className=''}:LucideProps)=><PlatformLogo platform="facebook" size={size} className={className}/>;
 export const Minimize2 = icon(Minimize2Vector);
 export const MonitorUp = icon(MonitorUpVector);
+export const Monitor = icon(MonitorVector);
+export const Smartphone = icon(SmartphoneVector);
 export const MonitorOff = icon(MonitorOffVector);
+export const BellOff = icon(BellOffVector);
+export const MoreHorizontal = icon(MoreHorizontalVector);
+export const Keyboard = icon(KeyboardVector);

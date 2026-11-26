@@ -242,7 +242,7 @@ export type PcFacts = z.infer<typeof pcFactsSchema>;
 export type DeviceFacts = z.infer<typeof deviceFactsSchema>;
 
 export function inspectionCoverage(platform: MonitorPlatform, facts: unknown): { status: 'unavailable' | 'not-reported' | 'limited' | 'reported'; detail: string } {
-  if (platform === 'ios') return { status: 'unavailable', detail: 'iPhone protection requires referee inspection, continuous supervision and recording. Installed-app and game-memory inspection are unavailable.' };
+  if (platform === 'ios') return { status: 'unavailable', detail: 'Apple does not let any app inspect an iPhone, so installed apps and game memory cannot be checked. The player confirms the iPhone settings at check-in and staff watch the live screen; a referee check is optional.' };
   if (!facts || typeof facts !== 'object') return { status: 'not-reported', detail: 'No device inspection report has arrived yet.' };
   const checks = (facts as { checks?: Record<string, unknown> }).checks;
   if (!checks) return { status: 'limited', detail: 'This collector did not report its inspection coverage. Update the companion before relying on its results.' };

@@ -13,6 +13,9 @@ export const LOST_AFTER_MS = 45_000;
 export const PAIRING_TTL_MS = 5 * 60_000;
 export const RETENTION_MS = 30 * 24 * 3600_000;
 
+/** A facilitator invite. `accepted_at` is set the first time the account holds the facilitator role. */
+export interface FacilitatorInvite { email: string; invited_by: string; invited_at: number; accepted_at: number | null }
+
 export interface SessionRow {
   id: string; match_id: string; match_label: string; game: MonitorGame; platform: MonitorPlatform; player_name: string;
   expected_steam_id: string; created_by: string; created_at: number; expires_at: number; code_hash: string | null; code_expires_at: number;
@@ -22,14 +25,15 @@ export interface SessionRow {
   room_id?: string;
   /** Registration typed on the join page (room joins only). */
   email?: string; college?: string;
-  /** Roster email comparison for legacy rooms, or 'verified' for a signed-in campus account. */
+  /** Roster email comparison for legacy rooms, 'verified' for a signed-in campus account, or 'unsigned' for a
+   *  staff test check-in without sign-in. An 'unsigned' session never counts as a pass. */
   email_check?: string;
   /** When this session first passed its scan (or iPhone inspection). Kept after the scan goes stale, as proof it ran. */
   passed_at?: number | null;
 }
 export type StoredSignal = { id: SignalId; severity: Severity; evidence: string; firstSeen: number; lastSeen: number; count: number };
 export type MediaItem = { id: number; kind: string; bytes: number; createdAt: number };
-export type PairingInput = { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; flexible?: boolean; playerName: string; team?: string; playerKey?: string; rosterVersion?: string; record?: boolean; expectedSteamId: string; hours: number; roomId?: string; email?: string; college?: string; emailCheck?: 'match' | 'mismatch' | 'unknown' | 'verified' };
+export type PairingInput = { matchId: string; matchLabel: string; game: MonitorGame; platform: MonitorPlatform; flexible?: boolean; playerName: string; team?: string; playerKey?: string; rosterVersion?: string; record?: boolean; expectedSteamId: string; hours: number; roomId?: string; email?: string; college?: string; emailCheck?: 'match' | 'mismatch' | 'unknown' | 'verified' | 'unsigned' };
 export type Pairing = { id: string; code: string; codeExpiresAt: number };
 
 export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -80,12 +84,14 @@ export function lostGapSignal(row: SessionRow, now: number, lostAfterMs: number)
 // ---------- Room codes ----------
 // A room is the front door for one match (or a scrim): players open the fixed join address and type the
 // room code that only staff can see. The code is derived from a secret kept on the server and changes
-// every 5 minutes, like an authenticator app. Typing it does not admit anyone by itself: the player then
+// every 3 minutes, like an authenticator app. Typing it does not admit anyone by itself: the player then
 // picks their own roster name, and each roster player can join once until staff reset them.
-export const ROOM_WINDOW_MS = 5 * 60_000;
+export const ROOM_WINDOW_MS = 3 * 60_000;
 /** The previous code keeps working this long after it changes, for a player who was mid-typing. */
 export const ROOM_GRACE_MS = 60_000;
-export const ROOM_CODE_LENGTH = 6;
+/** Digits only, so a player can type it on any phone keypad. */
+export const ROOM_CODE_LENGTH = 8;
+const ROOM_DIGITS = '0123456789';
 
 export type RoomPlayer = { slot: string; name: string; team: string; playerKey: string; college: string;
   /** sha256 of the lower-case school email from the staff-only roster. Never sent to players. */
@@ -102,35 +108,56 @@ export interface RoomRow {
   resets?: RoomReset[];
   test_room?: boolean;
   verified_checkin?: boolean;
+  /** Staff test switch on a match check-in: players may check in without signing in. Their sessions are
+   *  marked 'unsigned' and never count as a pass. Lives and dies with the room. */
+  no_sign_in?: boolean;
+  /** Set when staff pressed "New code": codes restart from this moment, and earlier codes stop working. */
+  code_start?: number;
 }
 
-export function roomCodeAt(secret: string, window: number) {
+/**
+ * One per iPhone player (per school account). The PRISM stream key never changes, so this record says which
+ * check-in (session and match screen) the stream belongs to right now. `verified_at` is set the first time the relay
+ * really received the player's screen: from then on their PRISM is set up, until the relay address changes.
+ */
+export interface IphoneSetup {
+  player_id: string; email: string; session_id: string; screen_key: string; updated_at: number;
+  verified_at: number | null; verified_server: string; device: string;
+}
+
+export function roomCodeAt(secret: string, window: number | string) {
   const digest = createHmac('sha256', secret).update(`arenahub-room:${window}`).digest();
-  // Two bytes per character keeps the bias of the modulo below 0.05%.
-  return Array.from({ length: ROOM_CODE_LENGTH }, (_, i) => PAIRING_ALPHABET[digest.readUInt16BE(i * 2) % PAIRING_ALPHABET.length]).join('');
+  // Two bytes per digit keeps the bias of the modulo below 0.02%.
+  return Array.from({ length: ROOM_CODE_LENGTH }, (_, i) => ROOM_DIGITS[digest.readUInt16BE(i * 2) % ROOM_DIGITS.length]).join('');
 }
 /** The code staff show right now, and when it changes. */
-type CodeRoom = Pick<RoomRow, 'secret'> & Partial<Pick<RoomRow, 'test_room' | 'expires_at'>>;
+type CodeRoom = Pick<RoomRow, 'secret'> & Partial<Pick<RoomRow, 'test_room' | 'expires_at' | 'code_start'>>;
+/** Code windows count from the staff's last "New code" press, or from time zero. */
+const codeWindow = (room: CodeRoom, now: number) => {
+  const start = room.code_start || 0, index = Math.floor((now - start) / ROOM_WINDOW_MS);
+  return { start, index, key: (i: number) => start ? `${start}:${i}` : i };
+};
 
 export function currentRoomCode(room: CodeRoom, now: number) {
   if (room.test_room) return { code: roomCodeAt(room.secret, 0), changesAt: room.expires_at ?? now };
-  const window = Math.floor(now / ROOM_WINDOW_MS);
-  return { code: roomCodeAt(room.secret, window), changesAt: (window + 1) * ROOM_WINDOW_MS };
+  const { start, index, key } = codeWindow(room, now);
+  return { code: roomCodeAt(room.secret, key(index)), changesAt: start + (index + 1) * ROOM_WINDOW_MS };
 }
-export const normalizeRoomCode = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+export const normalizeRoomCode = (value: string) => value.replace(/[^0-9]/g, '');
 /** True when the typed code is this room's current code, or the previous one within the grace period. */
 export function roomCodeMatches(room: CodeRoom, typed: string, now: number) {
   const value = normalizeRoomCode(typed);
   if (value.length !== ROOM_CODE_LENGTH) return false;
   if (room.test_room) return timingSafeEqual(Buffer.from(roomCodeAt(room.secret, 0)), Buffer.from(value));
-  const window = Math.floor(now / ROOM_WINDOW_MS);
-  const candidates = [window, ...(now - window * ROOM_WINDOW_MS < ROOM_GRACE_MS ? [window - 1] : [])];
-  return candidates.some(w => timingSafeEqual(Buffer.from(roomCodeAt(room.secret, w)), Buffer.from(value)));
+  const { start, index, key } = codeWindow(room, now);
+  // The previous code still works for a short grace period, but not across a "New code" press.
+  const candidates = [index, ...(index > 0 && now - start - index * ROOM_WINDOW_MS < ROOM_GRACE_MS ? [index - 1] : [])];
+  return candidates.some(w => timingSafeEqual(Buffer.from(roomCodeAt(room.secret, key(w))), Buffer.from(value)));
 }
 export const roomOpen = (room: RoomRow, now: number) => !room.closed_at && room.expires_at > now;
 /** A free-name slot: the same name typed twice is the same player. */
 export const nameSlot = (name: string) => `name:${name.trim().toLowerCase().replace(/\s+/g, ' ')}`;
-export type RoomInput = { label: string; matchId: string; game: MonitorGame | ''; rosterVersion: string; players: RoomPlayer[]; record: boolean; hours: number; testRoom?: boolean; verifiedCheckIn?: boolean };
+export type RoomInput = { label: string; matchId: string; game: MonitorGame | ''; rosterVersion: string; players: RoomPlayer[]; record: boolean; hours: number; testRoom?: boolean; verifiedCheckIn?: boolean; noSignIn?: boolean };
 /** Why a slot cannot be joined, or null when it is free. */
 export function slotBlocked(session: SessionRow | undefined, now: number): string | null {
   if (!session) return null;
@@ -138,6 +165,8 @@ export function slotBlocked(session: SessionRow | undefined, now: number): strin
   if (session.status === 'pending' && session.code_expires_at >= now) return 'This player is joining on another device right now. Wait 5 minutes, or ask the referee.';
   return null;
 }
+/** A test check-in made without signing in: no identity behind it, so it can never be proof of a scan. */
+export const unsignedSession = (row: Pick<SessionRow, 'email_check'> | null | undefined) => row?.email_check === 'unsigned';
 export const emailHash = (email: string) => sha256(email.trim().toLowerCase());
 export class RoomError extends Error { constructor(readonly status: number, message: string) { super(message); } }
 
@@ -196,12 +225,22 @@ export interface MonitorStore {
   /** Staff emails assigned to watch each screen room (a scheduled match or a scrim room), by screen key. */
   screenStaff(): Awaitable<Record<string, string[]>>;
   setScreenStaff(key: string, emails: string[], actor: string): Awaitable<void>;
+  /** Facilitators invited by email. The role itself lives in Firebase claims; this is the invite list. */
+  facilitatorInvites(): Awaitable<FacilitatorInvite[]>;
+  saveFacilitatorInvite(invite: FacilitatorInvite, actor: string): Awaitable<void>;
+  deleteFacilitatorInvite(email: string, actor: string): Awaitable<void>;
+  /** iPhone players: which check-in their PRISM stream belongs to now, and whether the relay has seen it work. */
+  iphoneSetups(playerIds: string[]): Awaitable<IphoneSetup[]>;
+  saveIphoneSetup(setup: IphoneSetup): Awaitable<void>;
   closeRoom(id: string, actor: string): Awaitable<boolean>;
+  /** Staff "New code": the current code stops working and a fresh one starts now. */
+  newRoomCode(id: string, actor: string): Awaitable<boolean>;
   /**
    * Reserves a slot and issues its pairing in one step, so two devices cannot take the same player.
    * Throws RoomError when the slot is taken.
    */
   joinRoom(roomId: string, slot: string, pairing: PairingInput): Awaitable<Pairing>;
   /** Staff free a slot: its session ends, and the player can join again. */
-  resetRoomSlot(roomId: string, slot: string, actor: string): Awaitable<boolean>;
+  /** Ends the player's session and frees the seat. With `moved`, the player left the seat themselves (not a staff reset). */
+  resetRoomSlot(roomId: string, slot: string, actor: string, moved?: string): Awaitable<boolean>;
 }

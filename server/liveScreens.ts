@@ -9,6 +9,7 @@
 //   LIVEKIT_API_SECRET  from the LiveKit project (secret for --dev)
 //   LIVEKIT_API_URL     optional: where THIS server reaches LiveKit, when it differs from LIVEKIT_URL
 import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
+import { SignJWT, decodeJwt } from 'jose';
 import type { PublishedData } from './data.ts';
 import { FAIR_PLAY_GAMES, belongsToFairPlayGame } from '../src/lib/fairPlayGames.ts';
 import { scheduleMatches } from '../src/lib/formats/placement.ts';
@@ -29,8 +30,8 @@ export interface ScreenRoomState { paused: boolean; by?: string; at?: number; no
 export interface ScreenRoomLive { publishers: number; state: ScreenRoomState }
 
 export interface LiveScreens {
-  /** Where players and staff connect (the browser and app open this address). */
-  url: string;
+  /** Where players and staff connect now (the browser and app open this address). */
+  address(): Promise<string>;
   publisherToken(key: string, player: { sessionId: string; name: string; team: string; platform: MonitorPlatform; game: MonitorGame }): Promise<string>;
   viewerToken(key: string, staff: { uid: string; name: string }): Promise<string>;
   /** Live rooms by screen key, read once for the whole list. */
@@ -38,22 +39,56 @@ export interface LiveScreens {
   setState(key: string, state: ScreenRoomState): Promise<ScreenRoomState>;
 }
 
-export function liveScreensFromEnv(env: Env): LiveScreens | null {
+/**
+ * LiveKit tokens are "not valid before" the moment they are made. A self-hosted LiveKit on a laptop whose clock is
+ * slow (the organizer's runs 15 min behind) rejects them as not yet valid, so move that moment an hour back and
+ * give the token an extra hour at the end. Signed with the same key, so LiveKit Cloud accepts them the same way.
+ */
+const CLOCK_SLACK_S = 3600;
+async function withClockSlack(jwt: string, secret: string) {
+  const payload = decodeJwt(jwt);
+  const nbf = (payload.nbf || Math.floor(Date.now() / 1000)) - CLOCK_SLACK_S;
+  return new SignJWT({ ...payload, nbf, exp: (payload.exp || nbf) + CLOCK_SLACK_S }).setProtectedHeader({ alg: 'HS256' }).sign(new TextEncoder().encode(secret));
+}
+/** The room API client, with the same clock slack on its own short-lived tokens. */
+class SlackRoomClient extends RoomServiceClient {
+  constructor(host: string, private readonly key: string, private readonly keySecret: string) { super(host, key, keySecret); }
+  async authHeader(...args: Parameters<RoomServiceClient['authHeader']>) {
+    const header = await super.authHeader(...args);
+    const bearer = /^Bearer (.+)$/.exec(header.Authorization || '');
+    return bearer ? { ...header, Authorization: 'Bearer ' + await withClockSlack(bearer[1], this.keySecret) } : header;
+  }
+}
+
+/**
+ * `laptop`: the organizer laptop's own LiveKit address while its relay is checked in (npm run relay:laptop).
+ * It wins over LIVEKIT_URL, so live screens keep working when the LiveKit Cloud free minutes run out.
+ */
+export function liveScreensFromEnv(env: Env, laptop?: () => Promise<string | null>): LiveScreens | null {
   const url = (env.LIVEKIT_URL || '').trim(), apiKey = (env.LIVEKIT_API_KEY || '').trim(), secret = (env.LIVEKIT_API_SECRET || '').trim();
   if (!url || !apiKey || !secret) return null;
   if (!/^wss?:\/\//.test(url)) throw new Error('LIVEKIT_URL must start with wss:// (or ws:// for a local test server).');
   // The room API speaks HTTP on the same host as the WebSocket address.
   const apiUrl = (env.LIVEKIT_API_URL || url).trim().replace(/^ws/, 'http');
-  const rooms = new RoomServiceClient(apiUrl, apiKey, secret);
-  let cached: { at: number; data: Promise<Record<string, ScreenRoomLive>> } | null = null;
+  const clients = new Map<string, RoomServiceClient>();
+  const roomsAt = (api: string) => {
+    if (!clients.has(api)) clients.set(api, new SlackRoomClient(api, apiKey, secret));
+    return clients.get(api)!;
+  };
+  /** Where players and staff connect now, and where this server reaches the room API. */
+  const target = async () => {
+    const own = laptop ? await laptop().catch(() => null) : null;
+    return own ? { url: own, api: own.replace(/^ws/, 'http') } : { url, api: apiUrl };
+  };
+  let cached: { at: number; api: string; data: Promise<Record<string, ScreenRoomLive>> } | null = null;
 
   const token = async (identity: string, name: string, ttl: string, grant: ConstructorParameters<typeof AccessToken>[2] & object, video: Record<string, unknown>) => {
     const at = new AccessToken(apiKey, secret, { identity, name, ttl, ...grant });
     at.addGrant(video);
-    return at.toJwt();
+    return withClockSlack(await at.toJwt(), secret);
   };
   return {
-    url,
+    address: async () => (await target()).url,
     publisherToken: (key, player) => token('p-' + player.sessionId, player.name, '4h',
       { attributes: { team: player.team, platform: player.platform, game: player.game } },
       // Players may publish one thing only, their screen, and may not watch anyone, including opponents.
@@ -61,17 +96,19 @@ export function liveScreensFromEnv(env: Env): LiveScreens | null {
     viewerToken: (key, staff) => token('s-' + staff.uid.slice(0, 24) + '-' + Math.random().toString(36).slice(2, 6), staff.name, '4h', {},
       // Staff watch only. Hidden, so players never see who is watching and the wall lists only players.
       { room: liveKitRoomName(key), roomJoin: true, canPublish: false, canPublishData: false, canSubscribe: true, canUpdateOwnMetadata: false, hidden: true }),
-    live() {
-      if (cached && Date.now() - cached.at < 3000) return cached.data;
-      const data = rooms.listRooms().then(list => Object.fromEntries(list
+    async live() {
+      const { api } = await target();
+      if (cached && cached.api === api && Date.now() - cached.at < 3000) return cached.data;
+      const data = roomsAt(api).listRooms().then(list => Object.fromEntries(list
         .filter(room => room.name.startsWith('arenahub-'))
         .map(room => [room.name.slice('arenahub-'.length), { publishers: room.numPublishers, state: parseState(room.metadata) }])));
-      cached = { at: Date.now(), data };
+      cached = { at: Date.now(), api, data };
       data.catch(() => { if (cached?.data === data) cached = null; });
       return data;
     },
     async setState(key, state) {
       const name = liveKitRoomName(key), metadata = JSON.stringify(state);
+      const rooms = roomsAt((await target()).api);
       cached = null;
       // A room exists only while someone is connected. Pausing an empty match creates it, so players who join later see the pause.
       try { await rooms.updateRoomMetadata(name, metadata); }

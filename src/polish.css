@@ -343,3 +343,37 @@ html[data-motion=reduced] .app-shell :is(.stream-game-card, .directory-game, .di
   .arena-dialog.is-sheet .dialog-grabber span { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); }
   .arena-dialog.is-sheet.auth-entry-dialog .dialog-grabber { display: none; }
 }
+
+/* iPhone check (referee): one tap per line, one button at the end. */
+.app-shell .ios-check { display: grid; gap: 10px; }
+.app-shell .ios-check h3 { margin: 0; }
+.app-shell .ios-check-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.app-shell .ios-check-head::-webkit-details-marker { display: none; }
+.app-shell .ios-check-head h3 small { font-weight: 500; opacity: .6; font-size: .8em; }
+.app-shell details.ios-check:not([open]) > :not(summary) { display: none; }
+.app-shell .ios-state { font-size: var(--fs-sm); font-weight: 650; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.app-shell .ios-state.is-ok { color: var(--success); border-color: var(--success-border); background: var(--success-soft); }
+.app-shell .ios-state.is-bad { color: var(--danger); border-color: var(--danger-border); background: var(--danger-soft); }
+.app-shell .ios-check .field-hint { margin: 0; }
+.app-shell .ios-meter { height: 6px; border-radius: 6px; background: var(--border); overflow: hidden; }
+.app-shell .ios-meter i { display: block; height: 100%; background: var(--success); transition: width .25s var(--ease-out); }
+.app-shell .ios-progress { margin: -4px 0 0; font-size: var(--fs-xs); color: var(--text-muted); }
+.app-shell .ios-rows { display: grid; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.app-shell .ios-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; padding: 10px 12px; border-top: 1px solid var(--border); transition: background .15s; }
+.app-shell .ios-row:first-child { border-top: 0; }
+.app-shell .ios-row.is-clear { background: var(--success-soft); }
+.app-shell .ios-row.is-found { background: var(--danger-soft); }
+.app-shell .ios-row-text { display: grid; min-width: 0; }
+.app-shell .ios-row-text strong { font-weight: 600; }
+.app-shell .ios-row-text small { color: var(--text-muted); font-size: var(--fs-xs); }
+.app-shell .ios-seg { display: inline-flex; padding: 3px; gap: 3px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.app-shell .ios-seg button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); font: inherit; font-weight: 600; cursor: pointer; }
+.app-shell .ios-seg button[aria-checked="true"] { background: var(--success); color: #0b1a10; }
+.app-shell .ios-seg button.is-problem[aria-checked="true"] { background: var(--danger); color: #16080a; }
+.app-shell .ios-row .ios-fix { grid-column: 1 / -1; margin: 0; font-size: var(--fs-sm); color: var(--text-primary); }
+.app-shell .ios-tick { cursor: pointer; }
+.app-shell .ios-tick input { width: 22px; height: 22px; accent-color: var(--success); }
+.app-shell .ios-extra { display: grid; gap: 4px; font-size: var(--fs-sm); color: var(--text-secondary); }
+.app-shell .monitor-more { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+.app-shell .monitor-more > summary { cursor: pointer; font-weight: 600; color: var(--text-secondary); }
+@media (max-width: 520px) { .app-shell .ios-row { grid-template-columns: 1fr; } }

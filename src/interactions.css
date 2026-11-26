@@ -6,6 +6,7 @@
 .artwork-picker .schedule-game-tile>img{transition:transform .35s cubic-bezier(.2,.75,.3,1),filter .25s;filter:saturate(.88)}
 .artwork-picker .schedule-game-tile[aria-pressed=true]{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
 .artwork-codm-logo{position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);width:62%;height:38%;background:white;mask:url(/platforms/codm.svg) center/contain no-repeat;-webkit-mask:url(/platforms/codm.svg) center/contain no-repeat;filter:drop-shadow(0 2px 5px #0008);pointer-events:none}
+.artwork-mode-badge{position:absolute;left:8px;top:8px;padding:3px 8px;border-radius:6px;background:var(--brand);color:#1b110a;font-size:var(--fs-xs);font-weight:700;letter-spacing:.04em;line-height:1.2;pointer-events:none;box-shadow:0 2px 6px #0006}
 .artwork-picker .schedule-game-tile[data-game^=codm]>img{filter:brightness(.48) saturate(.7)}
 .rank-guide-hero{transition:border-color .2s,background-color .2s}.rank-hero-medal{animation:medal-reveal .23s cubic-bezier(.2,.75,.3,1)}
 @keyframes medal-reveal{from{opacity:.3;transform:translateY(4px) scale(.96)}to{opacity:1;transform:none}}

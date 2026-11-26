@@ -20,6 +20,12 @@ interface Props {
     /** A small label on a card, such as "Up next". */
     badge?: (match: Match) => string | undefined;
   };
+  /** Staff check-in: any match that `canPick` allows is selectable, live or not (Anti-cheat page). */
+  pick?: {
+    canPick: (match: Match) => boolean;
+    selectedMatchId?: string;
+    badge?: (match: Match) => string | undefined;
+  };
   onSelectMatch: (match: Match) => void;
 }
 
@@ -28,7 +34,7 @@ interface Props {
  * and Swiss (rounds as columns), all ending in a Champion card. Layout comes from lib/bracketLayout.ts.
  * Drag to pan, zoom with the buttons; a live match opens its watch page.
  */
-export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, onSelectMatch, broadcast }) => {
+export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, onSelectMatch, broadcast, pick }) => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -66,7 +72,8 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, o
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold text-(--text-primary)">{title}</h2>
-          <p className="mt-0.5 text-xs text-[var(--text-muted)]">{broadcast ? 'Scroll or drag to explore. Select a match to manage its broadcast.'
+          <p className="mt-0.5 text-xs text-[var(--text-muted)]">{pick ? 'Drag to explore. Select a match with both teams set to open its check-in.'
+            : broadcast ? 'Scroll or drag to explore. Select a match to manage its broadcast.'
             : layout.mode === 'rounds' ? 'Every team meets each opponent in turn. Drag to explore; rankings are in Standings.'
             : 'Drag to explore. Select a live match to open it.'}</p>
         </div>
@@ -123,10 +130,12 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, o
               const bye = firstBye || secondBye;
               const live = match.status === 'live';
               const ifNeeded = Boolean(match.inactive);
-              const locked = broadcast ? !canBroadcastMatch(match) : !live && !bye;
-              const lockedMessage = ifNeeded ? 'Played only if needed' : match.status === 'completed' ? 'Match has ended' : 'Match is not live yet';
+              const locked = pick ? !pick.canPick(match) : broadcast ? !canBroadcastMatch(match) : !live && !bye;
+              const lockedMessage = ifNeeded ? 'Played only if needed' : match.status === 'completed' ? 'Match has ended'
+                : pick ? 'Teams are not decided yet' : 'Match is not live yet';
+              const badge = broadcast?.badge?.(match) ?? pick?.badge?.(match);
               const final = lane === 'final' || layout.headers.some(h => h.final && h.x === x && h.lane === lane);
-              const selected = (broadcast?.selectedMatchId ?? selectedId) === match.id;
+              const selected = (broadcast?.selectedMatchId ?? pick?.selectedMatchId ?? selectedId) === match.id;
               return (
                 <button
                   key={match.id}
@@ -135,7 +144,7 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, o
                   aria-disabled={locked || undefined}
                   aria-pressed={!locked ? selected : undefined}
                   aria-haspopup={broadcast && !locked ? 'dialog' : undefined}
-                  aria-label={broadcast ? `${matchName(match)}: ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}` : undefined}
+                  aria-label={broadcast || pick ? `${matchName(match)}: ${match.team1?.name || 'TBD'} vs ${match.team2?.name || 'TBD'}` : undefined}
                   title={locked ? lockedMessage : undefined}
                   onClick={() => { if (locked) return; setSelectedId(match.id); onSelectMatch(match); }}
                   data-live={live}
@@ -145,7 +154,7 @@ export const TournamentBracketCanvas: React.FC<Props> = ({ rounds, appearance, o
                   style={{ left: x, top: y - CARD_H / 2, width: CARD_W, height: CARD_H }}
                 >
                   <div className="bracket-match-card-header">
-                    <span className="flex items-center gap-1.5">{matchName(match)} <span>{(match.matchFormat || 'Bo3').toUpperCase()}</span>{broadcast?.badge?.(match) && <span className="bracket-badge">{broadcast.badge(match)}</span>}</span>
+                    <span className="flex items-center gap-1.5">{matchName(match)} <span>{(match.matchFormat || 'Bo3').toUpperCase()}</span>{badge && <span className="bracket-badge">{badge}</span>}</span>
                     {ifNeeded ? <span>If needed</span> : bye ? <span>Automatic advance</span> : live ? <span className="flex items-center gap-1 font-semibold text-[var(--brand-ink)]"><Radio className="h-3 w-3" aria-hidden="true" /> Live</span> : <span>{match.status === 'completed' ? 'Final' : match.status === 'alert' ? 'On hold' : match.status === 'pre-match' ? 'Pre-match' : 'Upcoming'}</span>}
                   </div>
                   <div className="bracket-match-time">{bye ? 'Advanced by BYE' : ifNeeded ? 'Only if the lower-bracket team wins' : broadcast?.schedule(match) ?? bracketScheduleLabel(match)}</div>

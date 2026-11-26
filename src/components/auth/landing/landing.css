@@ -242,3 +242,11 @@
 
 /* The page's own scrollbar: slim and dark, so it reads as part of the poster rather than a grey bar. */
 html:has(.auth-entry .lp) { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .22) #08080a; }
+
+/* A signed-out player opened a match check-in link: one clear bar that says why sign-in is needed. */
+.auth-entry-checkin { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 14px max(24px, calc((100% - 1280px) / 2)); background: color-mix(in srgb, var(--brand) 10%, var(--bg-base)); border-bottom: 1px solid color-mix(in srgb, var(--brand) 35%, transparent); }
+.auth-entry-checkin > svg { flex: none; color: var(--brand); }
+.auth-entry-checkin p { flex: 1 1 320px; margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--text-secondary); }
+.auth-entry-checkin p strong { color: var(--text-primary); font-weight: 600; }
+.auth-entry-checkin-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 640px) { .auth-entry-checkin { padding-inline: 20px; } .auth-entry-checkin-actions { width: 100%; } .auth-entry-checkin-actions > * { flex: 1; } }

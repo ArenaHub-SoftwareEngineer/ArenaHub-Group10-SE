@@ -197,7 +197,7 @@ export async function getOrCreateProfile(fbUser: FirebaseUser, overrideSchool?: 
   try {
     const token = await getIdTokenResult(fbUser);
     const tokenRole = typeof token.claims.role === 'string' ? token.claims.role : null;
-    const allowedRoles: UserRole[] = ['admin', 'organizer', 'moderator', 'school-admin'];
+    const allowedRoles: UserRole[] = ['admin', 'organizer', 'moderator', 'school-admin', 'facilitator'];
     if (token.claims.admin === true) claimedRole = 'admin';
     else if (tokenRole && allowedRoles.includes(tokenRole as UserRole)) claimedRole = tokenRole as UserRole;
   } catch {
@@ -293,7 +293,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           if (currentGeneration !== generation) return;
           if (!snapshot.exists()) { setProfileError('Your account profile is unavailable. Retry loading it or sign out.'); return; }
           const data = snapshot.data();
-          setAhUser(previous => ({ ...(previous || profile), name: data.name || profile.name, email: data.email || profile.email, avatarInitials: data.avatarInitials || makeInitials(data.name || profile.name), collegeName: data.collegeName || profile.collegeName, status: data.status || profile.status, spectatorInviteApproved: data.spectatorInviteApproved === true }));
+          setAhUser(previous => ({ ...(previous || profile), name: data.name || profile.name, email: data.email || profile.email, avatarInitials: data.avatarInitials || makeInitials(data.name || profile.name), collegeName: data.collegeName || profile.collegeName, status: data.status || profile.status, spectatorInviteApproved: data.spectatorInviteApproved !== false }));
         }, () => { if (currentGeneration === generation) setProfileError('Your account profile could not be reached. Check your connection and retry.'); });
         } catch (error) { if (currentGeneration !== generation) return; setProfileError(errorMessage(error, 'Your account profile could not load.')); }
       } else setAhUser(null);

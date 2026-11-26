@@ -114,24 +114,90 @@
   .linkish { background: none; border: 0; padding: 0; min-height: 0; width: auto; margin: 8px 0 0; display: inline; color: var(--brand-ink); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
   @media (hover: hover) { .option:not(:disabled):hover { background: var(--raise); } .option[aria-pressed=true]:hover { background: var(--info-soft); } }
   [hidden] { display: none !important; }
+
+  /* ---- Guided check-in: animated hero, step rail, one step on screen at a time ---- */
+  :root { --muted: #b9b9c2; --glow: 255, 102, 0; }
+  @media (prefers-color-scheme: light) { :root { --muted: #4b4b55; } }
+  body[data-tone=ok] { --glow: 74, 222, 128; }
+  body[data-tone=bad] { --glow: 248, 113, 113; }
+  body[data-tone=warn] { --glow: 251, 191, 36; }
+  .hero { position: relative; display: grid; place-items: center; height: 210px; margin: -8px -16px 0; overflow: hidden; }
+  .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .hero .mark { position: relative; width: 64px; height: 76px; display: grid; place-items: center; transition: transform .5s var(--ease, cubic-bezier(.2,.8,.2,1)); }
+  .hero .mark img { width: 52px; height: 62px; filter: drop-shadow(0 0 18px rgba(var(--glow), .55)); transition: filter .6s; }
+  .hero .mark .state { position: absolute; right: -8px; bottom: -4px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgb(var(--glow)); color: #111; box-shadow: 0 0 0 4px var(--bg), 0 0 22px rgba(var(--glow), .7); transform: scale(0); transition: transform .45s cubic-bezier(.3,1.6,.5,1); }
+  .hero .mark .state svg.i { width: 17px; height: 17px; stroke-width: 3; }
+  body[data-tone=ok] .hero .mark .state, body[data-tone=bad] .hero .mark .state { transform: scale(1); }
+  .ticket { text-align: center; margin-top: -6px; }
+  .ticket h1 { font-size: clamp(28px, 7.5vw, 36px); }
+  .ticket #subtitle { font-size: 15px; }
+  .ticket .device { justify-content: center; }
+  #iosValidity { margin-top: 10px; color: var(--ok); border-color: rgba(var(--glow), .45); background: rgba(var(--glow), .1); font-weight: 600; }
+  .rail { list-style: none; display: flex; align-items: flex-start; margin: 18px 0 4px; padding: 0; }
+  .rail li { flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 600; color: var(--muted); text-align: center; }
+  .rail li + li::before { content: ""; position: absolute; top: 15px; right: calc(50% + 20px); left: calc(-50% + 20px); height: 2px; border-radius: 2px; background: var(--line-strong); }
+  .rail li.done + li::before, .rail li.done + li.done::before { background: linear-gradient(90deg, var(--brand), rgba(var(--glow), 1)); }
+  .rail .dot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--line-strong); background: var(--card); color: var(--muted); font-size: 14px; font-weight: 700; transition: all .3s; }
+  .rail .dot svg.i { width: 16px; height: 16px; stroke-width: 3; }
+  .rail li.now { color: var(--text); }
+  .rail li.now .dot { border-color: rgb(var(--glow)); color: var(--text); animation: ring 2s ease-out infinite; }
+  .rail li.done .dot { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
+  @keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(var(--glow), .55); } 100% { box-shadow: 0 0 0 12px rgba(var(--glow), 0); } }
+  section.step { position: relative; padding: 22px 20px; border-color: rgba(var(--glow), .28); box-shadow: 0 0 0 1px rgba(var(--glow), .06), 0 18px 50px -24px rgba(var(--glow), .45); animation: rise .45s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.985); } }
+  .step-no { margin: 0 0 4px; font-size: 13px; font-weight: 650; color: var(--brand-ink); }
+  section.step h2 { font-size: 23px; letter-spacing: -.01em; }
+  .lead { font-size: 16px; color: var(--text); opacity: .86; }
+  section.step ul.checks li { font-size: 15.5px; color: var(--text); }
+  section.step ul.checks li span { opacity: .86; }
+  .go { position: relative; overflow: hidden; min-height: 56px; font-size: 17px; margin-top: 18px; box-shadow: 0 10px 30px -10px rgba(255, 102, 0, .75); }
+  .go::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.38) 50%, transparent 65%); transform: translateX(-100%); animation: sheen 3.2s ease-in-out 1s infinite; }
+  @keyframes sheen { 0%, 55% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+  .go svg.i { width: 20px; height: 20px; }
+  .links { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 14px; }
+  .links .quiet { width: auto; min-height: 40px; margin: 0; padding: 6px 10px; font-size: 14px; }
+  .links p { text-align: center; margin: 0; }
+  ol.selfcheck li { display: flex; gap: 12px; align-items: flex-start; cursor: pointer; padding: 12px 0; -webkit-tap-highlight-color: transparent; }
+  ol.selfcheck li .tick { flex: none; width: 26px; height: 26px; margin-top: 1px; border-radius: 8px; border: 2px solid var(--line-strong); display: grid; place-items: center; color: transparent; transition: all .2s; }
+  ol.selfcheck li .tick svg.i { width: 15px; height: 15px; stroke-width: 3.2; }
+  ol.selfcheck li[aria-checked=true] .tick { background: var(--ok); border-color: var(--ok); color: #0b1a10; transform: scale(1.06); }
+  ol.selfcheck li[aria-checked=true] strong { opacity: .6; text-decoration: line-through; text-decoration-thickness: 1.5px; }
+  ol.selfcheck li:focus-visible { outline: 2px solid var(--brand-ink); outline-offset: 2px; border-radius: 8px; }
+  .meter { height: 6px; border-radius: 6px; background: var(--raise); border: 1px solid var(--line); overflow: hidden; margin: 12px 0 4px; }
+  .meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--brand), var(--ok)); transition: width .35s cubic-bezier(.2,.8,.2,1); }
+  .waiting { display: inline-flex; gap: 5px; margin-left: 6px; vertical-align: middle; }
+  .waiting i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1.2s infinite both; }
+  .waiting i:nth-child(2) { animation-delay: .2s; } .waiting i:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .2; } 40% { opacity: 1; } }
+  .status-hero { padding: 24px 20px; }
+  details.more { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+  @media (prefers-reduced-motion: reduce) { section.step, .go::after, .rail li.now .dot, .waiting i { animation: none !important; } }
 </style>
 </head>
 <body>
 <main>
   <div class="top"><img src="/arenahub-logo.svg" alt="" width="22" height="26"> ArenaHub <span class="chip">Match check-in</span></div>
 
+  <div class="hero" aria-hidden="true">
+    <canvas id="orb"></canvas>
+    <div class="mark"><img src="/arenahub-logo.svg" alt="" width="52" height="62"><span id="heroState" class="state"></span></div>
+  </div>
+
   <div class="ticket">
     <span id="device" class="device" hidden></span>
     <h1 id="title">Loading your match...</h1>
     <p id="subtitle" class="muted"></p>
+    <span id="iosValidity" class="countdown" hidden></span>
   </div>
 
+  <ol id="rail" class="rail" aria-label="Check-in progress" hidden></ol>
+
   <section id="roomCode" class="card" hidden>
-    <h2>Type the room code</h2>
-    <p class="muted">Enter the 6-character code shown beside the QR.</p>
+    <h2>Type the check-in code</h2>
+    <p class="muted">Enter the 8-digit code on the organizer's screen. It changes every 3 minutes.</p>
     <form id="roomForm" novalidate>
-      <div class="field"><label for="code">Room code</label>
-        <input id="code" class="code" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="7" required></div>
+      <div class="field"><label for="code">Check-in code</label>
+        <input id="code" class="code" type="text" inputmode="numeric" autocomplete="one-time-code" spellcheck="false" maxlength="9" required></div>
       <button id="roomGo" type="submit">Continue</button>
     </form>
   </section>
@@ -165,97 +231,98 @@
     </form>
   </section>
 
-  <section id="pc" class="card" hidden>
-    <h2>Scan this PC</h2>
-    <p class="muted">One click starts the scan. A window opens where you agree, then it shows your result.</p>
-    <a id="startScan" class="button" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Start my scan</a>
-    <p class="hint">If your browser asks to open ArenaHub Anti-cheat, choose Open.</p>
-    <div class="first">
-      <h3>First time on this PC?</h3>
-      <ol class="steps">
-        <li><strong>Download your scan</strong>It already has your code and this server's address, so there is nothing to type.
-          <a id="pcDownload" class="button secondary" href="/api/integrity/downloads/arenahub-agent.exe" download>Download my scan (90 MB)</a></li>
-        <li><strong>Open it</strong>This test build is unsigned. If Windows warns you, choose More info, then Run anyway. Check the download with staff.</li>
-        <li><strong>Agree and wait for Scan passed</strong>Keep the ArenaHub window open while you play. For Dota 2 live data, restart the game once.</li>
-      </ol>
-    </div>
-    <details>
-      <summary>Start it by typing a command instead</summary>
-      <code id="command"></code>
-      <button id="copy" type="button" class="secondary">Copy the command</button>
-    </details>
-  </section>
-
-  <section id="android" class="card" hidden>
-    <h2>Scan this phone</h2>
-    <p class="muted">The ArenaHub Anti-cheat app checks this phone, then shows your result.</p>
-    <a id="openApp" class="button" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Open ArenaHub Companion</a>
-    <div class="first">
-      <h3>First time on this phone?</h3>
-      <ol class="steps">
-        <li><strong>Download the app</strong><a id="apk" class="button secondary" href="/api/integrity/downloads/arenahub-companion.apk" download>Download the app (2 MB)</a></li>
-        <li><strong>Install it</strong>Open the download. If the phone asks, allow your browser to install apps.</li>
-        <li><strong>Come back here</strong>Press Open ArenaHub Companion. Your code is filled in for you.</li>
-      </ol>
-    </div>
-  </section>
-
-  <section id="ios" class="card" hidden>
-    <h2>Check in with the referee</h2>
-    <p class="muted">Apple does not let any app inspect an iPhone, so a referee checks it by hand. Agree here, then take this iPhone to the referee.</p>
-    <button id="agree" type="button">Agree and check in</button>
-  </section>
-
-  <section id="consent" class="card" hidden>
-    <h2>What this scan checks</h2>
+  <!-- Step: agree (and scan, on Android and PC). One main button. -->
+  <section id="consent" class="card step" hidden>
+    <p class="step-no" data-step-no></p>
+    <h2 id="agreeTitle">Agree to the check</h2>
+    <p id="agreeLead" class="lead"></p>
     <ul id="collects" class="checks"></ul>
     <div class="note"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><div>Never touched: your messages, photos, contacts, location and passwords. A referee, not software, decides any outcome.</div></div>
+
+    <div id="ios" hidden>
+      <button id="agree" type="button" class="go"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>I confirm, check me in</button>
+    </div>
+
+    <div id="android" hidden>
+      <a id="openApp" class="button go" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Open ArenaHub Companion</a>
+      <details class="more">
+        <summary>First time on this phone?</summary>
+        <ol class="steps">
+          <li><strong>Download the app</strong><a id="apk" class="button secondary" href="/api/integrity/downloads/arenahub-companion.apk" download>Download the app (2 MB)</a></li>
+          <li><strong>Install it</strong>Open the download. If the phone asks, allow your browser to install apps.</li>
+          <li><strong>Come back here</strong>Press Open ArenaHub Companion. Your code is filled in for you.</li>
+        </ol>
+      </details>
+    </div>
+
+    <div id="pc" hidden>
+      <a id="startScan" class="button go" href="#"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Start my scan</a>
+      <p class="hint">If your browser asks to open ArenaHub Anti-cheat, choose Open.</p>
+      <details class="more">
+        <summary>First time on this PC?</summary>
+        <ol class="steps">
+          <li><strong>Download your scan</strong>It already has your code and this server's address, so there is nothing to type.
+            <a id="pcDownload" class="button secondary" href="/api/integrity/downloads/arenahub-agent.exe" download>Download my scan (90 MB)</a></li>
+          <li><strong>Open it</strong>This test build is unsigned. If Windows warns you, choose More info, then Run anyway. Check the download with staff.</li>
+          <li><strong>Agree and wait for Scan passed</strong>Keep the ArenaHub window open while you play. For Dota 2 live data, restart the game once.</li>
+        </ol>
+        <details>
+          <summary>Start it by typing a command instead</summary>
+          <code id="command"></code>
+          <button id="copy" type="button" class="secondary">Copy the command</button>
+        </details>
+      </details>
+    </div>
+
+    <!-- Appears only after the player starts the scan, so the step still has one thing to do at a time. -->
+    <button id="scanDone" type="button" class="go" hidden>My scan passed, next step</button>
+
     <details>
       <summary>Privacy details</summary>
-      <p class="muted">Reports and any recordings go to the tournament server in this page's address and are deleted after 30 days unless staff place an evidence hold. Screen captures can include private notifications, so close personal apps before playing. Complete the anti-cheat requirements before match admission: Android and Windows players need a current scan, and iPhone players need a referee inspection, recording and continuous supervision.</p>
+      <p class="muted">Reports and any recordings go to the tournament server in this page's address and are deleted after 30 days unless staff place an evidence hold. Screen captures can include private notifications, so close personal apps before playing. Before the match, share your game screen with the match staff. Android and Windows players also run the scan. iPhone players confirm their phone settings themselves, and a referee may still check the phone.</p>
+    </details>
+
+    <div id="declineBox" class="links" hidden>
+      <button id="decline" type="button" class="quiet">Decline monitoring for this match</button>
+      <p class="muted small">Declining is not a penalty. Staff are told and arrange another way for you to play.</p>
+    </div>
+  </section>
+
+  <!-- iPhone status: shown when there is no sharing step, or when a referee revokes the check-in. Updates by itself. -->
+  <section id="iosDone" hidden>
+    <section id="iosCard" class="card step status-hero tone-warn">
+      <p class="step-no" data-step-no></p>
+      <div id="iosBadge" class="badge" hidden></div>
+      <h2 id="iosHeading">You are checked in</h2>
+      <p id="iosClearance" role="status" aria-live="polite">Waiting for the referee to inspect your iPhone.</p>
+      <p id="iosWaiting" class="muted small">Updates by itself<span class="waiting" aria-hidden="true"><i></i><i></i><i></i></span></p>
+    </section>
+  </section>
+
+  <!-- First step on every device: share the game screen, so staff can watch every player even when no referee is nearby. -->
+  <section id="screenShare" class="card step" hidden>
+    <p class="step-no" data-step-no></p>
+    <h2>Share your game screen</h2>
+    <p class="lead">The match staff watch your screen while you play. You choose when sharing starts and stops.</p>
+    <a id="screenLink" class="button go" target="_blank" rel="noreferrer"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>Open screen sharing</a>
+    <button id="shareNext" type="button" class="go" hidden>I am sharing, next step</button>
+  </section>
+  <section class="card" id="uploadCard" hidden>
+    <details id="uploadBox">
+      <summary>The referee asked for my own screen recording</summary>
+      <p class="muted">Record with Control Center, then choose the video here when the referee asks. Keep this page open until the upload finishes. On mobile data a full match can use several hundred MB.</p>
+      <label for="file">Match screen recording</label><input id="file" type="file" accept="video/mp4,video/quicktime,video/*">
+      <button id="upload" type="button" disabled>Upload recording</button>
+      <progress id="progress" max="100" value="0" hidden></progress>
     </details>
   </section>
 
-  <section id="iosDone" hidden>
-    <section id="iosCard" class="card status-hero tone-warn">
-      <div id="iosBadge" class="badge"></div>
-      <h2 id="iosHeading">You are checked in</h2>
-      <p id="iosClearance" role="status" aria-live="polite">Waiting for the referee to inspect your iPhone.</p>
-      <span id="iosValidity" class="countdown" hidden></span>
-    </section>
-    <section class="card">
-      <div id="selfCheck">
-      <h3>Before you go to the referee</h3>
-      <p class="muted">Check these yourself. Any of them blocks clearance until it is fixed and the referee checks again.</p>
-      <ol class="selfcheck">
-        <li><strong>Developer Mode is off</strong><span>Settings &gt; Privacy &amp; Security &gt; Developer Mode.</span></li>
-        <li><strong>No Enterprise or Developer App is trusted</strong><span>Settings &gt; General &gt; VPN &amp; Device Management. Remove any your school or work did not install.</span></li>
-        <li><strong>No sideloading or jailbreak apps</strong><span>For example TrollStore, AltStore, Scarlet, ESign or Sileo.</span></li>
-        <li><strong>The game's App Store page says Open</strong><span>If it says Get, delete your copy and install it from the App Store.</span></li>
-        <li><strong>Only one copy of the game</strong><span>Delete any second or renamed copy.</span></li>
-        <li><strong>No VPN or extra profile</strong><span>Turn off VPNs and remove DNS or configuration profiles you do not need.</span></li>
-      </ol>
-      </div>
-      <div class="note"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg><div>Turn on Do Not Disturb so private notifications do not pop up during the match.</div></div>
-      <details id="uploadBox">
-        <summary>The referee asked for my own screen recording</summary>
-        <p class="muted">Record with Control Center, then choose the video here when the referee asks. Keep this page open until the upload finishes. On mobile data a full match can use several hundred MB.</p>
-        <label for="file">Match screen recording</label><input id="file" type="file" accept="video/mp4,video/quicktime,video/*">
-        <button id="upload" type="button" disabled>Upload recording</button>
-        <progress id="progress" max="100" value="0" hidden></progress>
-      </details>
-    </section>
-    <button id="refreshIos" type="button" class="secondary">Refresh inspection status</button>
-    <button id="stop" type="button" class="decline">Stop iPhone monitoring</button>
-  </section>
-
-  <div id="declineBox" class="decline-row" hidden>
-    <button id="decline" type="button" class="quiet">Decline monitoring for this match</button>
-    <p class="muted small">Declining is not a penalty. Staff are told and arrange another way for you to play.</p>
-  </div>
-
   <p id="status" role="status" aria-live="polite"></p>
-  <section id="screenShare" class="card" hidden><h2>Player screen</h2><p>Share your game with the match staff. You choose when sharing starts and stops.</p><a id="screenLink" class="button" target="_blank" rel="noreferrer">Open screen sharing</a></section>
+
+  <div id="iosLinks" class="links" hidden>
+    <button id="refreshIos" type="button" class="quiet">Refresh status</button>
+    <button id="stop" type="button" class="quiet">Stop iPhone monitoring</button>
+  </div>
 </main>
 <script>
 (function () {
@@ -271,15 +338,121 @@
       history.replaceState(history.state, '', location.pathname + location.search);
     } catch (e) { /* The scan remains available when browser storage is blocked. */ }
   }
+  var hasShare = false;
   try {
     var share = JSON.parse(sessionStorage.getItem('arena-pov') || 'null');
     if (share && (share.code === code || (!code && localStorage.getItem('arenahub-checkin')))) {
       document.getElementById('screenLink').href = '/pov.html#' + share.key;
-      document.getElementById('screenShare').hidden = false;
+      hasShare = true;
     }
   } catch (e) { /* Check-in is available with browser storage disabled. */ }
+
+  // ---- Hero: glowing rings and orbiting sparks around the shield. The colour follows the check-in state. ----
+  var TONES = { work: [255, 102, 0], warn: [251, 191, 36], ok: [74, 222, 128], bad: [248, 113, 113] };
+  var orb = { tone: 'work', rgb: TONES.work.slice(), burst: 0 };
+  function tone(name) {
+    if (orb.tone !== name && (name === 'ok' || name === 'bad')) orb.burst = 1;
+    orb.tone = name; document.body.setAttribute('data-tone', name);
+    var mark = { ok: '<path d="M20 6 9 17l-5-5"/>', bad: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>' }[name];
+    document.getElementById('heroState').innerHTML = mark ? '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + mark + '</svg>' : '';
+  }
+  (function () {
+    var canvas = document.getElementById('orb'), ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    var still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var light = matchMedia('(prefers-color-scheme: light)');
+    var w = 0, h = 0, dpr = 1, running = true, t0 = performance.now();
+    var sparks = [];
+    for (var i = 0; i < 26; i++) sparks.push({ ring: i % 3, a: Math.random() * Math.PI * 2, s: (0.15 + Math.random() * 0.35) * (i % 2 ? 1 : -1), r: 0.8 + Math.random() * 1.1, wob: Math.random() * 6 });
+    function size() { dpr = Math.min(devicePixelRatio || 1, 2); w = canvas.clientWidth; h = canvas.clientHeight; canvas.width = w * dpr; canvas.height = h * dpr; }
+    function frame(now) {
+      if (!running) return;
+      var t = (now - t0) / 1000, target = TONES[orb.tone], c = orb.rgb;
+      for (var k = 0; k < 3; k++) c[k] += (target[k] - c[k]) * 0.06;
+      var rgb = Math.round(c[0]) + ',' + Math.round(c[1]) + ',' + Math.round(c[2]);
+      var cx = w / 2, cy = h / 2, base = Math.min(w, h) * 0.3;
+      var calm = orb.tone === 'ok' || orb.tone === 'bad' ? 0.35 : 1;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+      ctx.globalCompositeOperation = light.matches ? 'source-over' : 'lighter';
+      // Breathing core glow behind the logo.
+      var pulse = 0.75 + 0.25 * Math.sin(t * 2.2);
+      var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, base * 1.9);
+      g.addColorStop(0, 'rgba(' + rgb + ',' + (0.34 * pulse) + ')'); g.addColorStop(0.45, 'rgba(' + rgb + ',' + (0.1 * pulse) + ')'); g.addColorStop(1, 'rgba(' + rgb + ',0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      // Three tilted rings, each drawn as a flattened ellipse that slowly turns.
+      for (var r = 0; r < 3; r++) {
+        var rad = base * (1.05 + r * 0.32), tilt = 0.38 + r * 0.06, spin = t * (0.5 - r * 0.17) * calm;
+        ctx.save(); ctx.translate(cx, cy); ctx.rotate(-0.22 + r * 0.2); ctx.scale(1, tilt);
+        ctx.lineWidth = 1.4 / tilt * 0.6;
+        ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.16 - r * 0.03) + ')';
+        ctx.beginPath(); ctx.arc(0, 0, rad, 0, Math.PI * 2); ctx.stroke();
+        // A bright comet arc travelling round the ring: the "scanning" sweep.
+        var len = 0.9 - r * 0.15;
+        var arc = ctx.createLinearGradient(Math.cos(spin) * rad, Math.sin(spin) * rad, Math.cos(spin + len) * rad, Math.sin(spin + len) * rad);
+        arc.addColorStop(0, 'rgba(' + rgb + ',0)'); arc.addColorStop(1, 'rgba(' + rgb + ',' + (0.85 - r * 0.2) + ')');
+        ctx.strokeStyle = arc; ctx.lineWidth = (2.6 - r * 0.5) / tilt * 0.7; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(0, 0, rad, spin, spin + len); ctx.stroke();
+        ctx.restore();
+      }
+      // Sparks riding the rings.
+      for (var s = 0; s < sparks.length; s++) {
+        var p = sparks[s], pr = base * (1.05 + p.ring * 0.32), ptilt = 0.38 + p.ring * 0.06, rot = -0.22 + p.ring * 0.2;
+        var a = p.a + t * p.s * calm, x = Math.cos(a) * pr, y = Math.sin(a) * pr * ptilt;
+        var px = cx + x * Math.cos(rot) - y * Math.sin(rot), py = cy + x * Math.sin(rot) + y * Math.cos(rot);
+        var front = Math.sin(a) > 0 ? 1 : 0.45, tw = 0.6 + 0.4 * Math.sin(t * 3 + p.wob);
+        var sg = ctx.createRadialGradient(px, py, 0, px, py, p.r * 3.4);
+        sg.addColorStop(0, 'rgba(' + rgb + ',' + (0.9 * front * tw) + ')'); sg.addColorStop(1, 'rgba(' + rgb + ',0)');
+        ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(px, py, p.r * 3.4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,' + (0.75 * front * tw) + ')'; ctx.beginPath(); ctx.arc(px, py, p.r * 0.7, 0, Math.PI * 2); ctx.fill();
+      }
+      // A shock ring when the result arrives (cleared or revoked).
+      if (orb.burst > 0) {
+        var b = 1 - orb.burst;
+        ctx.strokeStyle = 'rgba(' + rgb + ',' + orb.burst * 0.8 + ')'; ctx.lineWidth = 3 * orb.burst + 0.5;
+        ctx.beginPath(); ctx.arc(cx, cy, base * (0.6 + b * 2.2), 0, Math.PI * 2); ctx.stroke();
+        orb.burst = Math.max(0, orb.burst - 0.018);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      if (!still) requestAnimationFrame(frame);
+    }
+    size(); addEventListener('resize', size);
+    document.addEventListener('visibilitychange', function () { running = !document.hidden; if (running && !still) requestAnimationFrame(frame); });
+    requestAnimationFrame(frame);
+    if (still) setInterval(function () { requestAnimationFrame(frame); }, 1000);
+  })();
+  tone('work');
+
+  // ---- Steps: only one is on screen at a time. ----
+  var STEP_LABEL = { agree: 'Confirm', scan: 'Scan', referee: 'Status', share: 'Share screen' };
+  var steps = [], current = '';
+  function setSteps(list) { steps = list.filter(function (s) { return s !== 'share' || hasShare; }); }
+  function go(step) {
+    current = step;
+    var at = steps.indexOf(step), rail = document.getElementById('rail');
+    rail.innerHTML = '';
+    steps.forEach(function (s, i) {
+      var li = document.createElement('li');
+      li.className = i < at ? 'done' : i === at ? 'now' : '';
+      if (i === at) li.setAttribute('aria-current', 'step');
+      li.innerHTML = '<span class="dot">' + (i < at ? '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>' : String(i + 1)) + '</span>';
+      li.appendChild(document.createTextNode(STEP_LABEL[s]));
+      rail.appendChild(li);
+    });
+    rail.hidden = steps.length < 2;
+    var section = { agree: 'consent', scan: 'consent', referee: 'iosDone', share: 'screenShare' };
+    ['consent', 'iosDone', 'screenShare'].forEach(function (id) { document.getElementById(id).hidden = id !== section[step]; });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-step-no]'), function (el) { el.textContent = steps.length > 1 ? 'Step ' + (at + 1) + ' of ' + steps.length : ''; });
+    if (step === 'share') tone(orb.tone === 'bad' ? 'bad' : at > 0 ? 'ok' : 'work');
+    // Sharing is first on Android and PC; the button to the next step appears once the player opened sharing.
+    $('shareNext').hidden = true; $('screenLink').classList.add('go'); $('screenLink').classList.remove('secondary');
+  }
   var ua = navigator.userAgent;
-  var isAndroid = /Android/i.test(ua), isApple = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  var touch = navigator.maxTouchPoints > 0 || 'ontouchend' in document;
+  var hints = navigator.userAgentData && navigator.userAgentData.platform || '';
+  var isApple = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && touch);
+  // "Desktop site" mode and some QR-scanner browsers hide "Android" from the user agent, so a
+  // touch-screen Linux browser (what Android reports in desktop mode) also counts as Android.
+  var isAndroid = /Android/i.test(ua + ' ' + hints) || (!isApple && touch && /Linux/i.test(ua + ' ' + (navigator.platform || '')) && !/CrOS/.test(ua));
   var session = null, statusTimer = null, countdownTimer = null, statusRequest = null, validUntil = 0;
   try { session = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { session = null; }
   if (session && session.expiresAt < Date.now()) { session = null; forget(); }
@@ -305,7 +478,7 @@
   var WHAT = {
     android: ['Apps on this phone, compared with the tournament list on your phone. Only matches are sent, never your app list.', 'Your game install: its signing certificate and where it came from, so a modded copy is caught.', 'Root, Shizuku, cloned or virtual spaces, screen-control and overlay apps, and debugging settings.', 'Records your screen during the match if the referee turned recording on (no microphone, no camera).'],
     pc: ['Running and installed programs, compared with the tournament list. A renamed cheat is still caught by what the file contains.', 'Dota 2 game files against the list Valve ships with the game, plus launch options such as -insecure.', 'When the tournament requires it, your folders and other drives for cheat files. Files are read, never run or changed.', 'Takes a screenshot every 20 seconds if the referee turned recording on.', 'Connects Dota 2\'s official live match data (hero, match ID, Steam ID).'],
-    ios: ['Links your consent and referee inspection to this match and player roster.', 'Requires a referee to check your playing device, game account, official game listing and device settings, then arrange continuous supervision and recording.', 'Shows your current supervised clearance. Installed-app and game-memory inspection are unavailable on iPhone.', 'Accepts a screen recording you choose to upload when staff enable uploads.']
+    ios: ['Developer Mode is off (Settings > Privacy & Security > Developer Mode).', 'No Enterprise or Developer App is trusted (Settings > General > VPN & Device Management).', 'No sideloading or jailbreak apps, such as TrollStore, AltStore, Scarlet, ESign or Sileo.', 'The game\'s App Store page says Open, not Get.', 'Only one copy of the game is installed.', 'No VPN or extra configuration profile is on.']
   };
 
   // Returning iPhone player who already checked in.
@@ -374,12 +547,14 @@
 
     $('roomForm').addEventListener('submit', function (event) {
       event.preventDefault();
-      typed = $('code').value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (typed.length !== 6) return say('The room code has 6 characters.', 'error');
+      typed = $('code').value.replace(/[^0-9]/g, '');
+      if (typed.length !== 8) return say('The code has 8 digits.', 'error');
       busy('roomGo', true, 'Checking...'); say('');
       fetch('/api/integrity/device/room', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: typed }) }).then(json).then(function (result) {
         busy('roomGo', false, 'Continue');
-        if (!result.ok) return say(result.body.error || 'That room code did not work.', 'error');
+        if (!result.ok) return say(result.body.error || 'That code did not work.', 'error');
+        // A match check-in: sign in on the ArenaHub website, which finds the player from their school email.
+        if (result.body.checkIn) { say('Opening your match check-in...'); location.href = result.body.checkIn; return; }
         room = result.body;
         platform = detected;
         game = '';
@@ -445,7 +620,15 @@
     var platform = info.platform === 'any' ? (isAndroid ? 'android' : isApple ? 'ios' : '') : info.platform;
     if (!platform) { device('phone', 'Phone scan'); show('declineBox', true); return say('Open this on the phone you will play on: scan the QR code with that phone\'s camera.', 'error'); }
     WHAT[platform].forEach(function (line) { if (info.record || !/screen|screenshot/i.test(line)) bullet(line); });
-    show('consent', true); show('declineBox', true);
+    show('declineBox', true);
+    var TEXT = {
+      ios: ['Confirm your iPhone is clean', 'Apple does not let any app look inside an iPhone, so you confirm these yourself. Staff watch your screen while you play, and a referee may still check your phone.'],
+      android: ['Scan this phone', 'The ArenaHub Anti-cheat app checks this phone, then shows your result. Here is what it looks at.'],
+      pc: ['Scan this PC', 'One click starts the scan. A window opens where you agree, then it shows your result.']
+    }[platform];
+    $('agreeTitle').textContent = TEXT[0]; $('agreeLead').textContent = TEXT[1];
+    setSteps(platform === 'ios' ? ['agree', 'share'] : ['share', 'scan']);
+    go(steps[0]);
     if (platform === 'android') {
       device('phone', 'Android scan');
       show('android', true);
@@ -470,6 +653,22 @@
     }
   }).catch(function () { say('Cannot reach the tournament server. Check your internet connection and scan again. If it still fails, ask the referee for a new code.', 'error'); });
 
+  // Android and PC: after the scan is started, the same spot offers the next step (when there is one).
+  ['openApp', 'startScan'].forEach(function (id) {
+    $(id).addEventListener('click', function () {
+      var at = steps.indexOf(current);
+      if (at < 0 || at === steps.length - 1) return;
+      setTimeout(function () { $('scanDone').hidden = false; $(id).classList.remove('go'); $(id).classList.add('secondary'); }, 400);
+    });
+  });
+  $('scanDone').addEventListener('click', function () { go(steps[steps.indexOf(current) + 1]); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  $('screenLink').addEventListener('click', function () {
+    var next = steps[steps.indexOf('share') + 1];
+    if (!next) return;
+    setTimeout(function () { $('shareNext').hidden = false; $('screenLink').classList.remove('go'); $('screenLink').classList.add('secondary'); }, 400);
+  });
+  $('shareNext').addEventListener('click', function () { go(steps[steps.indexOf('share') + 1]); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+
   $('copy').addEventListener('click', function () {
     navigator.clipboard.writeText($('command').textContent).then(function () { say('Command copied.', 'ok'); }, function () { say('Copy failed. Select the command and copy it.', 'error'); });
   });
@@ -479,7 +678,8 @@
     $('decline').disabled = true;
     fetch('/api/integrity/device/decline', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: code }) }).then(json).then(function (result) {
       if (!result.ok) { $('decline').disabled = false; return say(result.body.error || 'Could not send your answer.', 'error'); }
-      ['consent', 'android', 'pc', 'ios', 'declineBox'].forEach(function (id) { show(id, false); });
+      ['consent', 'android', 'pc', 'ios', 'declineBox', 'rail', 'screenShare'].forEach(function (id) { show(id, false); });
+      tone('bad');
       $('title').textContent = 'You declined';
       say('The referee has been told. Please go to the referee desk before your match.', 'ok');
     }).catch(function () { $('decline').disabled = false; say('Cannot reach the tournament server. Try again.', 'error'); });
@@ -498,42 +698,38 @@
     }).catch(function () { $('agree').disabled = false; say('Cannot reach the tournament server. Check your internet connection and try again.', 'error'); });
   });
 
-  // ---- iPhone status: waiting for the referee, cleared (with a countdown), expired, revoked or ended ----
-  function iosView(tone, icon, heading, text) {
-    $('iosCard').className = 'card status-hero tone-' + tone;
+  // ---- iPhone status. The player's own confirmation checks them in; a referee can still revoke. ----
+  function iosView(kind, icon, heading, text) {
+    $('iosCard').className = 'card step status-hero tone-' + kind;
     $('iosBadge').innerHTML = svg(icon);
     $('iosHeading').textContent = heading;
     $('iosClearance').textContent = text;
+    // Waiting shows the live "updates by itself" dots; a final answer does not.
+    show('iosWaiting', kind === 'warn');
+    if (kind === 'bad') {
+      // Revoked or ended: the status card replaces the sharing step.
+      if (steps.indexOf('referee') < 0) steps.push('referee');
+      tone('bad');
+      if (current !== 'referee') go('referee');
+    } else if (current === 'referee' && steps.indexOf('share') >= 0) go('share');
+    else if (current !== 'share') tone(kind);
   }
-  function tickCountdown() {
-    var left = validUntil - Date.now();
-    if (!validUntil || left <= 0) {
-      $('iosValidity').hidden = true;
-      if (validUntil) {
-        validUntil = 0;
-        iosView('warn', 'alert', 'Inspection expired', 'Ask the referee to confirm your inspection before joining.');
-        show('selfCheck', true);
-        refreshIosStatus();
-      }
-      return;
-    }
-    var minutes = Math.floor(left / 60000), seconds = Math.floor(left / 1000) % 60;
-    $('iosValidity').innerHTML = svg('clock');
-    $('iosValidity').appendChild(document.createTextNode('Clearance valid for ' + minutes + ':' + (seconds < 10 ? '0' : '') + seconds));
-    $('iosValidity').hidden = false;
-  }
+  function tickCountdown() { $('iosValidity').hidden = true; }
   function iosCheckedIn() {
-    ['consent', 'ios', 'declineBox'].forEach(function (id) { show(id, false); });
+    ['ios', 'declineBox'].forEach(function (id) { show(id, false); });
     device('phone', 'iPhone check-in');
     $('title').textContent = 'Hi ' + session.playerName;
     $('subtitle').textContent = session.matchLabel + (session.gameLabel ? ' · ' + session.gameLabel : '');
-    show('iosDone', true); say('');
-    iosView('warn', 'clock', 'You are checked in', 'Waiting for the referee. Show this screen to the referee with the iPhone you will play on.');
-    show('uploadBox', session.record === true);
+    setSteps(['agree', 'share']);
+    if (steps.indexOf('share') < 0) steps.push('referee');
+    show('iosLinks', true); say('');
+    iosView('ok', 'check', 'You are checked in', 'Play as normal. The match staff watch your screen during the match.');
+    go(steps[1]);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    show('uploadCard', session.record === true);
     refreshIosStatus();
     if (statusTimer) clearInterval(statusTimer);
     statusTimer = setInterval(refreshIosStatus, 10000);
-    if (!countdownTimer) countdownTimer = setInterval(tickCountdown, 1000);
   }
 
   function refreshIosStatus() {
@@ -548,25 +744,14 @@
       if (result.status === 410) return iosEnded();
       var scan = result.body.scan;
       if (!result.ok || !scan || typeof scan.status !== 'string') throw new Error('Status unavailable');
-      if (scan.status === 'ready' && !(typeof scan.validUntil === 'number' && scan.validUntil > Date.now())) {
-        validUntil = 0;
-        $('iosValidity').hidden = true;
-        show('selfCheck', true);
-        return iosView('warn', 'alert', 'Inspection expired', 'Ask the referee to confirm your inspection before joining.');
-      }
-      if (scan.status === 'ready') iosView('ok', 'check', 'Cleared to play', 'The referee checked this iPhone. Stay with the referee: supervision and recording continue during play.');
-      else if (scan.status === 'blocked') iosView('bad', 'x', 'Clearance revoked', scan.detail + (scan.blockers && scan.blockers[0] ? ' Referee note: ' + scan.blockers[0] : ''));
-      else if (scan.status === 'stale') iosView('warn', 'alert', 'Inspection expired', scan.detail);
-      else iosView('warn', 'clock', 'You are checked in', 'Waiting for the referee. ' + scan.detail);
-      validUntil = scan.status === 'ready' && scan.validUntil ? scan.validUntil : 0;
-      // The self-check list is for before the inspection; once cleared it only adds noise.
-      show('selfCheck', scan.status !== 'ready');
-      tickCountdown();
-      show('uploadBox', result.body.record === true);
+      say('');
+      if (scan.status === 'blocked') iosView('bad', 'x', 'Not cleared to play', scan.detail + (scan.blockers && scan.blockers[0] ? ' Referee note: ' + scan.blockers[0] : ''));
+      else if (scan.status === 'ready') iosView('ok', 'check', 'You are checked in', 'Play as normal. The match staff watch your screen during the match.');
+      else iosView('warn', 'clock', 'You are checked in', scan.detail);
+      show('uploadCard', result.body.record === true);
     }).catch(function () {
       if (!session || session.token !== token) return;
-      iosView('bad', 'alert', 'Status unavailable', 'Clearance could not be verified. Reconnect and ask the referee before joining.');
-      validUntil = 0; $('iosValidity').hidden = true;
+      say('Could not reach the tournament server. Your check-in is kept; this page tries again by itself.', 'error');
     }).finally(function () {
       clearTimeout(timeout);
       if (statusRequest === controller) statusRequest = null;
@@ -578,7 +763,7 @@
     if (countdownTimer) clearInterval(countdownTimer);
     if (statusRequest) statusRequest.abort();
     $('refreshIos').disabled = true;
-    session = null; forget(); show('uploadBox', false); $('stop').disabled = true;
+    session = null; forget(); show('uploadCard', false); $('stop').disabled = true;
     validUntil = 0; $('iosValidity').hidden = true;
     iosView('bad', 'power', 'Monitoring ended', 'Ask the referee for a new code before joining.');
   }

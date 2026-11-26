@@ -85,6 +85,8 @@
 .lw-tile:hover, .lw-tile:focus-within { outline-color: rgba(255, 255, 255, .4); }
 .lw-tile.is-spotlight { outline-color: var(--team, var(--brand)); }
 .lw-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.lw-video-holder { position: absolute; inset: 0; }
+.lw-video-holder[hidden], .lw-video[hidden] { display: none; }
 .lw-placeholder { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 8px 8px 36px; color: var(--lw-muted); font-size: var(--fs-xs); text-align: center; }
 .lw-avatar { display: grid; place-items: center; width: clamp(32px, 26cqw, 96px); aspect-ratio: 1; border-radius: 50%; background: color-mix(in srgb, var(--team, #5c5e66) 75%, #000); color: #fff; font-size: clamp(12px, 8cqw, 30px); font-weight: 700; box-shadow: 0 0 0 4px rgba(0, 0, 0, .18); }
 .lw-placeholder-note { color: rgba(255, 255, 255, .72); }
@@ -162,3 +164,42 @@
   .lw-ctl-main { height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .lw-tile, .lw-actions { transition: none; } }
+
+/* ---- Watch screens: the 3D wall of match monitors (ScreenDeck) ---- */
+.sd-deck { position: relative; height: clamp(240px, 32vw, 340px); margin: 4px 0 8px; border-radius: 16px; overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 100%, color-mix(in srgb, var(--brand) 14%, transparent), transparent 62%), var(--surface);
+  border: 1px solid var(--border); opacity: 0; transform: translateY(8px); transition: opacity .5s ease, transform .5s ease; }
+.sd-deck.is-two-rows { height: clamp(300px, 40vw, 440px); }
+.sd-deck.is-ready { opacity: 1; transform: none; }
+.sd-canvas { position: absolute; inset: 0; }
+.sd-hint { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); margin: 0; padding: 6px 12px; border-radius: 999px; background: rgba(0, 0, 0, .55);
+  color: #fff; font-size: var(--fs-xs); white-space: nowrap; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
+.sd-live-count { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); }
+.sd-live-count span { width: 8px; height: 8px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 60%, transparent); animation: sd-pulse 1.6s ease-out infinite; }
+@keyframes sd-pulse { to { box-shadow: 0 0 0 8px transparent; } }
+.sd-filter { margin: 4px 0 2px; }
+.sd-list > li.is-sharing .lw-match { border-color: var(--brand-border); background: color-mix(in srgb, var(--brand) 7%, var(--surface)); }
+.sd-watch { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; background: var(--brand); color: #1b0d02; font-weight: 700; font-size: var(--fs-xs); }
+.sd-list .lw-assign { display: inline-flex; align-items: center; gap: 6px; padding-inline: 12px; }
+@media (prefers-reduced-motion: reduce) { .sd-deck { transition: none; } .sd-live-count span { animation: none; } }
+
+/* ---- Check-in: watch button and "New code" ---- */
+.ac-watch { justify-self: stretch; justify-content: center; }
+.ac-code-new { display: inline-flex; align-items: center; gap: 6px; margin-top: 2px; padding: 6px 12px; border: 1px solid var(--brand-border); border-radius: 999px; background: transparent; color: var(--text-primary); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
+.ac-code-new:hover { background: var(--brand-soft); }
+.ac-code-new:disabled { opacity: .5; cursor: default; }
+.ac-projector .ac-code-new { display: none; }
+
+/* ---- Report a player ---- */
+.rd-form { gap: 14px; }
+.rd-evidence { display: grid; gap: 8px; margin: 0; padding: 12px; border: 1px dashed var(--border-strong, var(--border)); border-radius: 12px; }
+.rd-evidence legend { padding: 0 4px; font-size: var(--fs-xs); color: var(--text-secondary); }
+.rd-evidence img { width: 100%; max-height: 240px; object-fit: contain; border-radius: 8px; background: #000; }
+.rd-file { position: relative; justify-self: start; cursor: pointer; }
+.rd-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.rd-file:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.rd-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.rd-levels button { display: grid; gap: 2px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text-primary); text-align: left; cursor: pointer; }
+.rd-levels button small { color: var(--text-secondary); font-size: var(--fs-xs); }
+.rd-levels button.is-active { border-color: var(--brand); background: var(--brand-soft); }
+.rd-done p { margin: 0 0 12px; }

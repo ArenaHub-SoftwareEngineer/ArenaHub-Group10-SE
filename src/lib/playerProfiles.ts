@@ -1,4 +1,5 @@
 import type { BracketDraft, Player, Team } from './types';
+import { safePhoto } from './teamRoster';
 import rankAssets from './rankAssets.json' with { type: 'json' };
 import { rankGame, rankTiers, rankUnit, isRetiredGame } from './gameRanks';
 const assets: Record<string, string> = rankAssets;
@@ -28,6 +29,8 @@ export function playerRank(player: Pick<Player,'rank'|'peakRank'>, gameId: strin
 }
 export function safePlayerImage(value?: string): string | undefined {
   if (!value) return undefined;
+  // Small photos added on the admin Teams page are stored inline (see teamRoster.ts).
+  if (value.startsWith('data:')) return safePhoto(value);
   try { const url = new URL(value,'https://arena.invalid'); return url.protocol === 'https:' && !url.username && !url.password ? value : undefined; } catch { return undefined; }
 }
 /** Never spread account/registration data into a public profile. */

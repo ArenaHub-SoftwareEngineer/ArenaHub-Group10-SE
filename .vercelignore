@@ -1,5 +1,6 @@
 # Vercel Hobby allows 100 MB of uploaded source per CLI deploy. The API needs only package files,
-# server/, api/, src/lib (shared rules), scripts/build-vercel.mjs and the join page assets in public/.
+# server/, api/, src/lib (shared rules), scripts/build-vercel.mjs, the join page assets in public/ and the
+# built website in dist/ (made locally by npm run deploy, served as static files).
 # Monitor data and player downloads never go to Vercel: data lives in Firestore and the agent and app
 # are streamed from INTEGRITY_DOWNLOAD_BASE.
 .env
@@ -7,7 +8,6 @@
 !.env.example
 data/
 .test-data/
-dist/
 dist-demo/
 dist-agent/
 dist-vercel/

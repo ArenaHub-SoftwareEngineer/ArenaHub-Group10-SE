@@ -31,12 +31,16 @@ export function NotificationBell({ staff = false, onNavigate }: { staff?: boolea
     setBusy(true); setError('');
     try { await setNotificationsRead(uid, ids, read); } catch { setError('Your read status could not be saved. Please retry.'); } finally { setBusy(false); }
   };
-  const openItem = async (item: ArenaNotification) => {
-    if (!item.readAt) await mark([item.id]);
-    panel.current?.hidePopover(); trigger.current?.focus(); if (uid) setSelected({ uid, item });
+  // A notification is a link: one click marks it read and goes straight to the page (and item) it is about.
+  // Only an update with no page behind it opens the detail dialog.
+  const openItem = (item: ArenaNotification) => {
+    if (!item.readAt) void mark([item.id]);
+    if (panel.current?.matches(':popover-open')) panel.current.hidePopover();
+    if (item.tab) onNavigate(item.tab, item.entityId || undefined);
+    else { trigger.current?.focus(); if (uid) setSelected({ uid, item }); }
   };
   // A system notification for new items while this tab is in the background (opt-in in Settings).
-  useSystemAlerts(uid, items, loading, item => { if (uid) setSelected({ uid, item }); if (!item.readAt) void mark([item.id]); });
+  useSystemAlerts(uid, items, loading, openItem);
   const detail = selected && selected.uid === uid ? items.find(item => item.id === selected.item.id) || selected.item : null;
   return <div className="notification-root">
     <button ref={trigger} type="button" className={`notification-trigger ${unread.length ? 'has-unread' : ''}`} aria-label={`Notifications${unread.length ? `, ${unread.length} unread` : ''}`} popoverTarget={id} onClick={event => {
@@ -51,7 +55,7 @@ export function NotificationBell({ staff = false, onNavigate }: { staff?: boolea
         {loading ? <p className="notification-empty">Checking your inbox…</p> : !visible.length ? <div className="notification-empty"><Bell size={28} /><h3>{filter === 'unread' ? 'You’re all caught up.' : 'Your arena updates live here.'}</h3><p>Match updates, roster decisions, and Fair Play reviews will appear in your personal inbox.</p></div> : <><p className="notification-section-label">{filter === 'unread' ? 'Needs your attention' : 'Latest updates'}</p>{visible.map(item => {
           const Icon = item.kind === 'fair-play' ? ShieldCheck : item.kind === 'registration' || item.kind === 'check-in' ? ClipboardList : CalendarDays;
           return <article key={item.id} className={`notification-item ${item.readAt ? '' : 'is-unread'}`}>
-            <button className="notification-content" onClick={() => void openItem(item)}><span className="notification-avatar"><Icon size={22} /></span><span><strong>{item.title}</strong><span className="notification-body">{item.body}</span><time dateTime={item.createdAt?.toDate?.().toISOString()}>{relativeTime(item.createdAt)}</time></span>{!item.readAt && <span className="notification-dot" aria-label="Unread" />}</button>
+            <button className="notification-content" onClick={() => openItem(item)}><span className="notification-avatar"><Icon size={22} /></span><span><strong>{item.title}</strong><span className="notification-body">{item.body}</span><time dateTime={item.createdAt?.toDate?.().toISOString()}>{relativeTime(item.createdAt)}</time></span>{!item.readAt && <span className="notification-dot" aria-label="Unread" />}</button>
             <button disabled={busy} className="notification-read-toggle" aria-label={`${item.readAt ? 'Mark unread' : 'Mark read'}: ${item.title}`} title={item.readAt ? 'Mark unread' : 'Mark read'} onClick={() => void mark([item.id], !item.readAt)}>{item.readAt ? <Bell size={13} /> : <Check size={13} />}</button>
           </article>;
         })}</>}

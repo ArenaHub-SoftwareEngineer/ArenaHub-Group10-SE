@@ -10,8 +10,8 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8085';
 const demoDb = () => getFirestore(getApps().find(app => app.name === 'a11y-demo') || initializeApp({ projectId: 'demo-arenahub' }, 'a11y-demo'));
 
-const ARENA = ['home', 'current-live', 'choose-tournament', 'brackets', 'teams', 'schedule', 'standings', 'ai-assistant', 'integrity', 'operations', 'support', 'settings'];
-const ADMIN = ['overview', 'users', 'logs', 'games', 'reports', 'bracket-studio', 'ai-assistant', 'schedule', 'live-stream', 'match-monitor', 'operations', 'support', 'settings'];
+const ARENA = ['home', 'current-live', 'choose-tournament', 'brackets', 'teams', 'schedule', 'standings', 'ai-assistant', 'integrity', 'support', 'settings'];
+const ADMIN = ['overview', 'users', 'logs', 'games', 'reports', 'bracket-studio', 'ai-assistant', 'schedule', 'live-stream', 'match-monitor', 'teams', 'support', 'settings'];
 
 async function scan(page: Page, route: string) {
   await page.evaluate(hash => { window.location.hash = hash; }, route);

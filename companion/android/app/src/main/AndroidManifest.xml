@@ -52,7 +52,7 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".PovActivity" android:exported="true" android:label="Share game screen">
+        <activity android:name=".PovActivity" android:exported="true" android:label="Share game screen" android:launchMode="singleTop">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

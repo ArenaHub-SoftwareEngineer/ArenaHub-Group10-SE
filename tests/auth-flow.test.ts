@@ -10,7 +10,11 @@ test('invitation input accepts current-site links and opaque tokens without navi
   assert.equal(parseInviteInput(token, site), token);
   assert.equal(parseInviteInput(`${site}?spectatorInvite=${token}`, site), token);
   assert.equal(parseInviteInput(`  ${site}?spectatorInvite=${token}  `, site), token);
-  for (const input of ['WSI319', 'WMSU-2026-PASS', `https://evil.example/school/?spectatorInvite=${token}`, `https://arena.example/other/?spectatorInvite=${token}`, `https://user:pass@arena.example/school/?spectatorInvite=${token}`, `javascript:alert(1)`, `${site}?spectatorInvite=${token}&spectatorInvite=${token}`, `${site}?spectatorInvite=short`]) assert.throws(() => parseInviteInput(input, site), /current ArenaHub/);
+  // Short codes a student reads out: case, spaces and the display dash do not matter.
+  assert.equal(parseInviteInput('7K3QM-X9PRT', site), '7K3QMX9PRT');
+  assert.equal(parseInviteInput(' 7k3qm x9prt ', site), '7K3QMX9PRT');
+  assert.equal(parseInviteInput(`${site}?spectatorInvite=7K3QMX9PRT`, site), '7K3QMX9PRT');
+  for (const input of ['WSI319', 'WMSU-2026-PASS', '7K3QM-X9PRI', '7K3QM-X9PR', `https://evil.example/school/?spectatorInvite=${token}`, `https://arena.example/other/?spectatorInvite=${token}`, `https://user:pass@arena.example/school/?spectatorInvite=${token}`, `javascript:alert(1)`, `${site}?spectatorInvite=${token}&spectatorInvite=${token}`, `${site}?spectatorInvite=short`]) assert.throws(() => parseInviteInput(input, site), /current ArenaHub/);
 });
 test('the real QR decoder recovers an encoded student invitation from image pixels', () => {
   const input = `https://arena.example/?spectatorInvite=${'b'.repeat(48)}`, qr = QRCode.create(input), size = qr.modules.size, scale = 7, margin = 4, width = (size + margin * 2) * scale;

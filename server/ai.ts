@@ -120,7 +120,8 @@ export function createAiRouter(env: Env, deps: AiDeps = {}) {
   async function identify(res: express.Response, token: string): Promise<Caller | null> {
     try {
       const caller = await verify(token);
-      if (!caller.admitted) { fail(res, 403, 'Join with a campus invite to use the assistant.'); return null; }
+      // Invited guests can watch and comment; Arena AI is for verified campus accounts only.
+      if (!caller.campus) { fail(res, 403, 'Arena AI is for verified campus accounts.'); return null; }
       if (!await burst.hit(caller.uid, config.burstPerMinute, 60)) { fail(res, 429, 'Too many questions at once. Wait a minute and try again.'); return null; }
       return caller;
     } catch (error) {

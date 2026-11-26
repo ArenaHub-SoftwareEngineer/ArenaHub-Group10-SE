@@ -17,10 +17,11 @@ import { applyMatchSchedules, canEditMatchSchedule, missingMatchSchedules, type 
 import { validateScore } from './integrityChecks';
 import { scheduleMatches } from './formats/placement';
 import { updateMatchAndAdvance } from './bracketUtils';
+import { canScoreMatch, scoredMatch } from './liveResults';
 import { watchCommunityReports, resolveCommunityReport } from './communityReports';
 import { collegeStandings } from './colleges';
 import { DEFAULT_CATEGORIES, DEFAULT_GAMES } from './catalogDefaults';
-import { contentFingerprint, toTournamentDoc } from './data/tournamentDocs';
+import { bracketTeams, contentFingerprint, toTournamentDoc } from './data/tournamentDocs';
 import { assertUniqueTeamNames } from './teamNames';
 import {
   publishTournament, restoreTournament, saveTournament, setTournamentFeatured, unpublishTournament,
@@ -76,7 +77,7 @@ class FirestoreService {
         const token = await user.getIdTokenResult();
         if (token.claims.admin === true && auth.currentUser?.uid === user.uid) {
           stopUsersListener = onSnapshot(collection(db, 'users'), snapshot => {
-            this.users = snapshot.docs.map(d => { const profile = d.data(); return { id: d.id, name: profile.name || 'Campus member', email: profile.email || '', role: profile.role || 'user', spectatorInviteApproved: profile.spectatorInviteApproved === true, status: profile.status || 'active', collegeId: '', collegeName: profile.collegeName || '', avatarInitials: profile.avatarInitials || 'U', joinedDate: profile.joinedAt?.toDate?.().toLocaleDateString() || '—', joinedAt: profile.joinedAt?.toMillis?.() } as User; });
+            this.users = snapshot.docs.map(d => { const profile = d.data(); return { id: d.id, name: profile.name || 'Campus member', email: profile.email || '', role: profile.role || 'user', spectatorInviteApproved: profile.spectatorInviteApproved !== false, emailVerified: profile.emailVerified === true, status: profile.status || 'active', collegeId: '', collegeName: profile.collegeName || '', avatarInitials: profile.avatarInitials || 'U', joinedDate: profile.joinedAt?.toDate?.().toLocaleDateString() || '—', joinedAt: profile.joinedAt?.toMillis?.() } as User; });
             this.emit();
           }, () => { this.users = []; this.emit(); });
         }
@@ -257,6 +258,39 @@ class FirestoreService {
     this.emit();
   }
 
+  /**
+   * Sets (or, without an image, removes) a team's logo. With `everyGame`, the same college's team in every other
+   * published bracket gets it too, so one upload covers MLBB, Dota 2 and CODM. Bracket Studio reads the same field.
+   */
+  public async saveTeamLogo(bracketId: string, teamId: string, image: string | undefined, everyGame = true): Promise<void> {
+    this.requireSignedIn('change team logos');
+    const source = this.published.find(b => b.id === bracketId);
+    const team = source && bracketTeams(source).find(t => t.id === teamId);
+    if (!source || !team) throw new Error('This team is no longer in a published bracket. Reload and try again.');
+    const code = (team.collegeCode || '').trim().toUpperCase();
+    const targets = this.published.flatMap(bracket => {
+      const ids = bracket.id === bracketId ? [teamId]
+        : everyGame && code ? bracketTeams(bracket).filter(t => (t.collegeCode || '').trim().toUpperCase() === code).map(t => t.id) : [];
+      return ids.length && this.cloud.has(bracket.id) ? [{ bracket, ids }] : [];
+    });
+    await this.guarded(async () => {
+      for (const { bracket, ids } of targets) {
+        const teams = { ...bracket.appearance?.teams };
+        for (const id of ids) {
+          const { image: _old, ...rest } = teams[id] || {};
+          if (image) teams[id] = { ...rest, image };
+          else if (Object.keys(rest).length) teams[id] = rest;
+          else delete teams[id];
+        }
+        const next: BracketDraft = { ...bracket, appearance: { ...bracket.appearance, teams } };
+        await this.writeTournament(next, this.cloud.get(bracket.id)!.revision, false);
+        this.published = this.published.map(b => b.id === next.id ? next : b);
+      }
+    });
+    this.addAuditLog(`${image ? 'Updated' : 'Removed'} the logo for ${team.name}`);
+    this.emit();
+  }
+
   public async setMatchStatus(matchId: string, status: Match['status']): Promise<void> {
     await this.persistMatchChange(matchId, match => {
       if (status === 'live' && !canBroadcastMatch(match)) throw new Error('This match is no longer available to go live.');
@@ -326,6 +360,8 @@ class FirestoreService {
 
   // --- Published brackets ---
   public getPublishedBrackets(): BracketDraft[] { return this.published.filter(b => !b.placement && !isRetiredGame(b)); }
+  /** Every published event, Battle Royale lobbies included (Anti-cheat check-in needs the lobby games too). */
+  public getPublishedEvents(): BracketDraft[] { return this.published.filter(b => !isRetiredGame(b)); }
   public getPublishedBracketById(id: string): BracketDraft | undefined { return this.getPublishedBrackets().find(b => b.id === id); }
   public getPreviousPublishedBrackets(): BracketDraft[] { return this.previous.filter(b => !b.placement); }
 
@@ -349,6 +385,40 @@ class FirestoreService {
     await this.guarded(() => publishTournament(published));
     this.addAuditLog(`Published bracket "${published.title}" (${gameName})`);
     return published;
+  }
+
+  /**
+   * Saves one result straight to a live bracket: the winner advances and spectators see it at once.
+   * No new version is kept (Versions is for whole re-publishes), and nothing changes here until the cloud write succeeds.
+   */
+  public async savePublishedMatchResult(bracketId: string, matchId: string, team1Score: number, team2Score: number): Promise<BracketDraft> {
+    this.requireSignedIn('update match results');
+    const bracket = this.published.find(b => b.id === bracketId);
+    const cloud = bracket && this.cloud.get(bracketId);
+    const current = bracket?.matches.find(m => m.id === matchId);
+    if (!bracket || !cloud || !current) throw new Error('This bracket is no longer live. Reload and try again.');
+    if (!canScoreMatch(current)) throw new Error('Both teams must be known before a result can be saved.');
+    const next: BracketDraft = { ...bracket, matches: updateMatchAndAdvance(bracket.matches, scoredMatch(current, team1Score, team2Score)) };
+    await this.writeTournament(next, cloud.revision);
+    this.published = this.published.map(b => b.id === bracketId ? next : b);
+    this.addAuditLog(`Result saved for ${current.team1?.name} vs ${current.team2?.name}: ${team1Score}-${team2Score}`);
+    this.emit();
+    return next;
+  }
+
+  /** Writes an edited live bracket over itself (same game, no Versions entry), for Bracket Studio's "Update live". */
+  public async updatePublishedBracket(draft: BracketDraft): Promise<BracketDraft> {
+    this.requireSignedIn('update live brackets');
+    assertUniqueTeamNames(draft);
+    const live = this.published.find(b => b.id === draft.id);
+    const cloud = this.cloud.get(draft.id);
+    if (!live || !cloud) throw new Error('This bracket is no longer live. Publish it again instead.');
+    const next: BracketDraft = { ...draft, gameName: live.gameName, gameId: live.gameId, status: 'published' };
+    await this.writeTournament(next, cloud.revision);
+    this.published = this.published.map(b => b.id === next.id ? next : b);
+    this.addAuditLog(`Updated live bracket "${next.title}"`);
+    this.emit();
+    return next;
   }
 
   public async restorePublishedBracket(previous: BracketDraft): Promise<BracketDraft> {

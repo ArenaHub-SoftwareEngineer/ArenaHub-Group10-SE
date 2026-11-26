@@ -51,6 +51,8 @@ test('Bracket Studio: prompt draft, mode switch, manual setup, PNG export and pu
   test.setTimeout(90_000);
   const { page, errors } = await open(browser, ORGANIZER);
   await page.evaluate(() => { window.location.hash = '#/admin/bracket-studio'; });
+  // The page opens on the Live board; New bracket opens the editor.
+  await page.getByRole('button', { name: 'New bracket' }).first().click();
   // Build settings is a <details> that closes once a bracket is on the canvas.
   const builder = page.locator('details.studio-builder').filter({ has: page.locator('summary', { hasText: 'Build settings' }) });
   const openBuilder = async () => { if (!(await builder.evaluate(el => (el as HTMLDetailsElement).open))) await builder.locator('summary').click(); };
@@ -157,9 +159,9 @@ test('staff can create and publish a new bracket while matches are live', async 
   await expect(viewer.locator('.stream-game-card').filter({ hasText: liveTitle })).toHaveCount(0);
   await viewer.locator('.stream-game-card').filter({ hasText: nextTitle }).click();
   await expect(viewer.getByRole('heading', { name: nextTitle, exact: true })).toBeVisible();
-  const library = admin.getByRole('complementary', { name: 'Bracket library' });
-  await library.getByRole('tab', { name: /^Versions/ }).click();
-  await expect(library.getByText(liveTitle, { exact: true })).toBeVisible();
+  await admin.getByRole('button', { name: 'All brackets' }).click();
+  await admin.getByRole('tab', { name: /^Versions/ }).click();
+  await expect(admin.getByRole('tabpanel', { name: 'Versions' }).getByText(liveTitle, { exact: true })).toBeVisible();
 
   await admin.goto(viewer.url());
   await admin.getByRole('button', { name: 'Match schedule' }).click();

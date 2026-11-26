@@ -42,9 +42,9 @@ service cloud.firestore {
         && institutionalEmail(request.auth.token.email);
     }
     function registeredStudent() {
-      return campusStudent() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('spectatorInviteApproved', false) == true;
+      return campusStudent() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('spectatorInviteApproved', true) != false;
     }
-    // Who may issue a guest invitation: an approved student, or a campus admin (who approves students and need not approve themselves).
+    // Who may issue a guest invitation: any verified, active campus student (unless an admin revoked their QR), or a campus admin.
     function inviteIssuer() { return registeredStudent() || (campusStudent() && isAdmin()); }
     function personalSpectator() {
       return activeAccount() && !campusStudent()
@@ -53,10 +53,10 @@ service cloud.firestore {
     function validInvite(token, invite) {
       let slot = get(/databases/$(database)/documents/studentInviteSlots/$(invite.issuer)).data;
       let issuer = get(/databases/$(database)/documents/users/$(invite.issuer)).data;
-      return token.matches('[a-f0-9]{48}') && slot.token == token
+      return token.matches('([a-f0-9]{48}|[2-9A-HJKMNP-Z]{10})') && slot.token == token
         && invite.createdAt == slot.createdAt
         && request.time < invite.createdAt + duration.value(20, 'm')
-        && issuer.status == 'active' && (issuer.get('spectatorInviteApproved', false) == true || issuer.get('role', '') == 'admin')
+        && issuer.status == 'active' && (issuer.get('spectatorInviteApproved', true) != false || issuer.get('role', '') == 'admin')
         && issuer.emailVerified == true && institutionalEmail(issuer.email);
     }
     function activeSpectator() {
@@ -68,14 +68,14 @@ service cloud.firestore {
       allow create, update: if ownsProfile(uid) && inviteIssuer()
         && (resource == null || request.time >= resource.data.createdAt + duration.value(20, 'm'))
         && request.resource.data.keys().hasOnly(['token', 'createdAt'])
-        && request.resource.data.token is string && request.resource.data.token.matches('[a-f0-9]{48}')
+        && request.resource.data.token is string && request.resource.data.token.matches('([a-f0-9]{48}|[2-9A-HJKMNP-Z]{10})')
         && request.resource.data.createdAt == request.time
         && getAfter(/databases/$(database)/documents/campusInvites/$(request.resource.data.token)).data.issuer == uid
         && getAfter(/databases/$(database)/documents/campusInvites/$(request.resource.data.token)).data.createdAt == request.time;
     }
     match /campusInvites/{token} {
       allow get: if validInvite(token, resource.data);
-      allow create: if inviteIssuer() && token.matches('[a-f0-9]{48}')
+      allow create: if inviteIssuer() && token.matches('([a-f0-9]{48}|[2-9A-HJKMNP-Z]{10})')
         && request.resource.data.keys().hasOnly(['issuer', 'createdAt'])
         && request.resource.data.issuer == request.auth.uid && request.resource.data.createdAt == request.time
         && getAfter(/databases/$(database)/documents/studentInviteSlots/$(request.auth.uid)).data.token == token
@@ -84,7 +84,8 @@ service cloud.firestore {
         && request.time >= resource.data.createdAt + duration.value(20, 'm');
     }
     match /spectatorAdmissions/{uid} {
-      allow get: if ownsProfile(uid);
+      allow get: if ownsProfile(uid) || isAdmin();
+      allow list: if isAdmin();
       allow create, update: if ownsProfile(uid) && personalSpectator()
         && request.resource.data.keys().hasOnly(['email', 'invite', 'admittedAt'])
         && request.resource.data.email == request.auth.token.email
@@ -242,7 +243,7 @@ service cloud.firestore {
     // Clients can write neither: isAI is not an allowed key and the name is reserved.
     match /matchChat/{matchId}/messages/{messageId} {
       allow read: if campusStudent() || activeSpectator();
-      allow create: if campusStudent()
+      allow create: if admitted()
         && request.resource.data.keys().hasOnly(['author', 'text', 'createdAt', 'badge'])
         && request.resource.data.createdAt == request.time
         && request.resource.data.text is string && request.resource.data.text.size() >= 1
@@ -265,7 +266,7 @@ service cloud.firestore {
     }
     match /matchChat/{matchId}/authors/{messageId} {
       allow get, list: if activeStaff();
-      allow create: if campusStudent()
+      allow create: if admitted()
         && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
         && request.resource.data.uid == request.auth.uid && request.resource.data.createdAt == request.time
         && getAfter(/databases/$(database)/documents/matchChat/$(matchId)/messages/$(messageId)).data.createdAt == request.time;
@@ -273,7 +274,7 @@ service cloud.firestore {
     // One record per viewer per match: when they last posted. Slow mode (with a 2 second floor) is enforced here.
     match /matchChat/{matchId}/pace/{uid} {
       allow get: if ownsProfile(uid);
-      allow create, update: if ownsProfile(uid) && campusStudent()
+      allow create, update: if ownsProfile(uid) && admitted()
         && request.resource.data.keys().hasOnly(['lastMessageAt', 'messageId'])
         && request.resource.data.lastMessageAt == request.time
         && request.resource.data.messageId is string

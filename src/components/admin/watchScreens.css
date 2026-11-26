@@ -1,0 +1,214 @@
+/*
+ * Anti-cheat "Watch screens" (ScreenWall.tsx) and Facilitators (FacilitatorsPanel.tsx).
+ * Little text: a day strip, game art buttons, then match cards that show crests, one light per player and who
+ * is facilitating. Colour meanings: green = sharing, red = live, orange = the action (Watch). No left accent bars,
+ * no glows outside the 3D stage, full 1px borders with -soft tints (design rules in pages.css / design.css).
+ */
+.app-shell .ws { --ws-ease: cubic-bezier(.16, 1, .3, 1); display: grid; gap: 18px; min-width: 0; }
+
+/* ---------- Day strip ---------- */
+.app-shell .ws-days { display: flex; gap: 10px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; scroll-snap-type: x proximity; }
+.app-shell .ws-day {
+  flex: none; display: grid; justify-items: start; gap: 2px; min-width: 92px; padding: 12px 16px; border-radius: 14px; scroll-snap-align: start;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font: inherit; text-align: left; cursor: pointer;
+  transition: transform .25s var(--ws-ease), border-color .2s, background-color .2s;
+}
+.app-shell .ws-day:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.app-shell .ws-day-week { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-xs); font-weight: 800; text-transform: uppercase; letter-spacing: .02em; }
+.app-shell .ws-day strong { font-size: clamp(28px, 3vw, 40px); font-weight: 1000; line-height: .9; letter-spacing: -.05em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.app-shell .ws-day small { font-size: var(--fs-xs); color: var(--text-muted); font-weight: 600; }
+.app-shell .ws-day.is-today .ws-day-week { color: var(--brand-ink); }
+.app-shell .ws-day[aria-pressed=true] { border-color: var(--brand-border); background: var(--brand-soft); color: var(--text-primary); }
+.app-shell .ws-day.is-now .ws-day-week { color: var(--live); }
+.app-shell .ws-day.is-now[aria-pressed=true] { border-color: rgb(233 25 22 / .45); background: rgb(233 25 22 / .12); }
+.app-shell .ws-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--live); animation: ws-pulse 1.6s ease-in-out infinite; }
+@keyframes ws-pulse { 50% { opacity: .35; transform: scale(.8); } }
+
+/* ---------- Game picker (official art) ---------- */
+.app-shell .ws-games { display: flex; flex-wrap: wrap; gap: 8px; }
+.app-shell .ws-game {
+  display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px 0 4px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font: inherit; font-size: var(--fs-sm); font-weight: 700;
+  transition: border-color .2s, background-color .2s, color .2s;
+}
+.app-shell .ws-game.is-all { padding: 0 18px; }
+.app-shell .ws-game img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
+.app-shell .ws-game b { min-width: 22px; height: 22px; display: inline-grid; place-items: center; padding: 0 6px; border-radius: 999px; background: var(--surface-elevated); font-size: var(--fs-xs); color: var(--text-muted); }
+.app-shell .ws-game:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.app-shell .ws-game[aria-pressed=true] { border-color: var(--brand-border); background: var(--brand-soft); color: var(--text-primary); }
+
+/* ---------- Match cards ---------- */
+.app-shell .ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.app-shell .ws-card {
+  position: relative; isolation: isolate; overflow: hidden; display: grid; min-width: 0; border-radius: 18px;
+  border: 1px solid var(--border); background: var(--surface);
+  transition: transform .35s var(--ws-ease), border-color .2s;
+  animation: ws-in .5s var(--ws-ease) both;
+}
+.app-shell .ws-card:nth-child(2) { animation-delay: .04s; } .app-shell .ws-card:nth-child(3) { animation-delay: .08s; }
+.app-shell .ws-card:nth-child(4) { animation-delay: .12s; } .app-shell .ws-card:nth-child(n+5) { animation-delay: .16s; }
+@keyframes ws-in { from { opacity: 0; transform: translateY(12px); } }
+.app-shell .ws-card:hover { transform: translateY(-4px); border-color: var(--border-strong); }
+.app-shell .ws-card.is-sharing { border-color: var(--success-border); }
+.app-shell .ws-card.is-live:not(.is-sharing) { border-color: rgb(233 25 22 / .4); }
+.app-shell .ws-card.is-skeleton { min-height: 236px; background: linear-gradient(100deg, var(--surface) 30%, var(--surface-soft) 50%, var(--surface) 70%) 0 0 / 300% 100%; animation: ws-shimmer 1.4s linear infinite; }
+@keyframes ws-shimmer { to { background-position: -150% 0; } }
+/* The game art sits behind the card, faded, so each game is recognisable without reading. */
+.app-shell .ws-card-art {
+  position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; opacity: .14; pointer-events: none;
+  mask-image: linear-gradient(180deg, #000 0%, transparent 70%); -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 70%);
+  transition: opacity .3s, transform .6s var(--ws-ease);
+}
+.app-shell .ws-card:hover .ws-card-art { opacity: .24; transform: scale(1.04); }
+.app-shell .ws-card-hit {
+  display: grid; gap: 16px; width: 100%; padding: 16px 16px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.app-shell .ws-card-hit:focus-visible { outline: 2px solid var(--brand); outline-offset: -4px; border-radius: 16px; }
+.app-shell .ws-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.app-shell .ws-time { display: inline-flex; align-items: baseline; gap: 3px; color: var(--text-primary); font-size: 30px; font-weight: 1000; letter-spacing: -.05em; line-height: .9; font-variant-numeric: tabular-nums; }
+.app-shell .ws-time small { font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0; color: var(--text-muted); }
+.app-shell .ws-live-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 6px; background: var(--live); color: #fff; font-size: var(--fs-xs); font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.app-shell .ws-card-name { display: grid; justify-items: end; gap: 2px; min-width: 0; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 800; text-align: right; }
+.app-shell .ws-card-name small { color: var(--text-muted); font-size: var(--fs-xs); font-weight: 600; }
+
+.app-shell .ws-vs { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.app-shell .ws-vs > i { font-style: normal; font-size: var(--fs-xs); font-weight: 1000; color: var(--text-muted); text-transform: uppercase; }
+.app-shell .ws-side { display: grid; justify-items: center; gap: 8px; min-width: 0; text-align: center; }
+.app-shell .ws-side > span:last-child { max-width: 100%; color: var(--text-primary); font-size: var(--fs-sm); font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.app-shell .ws-lobby { display: grid; place-items: center; min-height: 92px; }
+.app-shell .ws-lobby strong { font-size: clamp(24px, 2.6vw, 32px); font-weight: 1000; letter-spacing: -.04em; text-transform: uppercase; color: var(--text-primary); text-align: center; }
+
+.ws-crest {
+  --crest: var(--border-strong);
+  display: inline-grid; place-items: center; overflow: hidden; border-radius: 50%; flex: none;
+  border: 2px solid color-mix(in srgb, var(--crest) 70%, transparent); background: color-mix(in srgb, var(--crest) 18%, var(--surface-soft));
+  transition: transform .4s var(--ws-ease);
+}
+.ws-crest.is-md { width: 60px; height: 60px; }
+.ws-crest.is-sm { width: 28px; height: 28px; border-width: 1px; }
+.ws-crest img { width: 100%; height: 100%; object-fit: cover; }
+.ws-crest b { color: var(--text-primary); font-size: 18px; font-weight: 1000; letter-spacing: -.03em; }
+.ws-crest.is-sm b { font-size: 10px; }
+.app-shell .ws-card:hover .ws-side:first-child .ws-crest { transform: translateX(4px) rotate(-4deg); }
+.app-shell .ws-card:hover .ws-side:last-child .ws-crest { transform: translateX(-4px) rotate(4deg); }
+
+/* One light per player: lit when someone is sharing. */
+.app-shell .ws-seats { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
+.app-shell .ws-seats i { width: 18px; height: 6px; border-radius: 3px; background: var(--surface-elevated); transition: background-color .4s; }
+.app-shell .ws-seats i.is-on { background: var(--success); }
+
+.app-shell .ws-card-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.app-shell .ws-share { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--fs-xs); font-weight: 700; }
+.app-shell .ws-share.is-on { color: var(--success); }
+.app-shell .ws-share.is-paused { color: var(--danger); }
+.app-shell .ws-watch {
+  margin-left: auto; display: inline-flex; align-items: center; height: 34px; padding: 0 16px; border-radius: var(--radius-btn);
+  background: var(--surface-elevated); color: var(--text-primary); font-size: var(--fs-sm); font-weight: 800; transition: background-color .2s, color .2s;
+}
+.app-shell .ws-card:hover .ws-watch, .app-shell .ws-card.is-sharing .ws-watch { background: var(--brand); color: #1b110a; }
+
+/* Facilitators on the card. */
+.app-shell .ws-staff { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.app-shell .ws-stack { display: flex; min-height: 28px; }
+.app-shell .ws-stack .ws-avatar + .ws-avatar { margin-left: -8px; }
+.app-shell .ws-avatar {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; flex: none;
+  border: 2px solid var(--surface); background: var(--surface-elevated); color: var(--text-primary); font-size: 10px; font-weight: 800;
+}
+.app-shell .ws-assign-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; cursor: pointer;
+  border: 1px dashed var(--border-strong); background: none; color: var(--text-secondary); font: inherit; font-size: var(--fs-xs); font-weight: 700;
+}
+.app-shell .ws-assign-btn:hover { border-style: solid; border-color: var(--brand-border); color: var(--text-primary); }
+
+/* ---------- Assign dialog ---------- */
+.ws-assign { display: grid; gap: 14px; }
+.ws-people { display: grid; gap: 6px; max-height: 280px; overflow-y: auto; }
+.ws-person {
+  display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 10px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font: inherit; text-align: left;
+}
+.ws-person:disabled { opacity: .45; cursor: not-allowed; }
+.ws-person[aria-pressed=true] { border-color: var(--brand-border); background: var(--brand-soft); color: var(--text-primary); }
+.ws-person .ws-avatar { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--surface-elevated); color: var(--text-primary); font-size: 11px; font-weight: 800; }
+.ws-person-mail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ws-tick { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border-strong); }
+.ws-person[aria-pressed=true] .ws-tick { border-color: transparent; background: var(--brand); color: #1b110a; }
+.ws-invite-line { display: grid; gap: 6px; }
+.ws-label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); font-weight: 700; color: var(--text-secondary); }
+.ws-count { margin: 0; color: var(--text-muted); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+
+/* ---------- Facilitators tab ---------- */
+.app-shell .fx { display: grid; gap: 18px; min-width: 0; }
+.app-shell .fx-top { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; }
+.app-shell .fx-invite {
+  display: grid; gap: 12px; align-content: start; padding: 20px; border-radius: 18px; border: 1px solid var(--border);
+  background: radial-gradient(ellipse 90% 120% at 0% 0%, color-mix(in srgb, var(--brand) 10%, var(--surface)) 0%, var(--surface) 70%);
+}
+.app-shell .fx-invite h3 { margin: 0; font-size: clamp(22px, 2.4vw, 30px); font-weight: 1000; letter-spacing: -.04em; text-transform: uppercase; line-height: .95; color: var(--text-primary); }
+.app-shell .fx-invite form { display: flex; gap: 8px; flex-wrap: wrap; }
+.app-shell .fx-invite input { flex: 1 1 220px; min-width: 0; height: 46px; }
+.app-shell .fx-invite .arena-primary { height: 46px; display: inline-flex; align-items: center; gap: 8px; }
+.app-shell .fx-can { display: grid; gap: 10px; align-content: start; padding: 20px; border-radius: 18px; border: 1px solid var(--border); background: var(--surface); }
+.app-shell .fx-can ul { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 0; padding: 0; list-style: none; }
+.app-shell .fx-can li { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 600; }
+.app-shell .fx-can li svg { flex: none; }
+.app-shell .fx-can .is-yes svg { color: var(--success); }
+.app-shell .fx-can .is-no { color: var(--text-muted); }
+.app-shell .fx-can .is-no svg { color: var(--danger); }
+.app-shell .fx-can h4 { margin: 0; font-size: var(--fs-xs); font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .02em; }
+.app-shell .fx-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.app-shell .fx-person { display: grid; gap: 14px; padding: 16px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface); animation: ws-in .45s var(--ws-ease) both; }
+.app-shell .fx-person-head { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.app-shell .fx-person-head .ws-avatar { width: 44px; height: 44px; font-size: 14px; }
+.app-shell .fx-person-head > span:last-child { display: grid; gap: 4px; min-width: 0; }
+.app-shell .fx-mail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-weight: 700; }
+.app-shell .fx-person-matches { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 28px; }
+.app-shell .fx-person-matches .ws-crest { margin-right: -10px; border-color: var(--surface); }
+.app-shell .fx-person-matches small { margin-left: 14px; color: var(--text-secondary); font-size: var(--fs-xs); font-weight: 700; }
+.app-shell .fx-person-actions { display: flex; gap: 8px; }
+.app-shell .fx-person-actions button { flex: 1; height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.app-shell .fx-person-actions .is-remove { flex: none; width: 38px; padding: 0; }
+
+/* Match picker in the facilitator dialog. */
+.fx-picker { display: grid; gap: 14px; max-height: min(60vh, 520px); overflow-y: auto; padding-right: 4px; }
+.fx-picker h4 { margin: 0 0 6px; font-size: var(--fs-xs); font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .02em; }
+.fx-picker ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.fx-pick {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 10px; border-radius: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font: inherit; text-align: left;
+}
+.fx-pick[aria-pressed=true] { border-color: var(--brand-border); background: var(--brand-soft); color: var(--text-primary); }
+.fx-pick-time { width: 64px; flex: none; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text-primary); font-size: var(--fs-sm); }
+.fx-pick-crests { display: flex; flex: none; }
+.fx-pick-crests .ws-crest + .ws-crest { margin-left: -8px; }
+.fx-pick-name { flex: 1; min-width: 0; display: grid; font-size: var(--fs-sm); font-weight: 700; }
+.fx-pick-name small { color: var(--text-muted); font-weight: 600; font-size: var(--fs-xs); }
+.fx-pick .ws-tick { flex: none; }
+.fx-pick[aria-pressed=true] .ws-tick { border-color: transparent; background: var(--brand); color: #1b110a; }
+
+@media (max-width: 760px) {
+  .app-shell .fx-top { grid-template-columns: 1fr; }
+  .app-shell .fx-can ul { grid-template-columns: 1fr; }
+  .app-shell .ws-time { font-size: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .ws-card, .app-shell .fx-person { animation: none; }
+  .app-shell .ws-pulse { animation: none; }
+  .app-shell .ws-card:hover, .app-shell .ws-day:hover { transform: none; }
+}
+
+/* ---------- Anti-cheat page header tabs (MatchMonitorView) ---------- */
+.app-shell .ac-head { min-height: clamp(84px, 9vw, 130px); }
+.app-shell .ac-tabs { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.app-shell .ac-tab {
+  flex: none; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); font: inherit; font-size: var(--fs-md); font-weight: 800;
+  transition: border-color .2s, background-color .2s, color .2s, transform .25s var(--ws-ease, ease);
+}
+.app-shell .ac-tab:hover { color: var(--text-primary); border-color: var(--border-strong); transform: translateY(-1px); }
+.app-shell .ac-tab[aria-selected=true] { background: var(--text-primary); border-color: var(--text-primary); color: var(--bg-base); }
+.app-shell .ac-tab b { min-width: 22px; height: 22px; display: inline-grid; place-items: center; padding: 0 7px; border-radius: 999px; background: var(--success-soft); color: var(--success); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.app-shell .ac-tab.is-alert b { background: var(--danger-soft); color: var(--danger); }
+.app-shell .ac-tab[aria-selected=true] b { background: color-mix(in srgb, var(--bg-base) 18%, transparent); color: var(--bg-base); }
+@media (max-width: 560px) { .app-shell .ac-tab { height: 42px; padding: 0 14px; font-size: var(--fs-sm); } }

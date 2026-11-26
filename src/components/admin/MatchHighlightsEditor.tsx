@@ -3,6 +3,7 @@ import type { Match, MatchTimelineEvent } from '../../lib/types';
 import { firestoreService } from '../../lib/firestore';
 import { matchMvp, MAX_TIMELINE_EVENTS, mvpCandidates, sortedTimeline, timelineEvent, TIMELINE_TYPES } from '../../lib/matchHighlights';
 import { useToast } from '../ui/Toast';
+import { Req } from '../ui/Req';
 import { Plus, Save, Trash2, Trophy } from '../ui/Icons';
 import { errorMessage } from '../../lib/errors';
 import '../spectator/matchHighlights.css';
@@ -51,12 +52,12 @@ export const MatchHighlightsEditor: React.FC<{ match: Match }> = ({ match }) => 
       <div className="page-panel highlights-timeline">
         <header className="stats-card-head"><h3>Key moments</h3><p className="field-hint">Viewers see these on the match page, in time order.</p></header>
         <form className="highlights-editor-add module-form" onSubmit={add}>
-          <label>Game time<input value={draft.time} onChange={e => setDraft({ ...draft, time: e.target.value })} placeholder="12:35" inputMode="numeric" maxLength={6} aria-describedby="highlights-time-hint" /></label>
-          <label>What happened<select value={draft.type} onChange={e => setDraft({ ...draft, type: e.target.value })}>{TIMELINE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
+          <label><Req>Game time</Req><input aria-required="true" value={draft.time} onChange={e => setDraft({ ...draft, time: e.target.value })} placeholder="12:35" inputMode="numeric" maxLength={6} aria-describedby="highlights-time-hint" /></label>
+          <label><Req>What happened</Req><select aria-required="true" value={draft.type} onChange={e => setDraft({ ...draft, type: e.target.value })}>{TIMELINE_TYPES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
           <label>Team<select value={draft.team} onChange={e => setDraft({ ...draft, team: e.target.value })}>
             <option value="">Both or neither</option>{teams.map(t => <option key={t!.id} value={t!.collegeCode}>{t!.name} ({t!.collegeCode})</option>)}
           </select></label>
-          <label className="span-all">Description<input value={draft.text} onChange={e => setDraft({ ...draft, text: e.target.value })} maxLength={200} placeholder="Takes the first Lord after a won fight at mid" /></label>
+          <label className="span-all"><Req>Description</Req><input aria-required="true" value={draft.text} onChange={e => setDraft({ ...draft, text: e.target.value })} maxLength={200} placeholder="Takes the first Lord after a won fight at mid" /></label>
           <span id="highlights-time-hint" className="field-hint">Minutes:seconds from the in-game clock.</span>
           <button className="arena-outline highlights-add"><Plus size={16} />Add event</button>
         </form>

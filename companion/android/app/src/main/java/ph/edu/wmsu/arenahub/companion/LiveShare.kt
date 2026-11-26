@@ -38,9 +38,17 @@ object LiveShare {
     private var room: Room? = null
     private var events: Job? = null
     @Volatile var running = false; private set
+    /** When the live started (ms), who is sharing and in which match: shown on the live screen. */
+    var startedAt = 0L; private set
+    var who = ""; private set
+    var match = ""; private set
+    /** Null while the match runs; the referee's note (possibly empty) while it is paused. */
+    var pausedNote: String? = null; private set
+    /** Called on the main thread when sharing starts, stops or is paused. */
+    var onChange: (() -> Unit)? = null
 
     /** Must be called while PovActivity is on screen: Android only lets a visible app start screen capture. */
-    suspend fun start(context: Context, url: String, token: String, permission: Intent) {
+    suspend fun start(context: Context, url: String, token: String, permission: Intent, player: String = "", matchLabel: String = "") {
         val app = context.applicationContext
         stop(app)
         val next = LiveKit.create(app, RoomOptions(
@@ -72,6 +80,9 @@ object LiveShare {
             val params = ScreenCaptureParams(permission, SHARE_NOTIFICATION, sharingNotification(app)) { scope.launch { stop(app) } }
             check(next.localParticipant.setScreenShareEnabled(true, params)) { "Screen sharing did not start." }
             running = true
+            startedAt = System.currentTimeMillis()
+            who = player; match = matchLabel
+            onChange?.invoke()
         } catch (error: Exception) {
             stop(app)
             throw error
@@ -87,10 +98,14 @@ object LiveShare {
     }
 
     private fun cleanUp(context: Context) {
+        val was = running
         running = false
+        startedAt = 0L
+        pausedNote = null
         room = null
         events?.cancel(); events = null
         context.getSystemService(NotificationManager::class.java).cancel(PAUSE_NOTIFICATION)
+        if (was) onChange?.invoke()
     }
 
     private fun channels(context: Context): NotificationManager {
@@ -103,17 +118,22 @@ object LiveShare {
 
     private fun sharingNotification(context: Context): Notification {
         channels(context)
-        val stop = PendingIntent.getActivity(context, 22, Intent(context, PovActivity::class.java).setAction(PovActivity.ACTION_STOP).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
+        // Tapping the notification opens the live screen; only "End live" stops sharing.
+        val open = PendingIntent.getActivity(context, 21, Intent(context, PovActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getActivity(context, 22, Intent(context, PovActivity::class.java).setAction(PovActivity.ACTION_STOP).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(context, "screen-wall").setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("ArenaHub is sharing your screen").setContentText("Match staff can see your game. Tap to stop sharing.")
-            .setContentIntent(stop).setOngoing(true).build()
+            .setContentTitle("You are live to match staff").setContentText("ArenaHub is sharing your screen. Tap to see your live.")
+            .setContentIntent(open).setOngoing(true)
+            .addAction(Notification.Action.Builder(null, "End live", stop).build()).build()
     }
 
     private fun showPause(context: Context, metadata: String?) {
         val manager = channels(context)
         val state = try { JSONObject(metadata ?: "{}") } catch (_: Exception) { JSONObject() }
-        if (!state.optBoolean("paused")) { manager.cancel(PAUSE_NOTIFICATION); return }
+        if (!state.optBoolean("paused")) { manager.cancel(PAUSE_NOTIFICATION); if (pausedNote != null) { pausedNote = null; onChange?.invoke() }; return }
         val note = state.optString("note").take(200)
+        pausedNote = note
+        onChange?.invoke()
         manager.notify(PAUSE_NOTIFICATION, Notification.Builder(context, "match-paused").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("The referee paused this match")
             .setContentText(if (note.isNotBlank()) note else "Stop playing and pause the game now.")

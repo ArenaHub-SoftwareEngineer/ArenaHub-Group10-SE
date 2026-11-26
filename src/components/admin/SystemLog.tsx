@@ -1,17 +1,19 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AuditLogItem, BracketDraft, ContentReport, User } from '../../lib/types';
 import { LOG_CATEGORIES, buildSystemLog, clockTime, groupByDay, relativeTime, type LogCategory, type LogEntry } from '../../lib/adminInsights';
-import { PageHeading } from '../ui/PageHeading';
+import { activityBuckets, collapseBursts, useMutedCategories, type ActivityRange, type FeedItem } from '../../lib/logFeed';
 import { Modal } from '../ui/Modal';
-import { ArrowUpRight, ChevronLeft, ChevronRight, Download, Flag, GitBranch, Info, Radio, Search, Star, Swords, Users } from '../ui/Icons';
+import { ActivitySkyline, CATEGORY_TONE } from '../three/ActivitySkyline';
+import { ArrowUpRight, BellOff, Bell, ChevronDown, ChevronRight, Download, Flag, GitBranch, Info, Pause, Play, Radio, Search, Star, Swords, Users, X } from '../ui/Icons';
 import './adminOverview.css';
+import './adminPoster.css';
 
 const CATEGORY_ICON: Record<LogCategory, typeof Info> = {
   matches: Swords, brackets: GitBranch, broadcast: Radio, accounts: Users, moderation: Flag, content: Star, system: Info,
 };
 const CATEGORY_LABEL = Object.fromEntries(LOG_CATEGORIES.map(item => [item.id, item.label])) as Record<LogCategory, string>;
 const DESTINATION_LABEL: Record<string, string> = { 'bracket-studio': 'Brackets', 'live-stream': 'Broadcast', users: 'Users', reports: 'Reports' };
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 30;
 const ATTENTION_TONES = new Set(['danger', 'warning', 'live']);
 const timestamp = (at: number) => new Date(at).toLocaleString('en-PH', { timeZone: 'Asia/Manila' });
 
@@ -47,54 +49,70 @@ export function LogList({ entries, now, onNavigate, compact = false }: {
 
 function csvCell(value: string) { return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value; }
 
-function LogCategoryIcon({ entry }: { entry: LogEntry }) {
-  const Icon = CATEGORY_ICON[entry.category];
-  return <span className="log-area">
-    <span className={`log-area-icon ov-tone is-${entry.tone}`} aria-hidden="true"><Icon size={14} /></span>
-    {CATEGORY_LABEL[entry.category]}
-  </span>;
+function CategoryBadge({ category }: { category: LogCategory }) {
+  const Icon = CATEGORY_ICON[category];
+  return <span className={`adp-cat is-${CATEGORY_TONE[category]}`} title={CATEGORY_LABEL[category]}><Icon size={14} aria-hidden="true" /><span>{CATEGORY_LABEL[category]}</span></span>;
+}
+
+function Row({ entry, onOpen }: { entry: LogEntry; onOpen: (entry: LogEntry) => void }) {
+  return <button type="button" className={`adp-log-row${ATTENTION_TONES.has(entry.tone) ? ` is-${entry.tone}` : ''}`} aria-haspopup="dialog" onClick={() => onOpen(entry)}>
+    {entry.at ? <time dateTime={new Date(entry.at).toISOString()} className="adp-log-time">{clockTime(entry.at)}</time> : <span className="adp-log-time">—</span>}
+    <CategoryBadge category={entry.category} />
+    <span className="adp-log-text"><strong>{entry.actor}</strong> {entry.text}</span>
+    <ChevronRight size={16} className="adp-log-go" aria-hidden="true" />
+  </button>;
+}
+
+function Burst({ item, onOpen }: { item: Extract<FeedItem, { kind: 'burst' }>; onOpen: (entry: LogEntry) => void }) {
+  const [open, setOpen] = useState(false);
+  const first = item.entries[item.entries.length - 1], last = item.entries[0];
+  return <>
+    <button type="button" className="adp-log-row is-burst" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <span className="adp-log-time" title={`${clockTime(first.at)} to ${clockTime(last.at)}`}>{clockTime(last.at)}</span>
+      <CategoryBadge category={item.category} />
+      <span className="adp-log-text"><strong>{item.label}</strong> <span className="adp-burst-names">{item.entries.slice(0, 3).map(entry => entry.actor).join(', ')}{item.entries.length > 3 ? '…' : ''}</span></span>
+      <ChevronDown size={16} className="adp-log-go" aria-hidden="true" />
+    </button>
+    {open && <ol className="adp-burst-list">{item.entries.map(entry => <li key={entry.id}><Row entry={entry} onOpen={onOpen} /></li>)}</ol>}
+  </>;
 }
 
 export function SystemLogView({ auditLogs, users, reports, brackets, onNavigate }: {
   auditLogs: AuditLogItem[]; users: User[]; reports: ContentReport[]; brackets: BracketDraft[]; onNavigate: (tab: string) => void;
 }) {
   const now = useNow();
+  const [muted, setMuted] = useMutedCategories();
   const [category, setCategory] = useState<LogCategory | 'all'>('all');
-  const [date, setDate] = useState('');
+  const [range, setRange] = useState<ActivityRange>('day');
+  const [slot, setSlot] = useState<string | null>(null);
   const [attention, setAttention] = useState(false);
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [pausedAt, setPausedAt] = useState<number | null>(null);
+  const [muteOpen, setMuteOpen] = useState(false);
   const [selected, setSelected] = useState<LogEntry | null>(null);
-  const results = useRef<HTMLHeadingElement>(null);
+
   const all = useMemo(() => buildSystemLog({ auditLogs, users, reports, brackets }), [auditLogs, users, reports, brackets]);
-  const dates = useMemo(() => groupByDay(all, now), [all, now]);
-  const activeDate = dates.find(group => group.key === date);
+  // Paused: the feed holds still; anything newer waits behind the "new" button.
+  const live = useMemo(() => all.filter(entry => !muted.includes(entry.category)), [all, muted]);
+  const visible = pausedAt === null ? live : live.filter(entry => (entry.at ?? 0) <= pausedAt);
+  const waiting = live.length - visible.length;
+  const buckets = useMemo(() => activityBuckets(visible, now, range), [visible, now, range]);
+  const window_ = buckets.find(bucket => bucket.key === slot);
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = (activeDate?.entries ?? all).filter(entry => {
-    if ((category !== 'all' && entry.category !== category) || (attention && !ATTENTION_TONES.has(entry.tone))) return false;
+  const shown = visible.filter(entry => {
+    if (category !== 'all' && entry.category !== category) return false;
+    if (attention && !ATTENTION_TONES.has(entry.tone)) return false;
+    if (window_ && !(entry.at && entry.at >= window_.start && entry.at < window_.end)) return false;
     const searchable = `${entry.actor} ${entry.text} ${CATEGORY_LABEL[entry.category]}`.toLowerCase();
     return words.every(word => searchable.includes(word));
   });
-  const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const offset = (currentPage - 1) * PAGE_SIZE;
-  const groups = groupByDay(shown.slice(offset, offset + PAGE_SIZE), now);
-  const filtered = Boolean(query || category !== 'all' || activeDate || attention);
-  const destination = selected?.tab;
+  const counts = useMemo(() => Object.fromEntries(LOG_CATEGORIES.map(item => [item.id, visible.filter(entry => entry.category === item.id).length])) as Record<LogCategory, number>, [visible]);
+  const groups = groupByDay(shown.slice(0, limit), now);
+  const filtered = Boolean(query || category !== 'all' || window_ || attention);
+  const today = visible.filter(entry => entry.at && now - entry.at < 86_400_000).length;
 
-  function clearFilters() {
-    setQuery('');
-    setCategory('all');
-    setDate('');
-    setAttention(false);
-    setPage(1);
-  }
-
-  function changePage(next: number) {
-    setPage(next);
-    results.current?.focus({ preventScroll: true });
-    results.current?.scrollIntoView({ block: 'nearest' });
-  }
+  function clearFilters() { setQuery(''); setCategory('all'); setSlot(null); setAttention(false); setLimit(PAGE_SIZE); }
 
   function download() {
     const rows = [['Time (Manila)', 'Category', 'Who', 'What'], ...shown.map(entry => [
@@ -106,71 +124,119 @@ export function SystemLogView({ auditLogs, users, reports, brackets, onNavigate 
     URL.revokeObjectURL(url);
   }
 
-  return <div className="ov-page log-workspace">
-    <PageHeading title="System log" description="Staff actions, sign-ups, and reports · Manila time"
-      actions={<button type="button" className="arena-outline" disabled={!shown.length} onClick={download}><Download size={16} /> Download CSV</button>} />
+  const toggleMute = (id: LogCategory) => {
+    setMuted(muted.includes(id) ? muted.filter(item => item !== id) : [...muted, id]);
+    if (category === id) setCategory('all');
+  };
 
-    <section className="page-panel log-panel" aria-labelledby="log-activity-heading">
-      <div className="log-filters" role="group" aria-label="Filter activity">
-        <label className="page-search">
-          <Search size={16} aria-hidden="true" />
-          <input type="search" aria-label="Search the log" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="Search activity" />
-        </label>
-        <button type="button" className="log-attention" title="Show warnings, removals, and live changes" aria-pressed={attention}
-          onClick={() => { setAttention(!attention); setPage(1); }}>
-          <Flag size={15} aria-hidden="true" /> Key events
-        </button>
-        <select aria-label="Category" value={category} onChange={event => { setCategory(event.target.value as LogCategory | 'all'); setPage(1); }}>
-          <option value="all">All categories</option>
-          {LOG_CATEGORIES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </select>
-        <select aria-label="Date" value={activeDate?.key || ''} onChange={event => { setDate(event.target.value); setPage(1); }}>
-          <option value="">All dates</option>
-          {dates.map(day => <option key={day.key} value={day.key}>{day.label}</option>)}
-        </select>
+  return <div className="adp">
+    <header className="adp-head">
+      <span className="adp-giant" aria-hidden="true">Activity</span>
+      <div className="adp-title">
+        <h2><span className="adp-count">{today}</span> <span className="is-thin">events</span> today</h2>
+        <p>System log · Manila time</p>
       </div>
+      <div className="adp-head-actions">
+        <button type="button" className={`arena-outline${pausedAt !== null ? ' is-paused' : ''}`} aria-pressed={pausedAt !== null}
+          onClick={() => setPausedAt(pausedAt === null ? Date.now() : null)}>
+          {pausedAt === null ? <><Pause size={16} aria-hidden="true" /> Pause</> : <><Play size={16} aria-hidden="true" /> Resume</>}
+        </button>
+        <button type="button" className="arena-outline" aria-haspopup="dialog" onClick={() => setMuteOpen(true)}>
+          <BellOff size={16} aria-hidden="true" /> Mute{muted.length ? <span className="ah-chip-count">{muted.length}</span> : null}
+        </button>
+        <button type="button" className="arena-outline" disabled={!shown.length} onClick={download} aria-label="Download CSV" title="Download CSV"><Download size={16} aria-hidden="true" /></button>
+      </div>
+    </header>
 
-      <header className="log-results">
-        <h2 id="log-activity-heading" ref={results} tabIndex={-1}>Activity</h2>
-        <span role="status">{shown.length} {shown.length === 1 ? 'entry' : 'entries'}</span>
-        {filtered && <button type="button" className="arena-text-button" onClick={clearFilters}>Clear filters</button>}
-      </header>
+    {waiting > 0 && <button type="button" className="adp-waiting" onClick={() => setPausedAt(null)}>
+      <Play size={14} aria-hidden="true" /> {waiting} new · show
+    </button>}
 
-      {groups.length ? groups.map(group => <section className="log-day" key={group.key} aria-label={group.label}>
+    <section className="adp-sky-card" aria-label="Activity chart">
+      <div className="adp-sky-head">
+        <div className="ah-chips" role="group" aria-label="Chart range">
+          <button type="button" className="ah-chip" aria-pressed={range === 'day'} onClick={() => { setRange('day'); setSlot(null); }}>24 h</button>
+          <button type="button" className="ah-chip" aria-pressed={range === 'week'} onClick={() => { setRange('week'); setSlot(null); }}>7 days</button>
+        </div>
+        {window_ && <button type="button" className="ah-chip" aria-pressed="true" onClick={() => setSlot(null)}>{window_.label} <X size={13} aria-label="clear time" /></button>}
+      </div>
+      <ActivitySkyline buckets={buckets} selected={slot} onSelect={setSlot} />
+    </section>
+
+    <nav className="adp-cats" aria-label="Filter by category">
+      <button type="button" className="adp-cat-chip" aria-pressed={category === 'all'} onClick={() => setCategory('all')}><span>All</span><b>{visible.length}</b></button>
+      {LOG_CATEGORIES.filter(item => !muted.includes(item.id) && counts[item.id]).map(item => {
+        const Icon = CATEGORY_ICON[item.id];
+        return <button key={item.id} type="button" className={`adp-cat-chip is-${CATEGORY_TONE[item.id]}`} aria-pressed={category === item.id}
+          onClick={() => setCategory(category === item.id ? 'all' : item.id)}>
+          <Icon size={15} aria-hidden="true" /><span>{item.label}</span><b>{counts[item.id]}</b>
+        </button>;
+      })}
+      {muted.length > 0 && <button type="button" className="adp-cat-chip is-muted" onClick={() => setMuteOpen(true)}><BellOff size={15} aria-hidden="true" /><span>{muted.length} muted</span></button>}
+    </nav>
+
+    <div className="adp-toolbar">
+      <label className="page-search">
+        <Search size={16} aria-hidden="true" />
+        <input type="search" aria-label="Search the log" value={query} onChange={event => { setQuery(event.target.value); setLimit(PAGE_SIZE); }} placeholder="Search" />
+      </label>
+      <button type="button" className="ah-chip" title="Warnings, removals and live changes only" aria-pressed={attention} onClick={() => setAttention(!attention)}>
+        <Flag size={14} aria-hidden="true" /> Key events
+      </button>
+      <span className="adp-results" role="status">{shown.length} {shown.length === 1 ? 'entry' : 'entries'}</span>
+      {filtered && <button type="button" className="arena-text-button" onClick={clearFilters}>Clear</button>}
+    </div>
+
+    <section className="adp-feed" aria-label="Activity">
+      {groups.length ? groups.map(group => <section className="adp-day" key={group.key} aria-label={group.label}>
         <h3>{group.label}</h3>
         <ol>
-          {group.entries.map(entry => <li key={entry.id}>
-            <button type="button" className="log-entry" aria-haspopup="dialog" onClick={() => setSelected(entry)}>
-              {entry.at ? <time dateTime={new Date(entry.at).toISOString()} className="log-time">{clockTime(entry.at)}</time> : <span className="log-time">—</span>}
-              <LogCategoryIcon entry={entry} />
-              <span className="log-summary"><strong>{entry.actor}</strong> <span aria-hidden="true">·</span> {entry.text}</span>
-              <ChevronRight size={16} className="log-entry-arrow" aria-hidden="true" />
-            </button>
+          {collapseBursts(group.entries).map(item => <li key={item.kind === 'entry' ? item.entry.id : item.id}>
+            {item.kind === 'entry' ? <Row entry={item.entry} onOpen={setSelected} /> : <Burst item={item} onOpen={setSelected} />}
           </li>)}
         </ol>
-      </section>) : <p className="log-empty">{all.length ? 'No entries match these filters.' : 'No activity has been recorded yet.'}</p>}
-
-      {pageCount > 1 && <nav className="log-pagination" aria-label="Activity pages">
-        <span>{offset + 1}–{Math.min(offset + PAGE_SIZE, shown.length)} of {shown.length}</span>
-        <div>
-          <button type="button" className="arena-outline arena-sm" aria-label="Previous page" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}><ChevronLeft size={16} aria-hidden="true" /></button>
-          <span role="status">Page {currentPage} of {pageCount}</span>
-          <button type="button" className="arena-outline arena-sm" aria-label="Next page" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}><ChevronRight size={16} aria-hidden="true" /></button>
-        </div>
-      </nav>}
+      </section>) : <p className="adp-empty">{all.length ? 'Nothing matches.' : 'No activity yet.'}</p>}
+      {shown.length > limit && <button type="button" className="arena-outline adp-more" onClick={() => setLimit(limit + PAGE_SIZE)}>
+        Show more <span className="ah-chip-count">{shown.length - limit}</span>
+      </button>}
     </section>
+
+    <Modal open={muteOpen} title="Mute activity" description="Muted categories are hidden from the log and Overview on this browser." onClose={() => setMuteOpen(false)}>
+      <ul className="adp-mute-list">
+        {LOG_CATEGORIES.map(item => {
+          const Icon = CATEGORY_ICON[item.id];
+          const off = muted.includes(item.id);
+          return <li key={item.id}>
+            <label className={`adp-mute${off ? ' is-off' : ''}`}>
+              <span className={`adp-cat is-${CATEGORY_TONE[item.id]}`}><Icon size={16} aria-hidden="true" /></span>
+              <span className="adp-mute-name">{item.label}<small>{all.filter(entry => entry.category === item.id).length} entries</small></span>
+              {off ? <BellOff size={16} aria-hidden="true" /> : <Bell size={16} aria-hidden="true" />}
+              <input type="checkbox" role="switch" className="adp-switch" checked={!off} onChange={() => toggleMute(item.id)} aria-label={`Show ${item.label}`} />
+            </label>
+          </li>;
+        })}
+      </ul>
+      <div className="feature-dialog-actions">
+        {muted.length > 0 && <button type="button" className="arena-outline" onClick={() => setMuted([])}>Unmute all</button>}
+        <button type="button" className="arena-primary" onClick={() => setMuteOpen(false)}>Done</button>
+      </div>
+    </Modal>
 
     <Modal open={Boolean(selected)} title="Log entry" onClose={() => setSelected(null)}>
       {selected && <div className="log-detail">
-        <LogCategoryIcon entry={selected} />
-        <p>{selected.text}</p>
+        <CategoryBadge category={selected.category} />
+        <p><strong>{selected.actor}</strong> {selected.text}</p>
         <dl>
-          <div><dt>Actor</dt><dd>{selected.actor}</dd></div>
           <div><dt>Time in Manila</dt><dd>{selected.at ? <time dateTime={new Date(selected.at).toISOString()}>{timestamp(selected.at)}</time> : 'Unavailable'}</dd></div>
         </dl>
-        {destination && <button type="button" className="arena-outline" onClick={() => { setSelected(null); onNavigate(destination); }}>
-          Open {DESTINATION_LABEL[destination]} <ArrowUpRight size={15} aria-hidden="true" />
-        </button>}
+        <div className="feature-dialog-actions">
+          {!muted.includes(selected.category) && <button type="button" className="arena-outline" onClick={() => { toggleMute(selected.category); setSelected(null); }}>
+            <BellOff size={15} aria-hidden="true" /> Mute {CATEGORY_LABEL[selected.category]}
+          </button>}
+          {selected.tab && <button type="button" className="arena-primary" onClick={() => { const tab = selected.tab!; setSelected(null); onNavigate(tab); }}>
+            Open {DESTINATION_LABEL[selected.tab] || 'page'} <ArrowUpRight size={15} aria-hidden="true" />
+          </button>}
+        </div>
       </div>}
     </Modal>
   </div>;

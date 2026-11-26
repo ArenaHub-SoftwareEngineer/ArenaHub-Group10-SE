@@ -3,6 +3,8 @@ import { expect, type Locator, type Page } from '@playwright/test';
 export const QA_PASSWORD = 'ArenaHub-QA-Only-27!';
 export const ORGANIZER = 'organizer@wmsu.edu.ph';
 export const STUDENT = 'student@wmsu.edu.ph';
+/** Personal-email guest admitted with a student invite (tests/seed-emulators.mjs). */
+export const GUEST = 'guest@example.com';
 
 /** Collects console errors and uncaught page errors so a test can assert none happened. */
 export function watchErrors(page: Page) {
@@ -54,8 +56,8 @@ export async function scheduleDraft(page: Page) {
   await expect(schedule.getByRole('status')).toContainText(/matches? scheduled/);
 }
 
-/** Monitor opens on Live screens. Player check-in and device scans are on its second tab. */
+/** Anti-cheat opens on Screens. Device scans are on its Scans tab. */
 export async function openMonitorScans(page: Page) {
   await page.evaluate(() => { location.hash = '#/admin/match-monitor'; });
-  await page.getByRole('tab', { name: /^Check-in and scans/ }).click({ timeout: 20_000 });
+  await page.getByRole('tab', { name: /^Scans/ }).click({ timeout: 20_000 });
 }

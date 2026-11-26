@@ -46,7 +46,10 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
   const { showToast } = useToast();
   const statusLabel = ({ live: 'Live', completed: 'Completed', upcoming: 'Upcoming', 'pre-match': 'Pre-match', alert: 'Needs review' } as Record<string, string>)[match.status] || match.status;
   const [more, setMore] = useState(false);
-  const canPost = !readOnly && hasCampusEmail(currentUser.email);
+  // Everyone signed in here is admitted: campus accounts, or guests who joined with a student invite.
+  // Guests can comment; inviting others and Arena AI stay with campus accounts.
+  const campus = hasCampusEmail(currentUser.email);
+  const canPost = !readOnly;
   const team1 = match.team1?.name || 'Awaiting team', team2 = match.team2?.name || 'Awaiting team';
   // This viewer counts toward the match while the page is open; Up next shows the other live counts.
   const viewers = useWatchPresence(match.id, match.status === 'live');
@@ -90,10 +93,10 @@ export const LiveMatchView: React.FC<LiveMatchViewProps> = ({ match, gameName, g
       </section>
     </div>
 
-    <ShareMatchDialog open={sharing} onClose={() => setSharing(false)} match={match} gameName={gameName} canInvite={canPost && (currentUser.role === 'admin' || currentUser.spectatorInviteApproved === true)} />
+    <ShareMatchDialog open={sharing} onClose={() => setSharing(false)} match={match} gameName={gameName} canInvite={canPost && campus && (currentUser.role === 'admin' || currentUser.spectatorInviteApproved !== false)} />
 
     <aside className="watch-secondary">
-      <LiveChatPanel matchId={match.id} currentUser={currentUser} readOnly={readOnly} canPost={canPost} onOpenArenaAI={onOpenArenaAI} />
+      <LiveChatPanel matchId={match.id} currentUser={currentUser} readOnly={readOnly} canPost={canPost} canReport={campus} onOpenArenaAI={campus ? onOpenArenaAI : undefined} />
 
       {upNext.length > 0 && onOpenCard && <section className="watch-upnext" aria-labelledby="watch-upnext-title">
         <h2 id="watch-upnext-title">Up next</h2>

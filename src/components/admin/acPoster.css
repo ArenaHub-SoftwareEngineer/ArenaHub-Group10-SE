@@ -1,0 +1,158 @@
+/*
+ * Anti-cheat check-in, poster edition (admin/AntiCheatCheckIn.tsx). Same type system as Home (spectator/homePoster.css):
+ * ultra black 1000 uppercase display lines beside hairline 150, giant outlined background words, numbered chapters.
+ * Text does the navigation: the step strip is three big numbered words, the headline says what to do next.
+ * Selectors start at .app-shell .acp so they beat the shell's generic h2/h3 rules without !important.
+ * Rules kept from the design system: one orange, no coloured glows outside the 3D stage, no left accent bars,
+ * and the QR always sits on plain white so phones can scan it.
+ */
+
+.app-shell .acp { --acp-ease: cubic-bezier(.16, 1, .3, 1); position: relative; isolation: isolate; overflow: hidden; }
+
+/* ---------- Shared type ---------- */
+.app-shell .acp-kicker { display: inline-flex; align-items: center; gap: 10px; margin: 0; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 600; }
+.app-shell .acp-kicker > svg { color: var(--brand-ink); }
+.app-shell .acp-kicker b { color: var(--brand-ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+.app-shell .acp-display {
+  margin: 0; color: var(--text-primary); font-weight: 1000; line-height: .88; letter-spacing: -.05em; text-transform: uppercase;
+  font-size: clamp(40px, 5.6vw, 92px); overflow-wrap: anywhere;
+}
+.app-shell .acp-display .is-thin { font-weight: 150; }
+.app-shell .acp-display .is-brand { color: var(--brand); }
+.app-shell .acp-lede { margin: 0; max-width: 52ch; color: var(--text-secondary); font-size: clamp(15px, 1.15vw, 18px); line-height: 1.6; }
+.app-shell .acp-rise { animation: acp-rise .7s var(--acp-ease) both; }
+@keyframes acp-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+/* ---------- Header ---------- */
+.app-shell .acp-head { position: relative; display: grid; gap: 14px; margin-bottom: clamp(20px, 3vw, 36px); }
+.app-shell .acp-head h2 { margin: 0; font-size: clamp(44px, 6.4vw, 104px); font-weight: 1000; line-height: .86; letter-spacing: -.055em; text-transform: uppercase; color: var(--text-primary); }
+.app-shell .acp-head h2 .is-thin { font-weight: 150; }
+.app-shell .acp-giant {
+  position: absolute; right: -2%; top: -4%; z-index: -1; pointer-events: none; white-space: nowrap; user-select: none;
+  font-size: clamp(120px, 19vw, 320px); font-weight: 1000; line-height: .8; letter-spacing: -.065em; text-transform: uppercase;
+  color: transparent; -webkit-text-stroke: 2px rgb(255 255 255 / .055);
+}
+
+/* ---------- Step strip: three big numbered words ---------- */
+.app-shell .acp-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 0 clamp(24px, 3vw, 40px); padding: 0; list-style: none; border-top: 1px solid var(--border); }
+.app-shell .acp-steps li { position: relative; min-width: 0; }
+.app-shell .acp-steps li::before { content: ''; position: absolute; left: 0; right: 0; top: -1px; height: 3px; background: var(--brand); transform: scaleX(0); transform-origin: left; transition: transform .6s var(--acp-ease); }
+.app-shell .acp-steps li.is-done::before { transform: scaleX(1); background: var(--text-muted); }
+.app-shell .acp-steps li.is-current::before { transform: scaleX(1); }
+.app-shell .acp-step {
+  display: flex; align-items: baseline; gap: 12px; width: 100%; min-height: 64px; padding: 16px 12px 6px 0; border: 0; background: none; text-align: left;
+  color: var(--text-muted); font: inherit; cursor: default;
+}
+.app-shell button.acp-step { cursor: pointer; }
+.app-shell button.acp-step:hover .acp-step-word { color: var(--text-primary); }
+.app-shell .acp-step:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+.app-shell .acp-step-num { font-size: var(--fs-sm); font-weight: 800; font-variant-numeric: tabular-nums; }
+.app-shell .acp-step-word { font-size: clamp(22px, 2.6vw, 40px); font-weight: 1000; line-height: 1; letter-spacing: -.04em; text-transform: uppercase; transition: color .2s; overflow-wrap: anywhere; }
+.app-shell .acp-step small { display: block; margin-top: 6px; font-size: var(--fs-xs); font-weight: 500; color: var(--text-muted); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .acp-step-text { min-width: 0; }
+.app-shell .acp-steps li.is-current .acp-step { color: var(--text-primary); }
+.app-shell .acp-steps li.is-current .acp-step-num { color: var(--brand-ink); }
+.app-shell .acp-steps li.is-done .acp-step { color: var(--text-secondary); }
+
+/* ---------- Step headline: says what to do now ---------- */
+.app-shell .acp-prompt { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; margin-bottom: 20px; }
+.app-shell .acp-prompt > div { display: grid; gap: 10px; min-width: 0; }
+.app-shell .acp-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: var(--radius-btn); border: 1px solid var(--border-strong); background: none; color: var(--text-primary); font: inherit; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; transition: border-color .2s, background-color .2s; }
+.app-shell .acp-back:hover { border-color: var(--text-muted); background: var(--surface-soft); }
+.app-shell .acp-back svg { transition: transform .35s var(--acp-ease); }
+.app-shell .acp-back:hover svg { transform: translateX(-4px); }
+
+/* ---------- Check-in: before opening ---------- */
+.app-shell .acp-start { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: clamp(20px, 3vw, 48px); align-items: stretch; }
+.app-shell .acp-start-copy { display: grid; align-content: start; gap: 22px; min-width: 0; }
+.app-shell .acp-how { margin: 0; padding: 0; list-style: none; display: grid; border-top: 1px solid var(--border); }
+.app-shell .acp-how li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.app-shell .acp-how-num { grid-row: span 2; font-size: var(--fs-sm); font-weight: 800; color: var(--brand-ink); font-variant-numeric: tabular-nums; padding-top: 6px; }
+.app-shell .acp-how strong { font-size: clamp(24px, 2.4vw, 36px); font-weight: 1000; line-height: 1; letter-spacing: -.04em; text-transform: uppercase; color: var(--text-primary); }
+.app-shell .acp-how span:not(.acp-how-num) { color: var(--text-secondary); font-size: var(--fs-sm); line-height: 1.55; }
+.app-shell .acp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.app-shell .acp-cta { min-height: 56px; padding-inline: 28px; font-size: var(--fs-md); font-weight: 800; }
+
+/* Test switch as a real switch: the checkbox stays the control, the track is drawn from it. */
+.app-shell .acp-test { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px dashed var(--border-strong); border-radius: 10px; cursor: pointer; }
+.app-shell .acp-test strong { font-size: var(--fs-sm); font-weight: 700; color: var(--text-primary); }
+.app-shell .acp-test small { display: block; margin-top: 4px; font-size: var(--fs-xs); line-height: 1.6; color: var(--text-muted); }
+.app-shell .acp-test input {
+  appearance: none; flex: none; position: relative; width: 44px; height: 26px; margin: 0; border-radius: 999px; cursor: pointer;
+  background: var(--surface-elevated); border: 1px solid var(--border-strong); transition: background-color .2s, border-color .2s;
+}
+.app-shell .acp-test input::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--text-secondary); transition: transform .3s var(--acp-ease), background-color .2s; }
+.app-shell .acp-test input:checked { background: var(--warning-soft); border-color: var(--warning-border); }
+.app-shell .acp-test input:checked::after { transform: translateX(18px); background: var(--warning); }
+.app-shell .acp-test input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.app-shell .acp-test input:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- 3D gate stage ---------- */
+.app-shell .acp-stage {
+  position: relative; display: grid; align-content: end; min-height: 320px; overflow: hidden; border-radius: 16px; border: 1px solid var(--border);
+  background: radial-gradient(ellipse 80% 70% at 50% 40%, #24140a 0%, #0d0b0c 60%, #08080a 100%);
+}
+.app-shell .acp-stage.is-test { background: radial-gradient(ellipse 80% 70% at 50% 40%, #241f0a 0%, #0d0c0b 60%, #08080a 100%); }
+.app-shell .acp-gate { position: absolute; inset: 0; opacity: 0; transition: opacity .8s ease; }
+.app-shell .acp-gate.is-ready, .app-shell .acp-gate:has(.acp-gate-css) { opacity: 1; }
+.app-shell .acp-gate canvas { display: block; }
+.app-shell .acp-stage-copy { position: relative; z-index: 1; display: grid; gap: 4px; padding: 18px 20px; background: linear-gradient(transparent, rgb(8 8 10 / .85) 45%); }
+.app-shell .acp-stage-copy strong { font-size: clamp(36px, 4vw, 64px); font-weight: 1000; line-height: .9; letter-spacing: -.05em; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.app-shell .acp-stage-copy strong .is-thin { font-weight: 150; }
+.app-shell .acp-stage-copy span { color: var(--text-secondary); font-size: var(--fs-sm); }
+/* CSS fallback arch (no WebGL, data saver). */
+.app-shell .acp-gate-css { position: absolute; left: 50%; top: 18%; width: 140px; height: 170px; transform: translateX(-50%); }
+.app-shell .acp-gate-css i { position: absolute; inset: 0; border: 8px solid var(--text-muted); border-bottom: 0; border-radius: 70px 70px 0 0; opacity: .4; }
+.app-shell .acp-gate-css.is-open i { border-color: var(--brand); opacity: 1; }
+.app-shell .acp-gate-css.is-test i { border-color: var(--warning); opacity: 1; }
+
+/* ---------- Check-in: open ---------- */
+.app-shell .acp-live { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(220px, .7fr); gap: clamp(16px, 2.4vw, 32px); align-items: stretch; }
+.app-shell .acp-qr { display: grid; place-items: center; align-content: center; gap: 10px; padding: 16px; border-radius: 16px; background: #fff; color: #111; }
+.app-shell .acp-qr img, .app-shell .acp-qr .ac-qr-placeholder { display: block; width: 200px; height: 200px; border-radius: 0; background: #fff; }
+.app-shell .acp-qr small { font-size: var(--fs-xs); font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: .02em; }
+.app-shell .acp-code-col { display: grid; align-content: space-between; gap: 18px; min-width: 0; }
+.app-shell .acp-live .room-countdown { color: var(--text-secondary); }
+.app-shell .acp-live .room-code-actions { margin: 0; }
+.app-shell .acp-live .room-address { font-weight: 700; }
+.app-shell .acp-live .field-hint { margin: 0; }
+.app-shell .acp-live .acp-stage { min-height: 260px; }
+
+/* The code itself: poster-size digits. */
+.app-shell .acp .ac-code { justify-items: start; gap: 10px; padding: 0; border: 0; background: none; }
+.app-shell .acp .ac-code-label { font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); text-transform: none; letter-spacing: 0; }
+.app-shell .acp .ac-code-digits { font-size: clamp(52px, 7.4vw, 128px); font-weight: 1000; line-height: .85; letter-spacing: -.02em; color: var(--text-primary); }
+.app-shell .acp .ac-code-timer { font-size: var(--fs-sm); font-weight: 600; }
+.app-shell .acp .ac-code-timer svg { width: 22px; height: 22px; }
+
+/* Projector: the same poster type, centred. */
+.ac-projector .ac-code { justify-items: center; padding: 8px 0 0; border: 0; background: none; }
+.ac-projector .ac-code-label { font-size: var(--fs-md); font-weight: 600; text-transform: none; letter-spacing: 0; }
+.ac-projector .ac-code.is-large .ac-code-digits { font-size: clamp(64px, 11vw, 160px); font-weight: 1000; letter-spacing: -.02em; line-height: .9; }
+.ac-projector .room-projector-body img { padding: 14px; background: #fff; border-radius: 16px; }
+
+/* Roster heading in poster type. */
+.app-shell .acp .room-roster h3 { font-size: clamp(24px, 2.4vw, 36px); font-weight: 1000; letter-spacing: -.04em; text-transform: uppercase; line-height: 1; }
+.app-shell .acp .room-roster h3 svg { color: var(--brand-ink); }
+
+@media (max-width: 1100px) {
+  .app-shell .acp-live { grid-template-columns: auto minmax(0, 1fr); }
+  .app-shell .acp-live .acp-stage { grid-column: 1 / -1; min-height: 220px; }
+}
+@media (max-width: 860px) {
+  .app-shell .acp-start { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .acp-start .acp-stage { order: -1; min-height: 220px; }
+  .app-shell .acp-live { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .acp-qr { justify-self: start; }
+}
+@media (max-width: 560px) {
+  .app-shell .acp-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .app-shell .acp-step { flex-direction: column; gap: 4px; padding-right: 6px; }
+  .app-shell .acp-step small { display: none; }
+  .app-shell .acp-how li { grid-template-columns: 36px minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .acp-rise { animation: none; }
+  .app-shell .acp-steps li::before { transition: none; }
+}
+:root[data-motion='reduced'] .app-shell .acp-rise { animation: none; }

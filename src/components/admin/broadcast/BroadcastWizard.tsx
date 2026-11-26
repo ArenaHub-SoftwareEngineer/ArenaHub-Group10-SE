@@ -9,6 +9,7 @@ import { workspaceHref } from '../../../lib/navigation';
 import { BroadcastPlayer } from '../../common/BroadcastPlayer';
 import { matchTitle } from '../../common/MatchPicker';
 import { ConfirmModal } from '../../ui/ConfirmModal';
+import { Req } from '../../ui/Req';
 import { ArrowRight, Eye, Link2, LoaderCircle, Radio, Upload } from '../../ui/Icons';
 import { Modal } from '../../ui/Modal';
 import { LiveChatPanel } from '../../spectator/LiveChatPanel';
@@ -93,7 +94,7 @@ export function BroadcastWizard({ userId, currentUser, selected, artwork, bracke
 
         <div className="bw-setup-grid">
           <div className="bw-link-fields">
-            <label className="bw-field"><span>Live link <span className="bw-required" aria-hidden="true">*</span></span>
+            <label className="bw-field"><Req>Live link</Req>
               <span className={`bw-url is-${source ? 'ok' : invalidLink ? 'bad' : 'empty'}`}>
                 <Link2 size={18} aria-hidden="true" />
                 <input id="broadcast-live-link" type="url" value={url} maxLength={2000} autoComplete="off" disabled={disabled} required
@@ -117,7 +118,7 @@ export function BroadcastWizard({ userId, currentUser, selected, artwork, bracke
 
           <div className="bw-details-fields">
             <div className="bw-field">
-              <span>Thumbnail <span className="bw-required" aria-hidden="true">*</span></span>
+              <Req>Thumbnail</Req>
               <label className="bw-thumbnail-upload">
                 {thumbnail && <img src={thumbnail} alt="" />}
                 <span><Upload size={16} aria-hidden="true" />{uploading ? 'Uploading…' : thumbnail ? 'Replace thumbnail' : 'Upload thumbnail'}</span>
@@ -128,7 +129,7 @@ export function BroadcastWizard({ userId, currentUser, selected, artwork, bracke
               <p id="bw-thumbnail-hint" className="field-hint">{thumbnail ? 'Thumbnail added.' : 'PNG, JPEG or WebP. A wide image works best.'}</p>
             </div>
 
-            <label className="bw-field"><span>Broadcast title <span className="bw-required" aria-hidden="true">*</span></span><input type="text" value={title} maxLength={160} disabled={disabled} onChange={event => { edit({ title: event.target.value }); setNotice(''); }} /></label>
+            <label className="bw-field"><Req>Broadcast title</Req><input type="text" value={title} maxLength={160} disabled={disabled} onChange={event => { edit({ title: event.target.value }); setNotice(''); }} /></label>
           </div>
         </div>
 

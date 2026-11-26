@@ -25,6 +25,8 @@ import { changeRoundFormat } from '../../lib/tournamentFormats';
 import { swissRoundCount } from '../../lib/formats/swiss';
 import { BracketAIDraft } from './bracket-studio/BracketAIDraft';
 import { duplicateMessage, duplicateNames, teamNameProblem } from '../../lib/teamNames';
+import { LiveBoard } from './bracket-studio/LiveBoard';
+import { ChevronLeft } from '../ui/Icons';
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
@@ -34,9 +36,8 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
   // Mode
   const [buildMode, setBuildMode] = useState<'prompt' | 'manual' | 'upload'>('prompt');
   const schedulePanel = useRef<HTMLDetailsElement>(null);
-  const [libraryTab, setLibraryTab] = useState<'drafts' | 'live' | 'versions'>('drafts');
 
-  // Bracket state
+  // Bracket state. With nothing asked for, the page opens on the Live board (home) instead of the editor.
   const [currentDraft, setCurrentDraft] = useState<BracketDraft | null>(() => {
     if (startNew) return null;
     if (initialBracketId) {
@@ -50,10 +51,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
         return JSON.parse(handoff) as BracketDraft;
       }
     } catch {
-      // Continue with the persisted ArenaHub draft.
+      // Open the Live board instead.
     }
-    return firestoreService.getSavedBracketDraft();
+    return null;
   });
+  const [view, setView] = useState<'home' | 'editor'>(() => startNew || currentDraft ? 'editor' : 'home');
+  const [updatingLive, setUpdatingLive] = useState(false);
+  const [newAfterClear, setNewAfterClear] = useState(false);
   const loadedBracket = useRef(currentDraft?.status === 'saved' || currentDraft?.status === 'published' ? currentDraft : null);
   const [drafts, setDrafts] = useState(() => firestoreService.getSavedBracketDrafts());
   const [bracketToLoad, setBracketToLoad] = useState<BracketDraft | null>(null);
@@ -473,7 +477,33 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
     }
     setPublishedBrackets(firestoreService.getPublishedBrackets());
     setBracketToUnpublish(null);
-    showToast(`Bracket "${bracket.title}" unpublished.`, 'info');
+    // The editor keeps the bracket open as a draft that can be published again.
+    if (currentDraft?.id === bracket.id) {
+      const draft: BracketDraft = { ...currentDraft, status: 'saved' };
+      loadedBracket.current = null;
+      setCurrentDraft(draft);
+    }
+    showToast(`"${bracket.title}" removed from live. Spectators no longer see it.`, 'info');
+  };
+
+  // Saves the open live bracket over itself: same game, spectators see the change at once.
+  const handleUpdateLive = async () => {
+    if (!currentDraft || updatingLive) return;
+    const problem = teamNameProblem(currentDraft);
+    if (problem) { showToast(problem, 'error'); return; }
+    setUpdatingLive(true);
+    try {
+      const updated = await firestoreService.updatePublishedBracket(currentDraft);
+      loadedBracket.current = updated;
+      setCurrentDraft(updated);
+      setSelectedMatch(null);
+      setDraftBeforeMatchEdit(null);
+      showToast('Live bracket updated. Spectators see the change now.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'The live bracket was not updated. Try again.', 'error');
+    } finally {
+      setUpdatingLive(false);
+    }
   };
 
   const loadBracket = (bracket: BracketDraft) => {
@@ -483,6 +513,19 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
     setIsEditingTitle(false);
     setCurrentDraft(bracket);
     setBracketToLoad(null);
+    setView('editor');
+  };
+
+  const startNewBracket = () => {
+    if (currentDraft && currentDraft !== loadedBracket.current) {
+      setNewAfterClear(true);
+      setShowConfirmDiscard(true);
+      return;
+    }
+    loadedBracket.current = null;
+    setCurrentDraft(null);
+    setSelectedMatch(null);
+    setView('editor');
   };
 
   const deletingOpenDraft = draftToDelete !== null && loadedBracket.current?.status === 'saved'
@@ -516,7 +559,8 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
     setCurrentDraft(null);
     setSelectedMatch(null);
     setShowConfirmDiscard(false);
-    showToast('Canvas cleared.', 'info');
+    if (newAfterClear) { setNewAfterClear(false); setView('editor'); }
+    else showToast('Canvas cleared.', 'info');
   };
 
   // ── Helper ────────────────────────────────────────────────────────────────
@@ -552,6 +596,13 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
 
   return (
     <div className="bracket-studio module-page">
+      {view === 'home' ? <LiveBoard live={publishedBrackets} drafts={drafts} versions={previousVersions}
+        working={currentDraft && currentDraft !== loadedBracket.current ? currentDraft : null}
+        onNew={startNewBracket} onContinue={() => setView('editor')} onEdit={requestBracket}
+        onRemove={setBracketToUnpublish} onDeleteDraft={setDraftToDelete} onRestore={setVersionToRestore} /> : <>
+      <button type="button" className="studio-back" onClick={() => setView('home')}>
+        <ChevronLeft size={16} aria-hidden="true" /> All brackets
+      </button>
       {/* ── Top Header ── */}
       <header className="studio-header">
         <div>
@@ -629,15 +680,21 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
         </ol>;
       })()}
 
-      <ConfirmModal isOpen={draftToDelete !== null} title="Delete saved draft?"
-        description={`Delete “${draftToDelete?.title || 'this draft'}” from your account?${deletingOpenDraft ? ' The open draft and its unsaved changes will also close.' : ''} Published brackets stay available.`}
-        confirmLabel="Delete draft" isDestructive onCancel={() => setDraftToDelete(null)} onConfirm={deleteDraft} />
+      {previouslyPublished && currentDraft && <div className="studio-live-banner" role="status">
+        <span className="adp-pill is-live" style={{ '--tone': 'var(--live)', '--tone-border': 'rgb(233 25 22 / .45)' } as React.CSSProperties}><i className="lbd-live-dot" /> Live</span>
+        <span><strong>Spectators can see this bracket.</strong><small>{currentDraft === loadedBracket.current ? 'No changes yet.' : 'Press Update live to show your changes.'}</small></span>
+        <span className="studio-row-actions">
+          <button type="button" className="arena-primary" disabled={currentDraft === loadedBracket.current || updatingLive} onClick={() => void handleUpdateLive()}>
+            {updatingLive ? <LoaderCircle size={16} className="animate-spin" aria-hidden="true" /> : <Check size={16} aria-hidden="true" />} Update live
+          </button>
+          <button type="button" className="arena-outline arena-danger-text" onClick={() => {
+            const live = publishedBrackets.find(bracket => bracket.id === currentDraft.id);
+            if (live) setBracketToUnpublish(live);
+          }}><Trash2 size={15} aria-hidden="true" /> Remove from live</button>
+        </span>
+      </div>}
 
-      {bracketToLoad && <ConfirmModal isOpen title="Open another bracket?"
-        description={`“${currentDraft?.title}” has unsaved changes. Cancel to save that draft first, or continue to open “${bracketToLoad.title}”.`}
-        confirmLabel="Open bracket" onCancel={() => setBracketToLoad(null)} onConfirm={() => loadBracket(bracketToLoad)} />}
-
-      <div className="studio-top">
+      <div className="studio-top is-solo">
         <details className="studio-builder studio-build" open={!currentDraft}>
           <summary>
             <span><strong>Build settings</strong><small>Start from a prompt, set up manually, or upload a roster.</small></span>
@@ -756,43 +813,6 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
           )}
           </div>
         </details>
-
-        <aside className="page-panel studio-library" aria-label="Bracket library">
-          <h2>Library</h2>
-          <div className="ah-tabs studio-library-tabs" role="tablist" aria-label="Bracket library">
-            {([['drafts', 'Drafts', drafts.length], ['live', 'Live', publishedBrackets.length], ['versions', 'Versions', previousVersions.length]] as const).map(([id, label, count]) =>
-              <button key={id} type="button" role="tab" aria-selected={libraryTab === id} onClick={() => setLibraryTab(id)}>{label}<span className="ah-chip-count">{count}</span></button>)}
-          </div>
-          <div className="studio-bracket-library" role="tabpanel">
-            {libraryTab === 'drafts' && <>
-              {drafts.length === 0 && <p className="studio-muted">No saved drafts. Publishing a bracket also keeps its latest draft and roster here.</p>}
-              {drafts.map(draft => <div key={draft.id} className="studio-bracket-library-row">
-                <span><strong>{draft.title}</strong><small>{draft.gameName} · {draft.teamsCount} teams</small></span>
-                <span className="studio-row-actions">
-                  <button type="button" className="arena-outline arena-sm" onClick={() => requestBracket(draft)}>Open draft</button>
-                  <button type="button" className="arena-outline arena-sm arena-danger-text studio-delete-draft" onClick={() => setDraftToDelete(draft)}>Delete draft</button>
-                </span>
-              </div>)}
-            </>}
-            {libraryTab === 'live' && <>
-              {publishedBrackets.length === 0 && <p className="studio-muted">No brackets are published right now.</p>}
-              {publishedBrackets.map(bracket => <div key={bracket.id} className="studio-bracket-library-row">
-                <span><strong><i className="studio-live-dot" aria-hidden="true" />{bracket.title}</strong><small>{bracket.gameName} · {bracket.teamsCount} teams</small></span>
-                <span className="studio-row-actions">
-                  <button type="button" className="arena-outline arena-sm" onClick={() => requestBracket(bracket)}>Edit published copy</button>
-                  <button type="button" className="arena-outline arena-sm arena-danger-text" onClick={() => setBracketToUnpublish(bracket)}>Unpublish</button>
-                </span>
-              </div>)}
-            </>}
-            {libraryTab === 'versions' && <>
-              {previousVersions.length === 0 && <p className="studio-muted">Earlier live versions appear here after you publish a change.</p>}
-              {previousVersions.map(version => <div key={publicationGameKey(version)} className="studio-bracket-library-row">
-                <span><strong>{version.title}</strong><small>{version.gameName}</small></span>
-                <span className="studio-row-actions"><button type="button" className="arena-outline arena-sm" onClick={() => setVersionToRestore(version)}>Restore previous version</button></span>
-              </div>)}
-            </>}
-          </div>
-        </aside>
       </div>
 
       <div className="studio-workspace">
@@ -903,6 +923,16 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
         </div>
       </div>
 
+      </>}
+
+      <ConfirmModal isOpen={draftToDelete !== null} title="Delete saved draft?"
+        description={`Delete “${draftToDelete?.title || 'this draft'}” from your account?${deletingOpenDraft ? ' The open draft and its unsaved changes will also close.' : ''} Published brackets stay available.`}
+        confirmLabel="Delete draft" isDestructive onCancel={() => setDraftToDelete(null)} onConfirm={deleteDraft} />
+
+      {bracketToLoad && <ConfirmModal isOpen title="Open another bracket?"
+        description={`“${currentDraft?.title}” has unsaved changes. Cancel to save that draft first, or continue to open “${bracketToLoad.title}”.`}
+        confirmLabel="Open bracket" onCancel={() => setBracketToLoad(null)} onConfirm={() => loadBracket(bracketToLoad)} />}
+
       <ConfirmModal
         isOpen={Boolean(versionToRestore)}
         title="Restore previous live version?"
@@ -992,12 +1022,12 @@ export const BracketStudioView: React.FC<{ initialBracketId?: string | null; sta
 
       <ConfirmModal
         isOpen={showConfirmDiscard}
-        title="Clear the canvas?"
-        description="Unsaved edits will be discarded. You can reopen saved drafts and published brackets."
-        confirmLabel="Clear canvas"
+        title={newAfterClear ? 'Start a new bracket?' : 'Clear the canvas?'}
+        description={newAfterClear ? `“${currentDraft?.title || 'The open bracket'}” has unsaved changes. They will be discarded.` : 'Unsaved edits will be discarded. You can reopen saved drafts and published brackets.'}
+        confirmLabel={newAfterClear ? 'Discard and start new' : 'Clear canvas'}
         isDestructive={true}
         onConfirm={handleDiscardDraft}
-        onCancel={() => setShowConfirmDiscard(false)}
+        onCancel={() => { setShowConfirmDiscard(false); setNewAfterClear(false); }}
       />
 
       <ConfirmModal

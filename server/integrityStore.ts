@@ -9,7 +9,7 @@ import { join, resolve } from 'node:path';
 import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, PAIRING_ALPHABET, type MonitorConfig, type MonitorPlatform, type Signal } from '../src/lib/integrityRisk.ts';
 import { IOS_CLEARANCE_MS, foundIndicators, iosReviewSchema, type IosReviewInput, type IosClearance } from '../src/lib/iosAntiCheat.ts';
 import { HEARTBEAT_SECONDS, LOST_AFTER_MS, PAIRING_TTL_MS, RETENTION_MS, RoomError, WrongDeviceError, claimingPlatform, connectionOf, liveSignalsOf, lostGapSignal, policyVersionOf, riskOf, roomOpen, scanOf, sha256, slotBlocked,
-  type MediaItem, type MonitorStore, type Pairing, type PairingInput, type RoomInput, type RoomRow, type SessionRow, type StoredSignal } from './monitorStore.ts';
+  type FacilitatorInvite, type IphoneSetup, type MediaItem, type MonitorStore, type Pairing, type PairingInput, type RoomInput, type RoomRow, type SessionRow, type StoredSignal } from './monitorStore.ts';
 
 export { HEARTBEAT_SECONDS, LOST_AFTER_MS, PAIRING_TTL_MS, RETENTION_MS, WrongDeviceError, claimingPlatform, sha256, type SessionRow };
 const idOf = (row: SessionRow | string) => typeof row === 'string' ? row : row.id;
@@ -64,6 +64,8 @@ export class IntegrityStore implements MonitorStore {
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS sessions_gsi_token ON sessions(gsi_token_hash)');
     this.db.exec('CREATE TABLE IF NOT EXISTS rooms (id TEXT PRIMARY KEY, value TEXT NOT NULL, created_at INTEGER NOT NULL)');
     this.db.exec('CREATE TABLE IF NOT EXISTS screen_staff (screen_key TEXT PRIMARY KEY, emails TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+    this.db.exec('CREATE TABLE IF NOT EXISTS iphone_setups (player_id TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    this.db.exec('CREATE TABLE IF NOT EXISTS facilitator_invites (email TEXT PRIMARY KEY, value TEXT NOT NULL)');
   }
 
   config(): MonitorConfig {
@@ -257,9 +259,9 @@ export class IntegrityStore implements MonitorStore {
   createRoom(input: RoomInput, actor: string): RoomRow {
     const now = this.now();
     const room: RoomRow = { id: randomBytes(9).toString('base64url'), label: input.label, match_id: input.matchId, game: input.game, roster_version: input.rosterVersion, players: input.players,
-      secret: randomBytes(32).toString('base64url'), record: input.record ? 1 : 0, hours: input.hours, created_by: actor, created_at: now, expires_at: now + input.hours * 3600_000, closed_at: null, joined: {}, ...(input.testRoom ? { test_room: true } : {}), ...(input.verifiedCheckIn ? { verified_checkin: true } : {}) };
+      secret: randomBytes(32).toString('base64url'), record: input.record ? 1 : 0, hours: input.hours, created_by: actor, created_at: now, expires_at: now + input.hours * 3600_000, closed_at: null, joined: {}, ...(input.testRoom ? { test_room: true } : {}), ...(input.verifiedCheckIn ? { verified_checkin: true } : {}), ...(input.noSignIn ? { no_sign_in: true } : {}) };
     this.db.prepare('INSERT INTO rooms (id, value, created_at) VALUES (?, ?, ?)').run(room.id, JSON.stringify(room), now);
-    this.audit(actor, 'room-opened', '', `${input.label} (${input.players.length || 'typed'} players)`);
+    this.audit(actor, 'room-opened', '', `${input.label} (${input.players.length || 'typed'} players)${input.noSignIn ? ', TEST: no sign-in' : ''}`);
     return room;
   }
   room(id: string): RoomRow | undefined {
@@ -279,11 +281,36 @@ export class IntegrityStore implements MonitorStore {
     else this.db.prepare('DELETE FROM screen_staff WHERE screen_key = ?').run(key);
     this.audit(actor, 'screen-facilitator', '', key + ' · ' + (emails.join(', ') || 'removed'));
   }
+  facilitatorInvites(): FacilitatorInvite[] {
+    return (this.db.prepare('SELECT value FROM facilitator_invites ORDER BY email').all() as { value: string }[]).map(row => JSON.parse(row.value));
+  }
+  saveFacilitatorInvite(invite: FacilitatorInvite, actor: string) {
+    this.db.prepare('INSERT INTO facilitator_invites (email, value) VALUES (?, ?) ON CONFLICT(email) DO UPDATE SET value = excluded.value').run(invite.email, JSON.stringify(invite));
+    this.audit(actor, 'facilitator-invite', '', invite.email + (invite.accepted_at ? ' · active' : ' · invited'));
+  }
+  deleteFacilitatorInvite(email: string, actor: string) {
+    this.db.prepare('DELETE FROM facilitator_invites WHERE email = ?').run(email);
+    this.audit(actor, 'facilitator-removed', '', email);
+  }
+  iphoneSetups(playerIds: string[]): IphoneSetup[] {
+    const read = this.db.prepare('SELECT value FROM iphone_setups WHERE player_id = ?');
+    return playerIds.flatMap(id => { const row = read.get(id) as { value: string } | undefined; return row ? [JSON.parse(row.value) as IphoneSetup] : []; });
+  }
+  saveIphoneSetup(setup: IphoneSetup) {
+    this.db.prepare('INSERT INTO iphone_setups (player_id, value) VALUES (?, ?) ON CONFLICT(player_id) DO UPDATE SET value = excluded.value').run(setup.player_id, JSON.stringify(setup));
+  }
   closeRoom(id: string, actor: string) {
     const room = this.room(id);
     if (!room || room.closed_at) return false;
     this.saveRoom({ ...room, closed_at: this.now() });
     this.audit(actor, 'room-closed', '', room.label);
+    return true;
+  }
+  newRoomCode(id: string, actor: string) {
+    const room = this.room(id);
+    if (!room || room.closed_at) return false;
+    this.saveRoom({ ...room, code_start: this.now() });
+    this.audit(actor, 'room-new-code', '', room.label);
     return true;
   }
   joinRoom(roomId: string, slot: string, pairing: PairingInput): Pairing {
@@ -297,14 +324,14 @@ export class IntegrityStore implements MonitorStore {
     this.saveRoom({ ...room, joined: { ...room.joined, [slot]: { sessionId: issued.id, at: this.now() } } });
     return issued;
   }
-  resetRoomSlot(roomId: string, slot: string, actor: string) {
+  resetRoomSlot(roomId: string, slot: string, actor: string, moved?: string) {
     const room = this.room(roomId), held = room?.joined[slot];
     if (!room || !held) return false;
-    this.end(held.sessionId, actor, 'Staff reset this player in the room so they can join again');
+    this.end(held.sessionId, actor, moved || 'Staff reset this player in the room so they can join again');
     const { [slot]: _removed, ...rest } = room.joined;
     const name = this.session(held.sessionId)?.player_name || slot;
-    this.saveRoom({ ...room, joined: rest, resets: [...(room.resets || []), { slot, name, sessionId: held.sessionId, by: actor, at: this.now() }].slice(-200) });
-    this.audit(actor, 'room-slot-reset', held.sessionId, `${room.label}: ${slot}`);
+    this.saveRoom({ ...room, joined: rest, resets: moved ? room.resets || [] : [...(room.resets || []), { slot, name, sessionId: held.sessionId, by: actor, at: this.now() }].slice(-200) });
+    this.audit(actor, moved ? 'room-slot-moved' : 'room-slot-reset', held.sessionId, `${room.label}: ${slot}`);
     return true;
   }
   close() { this.db.close(); }

@@ -26,10 +26,11 @@ export function preMatchScan(input: ScanInput): ScanReadiness {
   if (input.platform === 'ios') {
     if (input.game === 'dota2') return result('unsupported', 'Windows device required', 'Dota 2 requires the Windows agent.');
     const review = input.iosClearance;
-    if (!review) return result('required', 'iPhone inspection required', 'Ask a referee to inspect this iPhone, verify recording and arrange continuous supervision.');
-    if (!review.approved) return result('blocked', 'iPhone clearance revoked', 'Return to the referee for a new inspection before joining.', [review.note]);
-    if (review.challenge !== input.challenge || review.policyVersion !== input.policyVersion) return result('required', 'iPhone reinspection required', 'The session or tournament rules changed. Ask a referee to repeat the inspection.');
-    if (review.validUntil <= input.now) return { ...result('stale', 'iPhone inspection expired', 'Ask the referee to repeat the inspection and confirm supervision before joining.'), checkedAt: review.reviewedAt };
+    // The player confirmed the iPhone settings at check-in, and staff watch the live screen. A referee check is optional;
+    // only a referee's "not cleared" blocks. An older or expired referee check falls back to the player's own confirmation.
+    const selfChecked = { ...result('ready', 'iPhone checked in', 'The player confirmed the iPhone settings at check-in. Watch their screen on Live screens; a referee check is optional.', [], ['Apps and game memory cannot be checked on an iPhone. The player confirmed the settings themselves.']), checkedAt: input.lastSeen, validUntil: input.expiresAt };
+    if (review && !review.approved && review.challenge === input.challenge) return result('blocked', 'iPhone not cleared', 'A referee found a problem on this iPhone. The player must fix it and ask the referee to check again.', [review.note]);
+    if (!review || !review.approved || review.challenge !== input.challenge || review.policyVersion !== input.policyVersion || review.validUntil <= input.now) return selfChecked;
     return { ...result('ready', 'iPhone supervised clearance', 'Referee inspection is current. Continuous supervision and recording are required during play.', [], ['iPhone protection uses referee inspection and recorded gameplay. Installed-app and game-memory inspection are unavailable.']), checkedAt: review.reviewedAt, validUntil: Math.min(input.expiresAt, review.validUntil) };
   }
   if (!input.facts) return result('scanning', 'Waiting for first scan', 'Pairing alone does not clear a player to join.');

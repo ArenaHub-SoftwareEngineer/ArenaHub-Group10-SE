@@ -6,6 +6,8 @@ export const FAIR_PLAY_GAMES = [
  {id:'codm-mp',name:'CODM',mode:'Multiplayer',gameIds:['game-codm','game-codm-mp','game-call-of-duty-mobile','game-call-of-duty-mobile-mp','codm'],players:5,image:'/fairplay-codm.webp',evidence:['Room / match reference, map and mode','Round number, timestamp and player UID or IGN','Scoreboard, lobby roster and relevant recording'],tip:'Include the round and mode, plus the complete encounter. Killcam footage can omit context; organizers should compare available perspectives.'},
 ] as const;
 export type FairPlayGame = typeof FAIR_PLAY_GAMES[number];
+/** The full game name people see: "CODM Battle Royale" or "CODM Multiplayer", never a bare "CODM". */
+export const fairPlayLabel = (game: Pick<FairPlayGame, 'name' | 'mode'>) => game.name === 'CODM' && game.mode ? `CODM ${game.mode}` : game.name;
 export function belongsToFairPlayGame(record: Pick<Match,'gameId'> & {gameMode?:string}, game:FairPlayGame) {
  if (!(game.gameIds as readonly string[]).includes(record.gameId)) return false;
  if(!game.id.startsWith('codm'))return true;

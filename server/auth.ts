@@ -9,6 +9,13 @@ import { hasCampusEmail } from '../src/lib/institution.ts';
 import { adminApp, emulated } from './firebaseAdmin.ts';
 
 export const STAFF_ROLES = ['admin', 'organizer', 'school-admin', 'moderator'];
+/**
+ * Facilitators are invited by email (server/facilitators.ts). They are not staff anywhere else: no Firestore staff
+ * rules, no bracket or user tools. They only use Anti-cheat, and only for the matches they are assigned to.
+ */
+export const FACILITATOR_ROLE = 'facilitator';
+/** Staff roles that run Anti-cheat for every match and invite facilitators. Moderators see assigned matches only. */
+export const MONITOR_MANAGERS = ['admin', 'school-admin', 'organizer'];
 export class AuthError extends Error { constructor(readonly status: 401 | 403, message: string) { super(message); } }
 
 export interface Caller {
@@ -20,6 +27,8 @@ export interface Caller {
   admitted: boolean;
   /** Staff claim on a campus account (activeStaff in the rules). */
   staff: boolean;
+  /** Invited facilitator on a campus account: Anti-cheat only, for their assigned matches. */
+  facilitator?: boolean;
   role: string;
 }
 type Env = Record<string, string | undefined>;
@@ -37,7 +46,8 @@ function classify(identity: Identity, active: boolean, spectatorEmail: () => Pro
   if (!identity.verified || (identity.provider === 'google.com' && !campus)) throw new AuthError(401, 'A verified account is required.');
   if (!active) throw new AuthError(403, 'This account is not active.');
   const staff = campus && (identity.admin || STAFF_ROLES.includes(identity.role));
-  const base: Caller = { uid: identity.uid, email: identity.email, campus, admitted: campus, staff, role: identity.admin ? 'admin' : identity.role };
+  const facilitator = campus && !staff && identity.role === FACILITATOR_ROLE;
+  const base: Caller = { uid: identity.uid, email: identity.email, campus, admitted: campus, staff, facilitator, role: identity.admin ? 'admin' : identity.role };
   if (campus || !['google.com', 'password'].includes(identity.provider)) return Promise.resolve(base);
   return spectatorEmail().then(email => ({ ...base, admitted: !!email && email === identity.email }));
 }
@@ -89,6 +99,13 @@ export function callerVerifier(env: Env, fetcher: typeof fetch = fetch): VerifyC
       throw new AuthError(401, 'Your account could not be verified. Sign in again.');
     }
   };
+}
+
+/** Staff or an invited facilitator: the Anti-cheat page. Callers check `facilitator` for what it may not do. */
+export async function requireMonitorAccess(verify: VerifyCaller, token: string | undefined, notStaff: string) {
+  const caller = await verify(token);
+  if (!caller.staff && caller.facilitator !== true) throw new AuthError(403, notStaff);
+  return caller;
 }
 
 /** Staff only (activeStaff). The message is shown to the caller when they are signed in but not staff. */

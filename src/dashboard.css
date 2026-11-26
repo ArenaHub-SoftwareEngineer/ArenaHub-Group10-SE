@@ -561,6 +561,7 @@
 .student-invite-content img { width: min(224px, 100%); height: auto; border: 1px solid var(--border); border-radius: 12px; background:var(--surface); }
 .student-invite-timer { font-size: var(--fs-3xl); font-weight: 650; color: var(--brand-ink); font-variant-numeric: tabular-nums; margin-bottom: 8px; }
 .student-invite .module-error { margin: 10px 0; }
+.student-invite-code { font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace); font-size: var(--fs-2xl); font-weight: 650; letter-spacing: 0.12em; color: var(--text); margin-bottom: 10px; user-select: all; overflow-wrap: anywhere; }
 .spectator-shell > nav > button { min-width: 0; }
 
 @media (min-width: 768px) and (max-width: 1023px) {

@@ -17,6 +17,12 @@
     { "code": "CL", "name": "College of Law", "color": "#8B5CF6" },
     { "code": "CA", "name": "College of Architecture", "color": "#EC4899" },
     { "code": "CLA", "name": "College of Liberal Arts", "color": "#6366F1" },
-    { "code": "CED", "name": "College of Education", "color": "#14B8A6" }
+    { "code": "CED", "name": "College of Education", "color": "#14B8A6" },
+    { "code": "CSM", "name": "College of Science and Mathematics", "color": "#06B6D4" },
+    { "code": "CAIS", "name": "College of Asian and Islamic Studies", "color": "#22C55E" },
+    { "code": "CHE", "name": "College of Home Economics", "color": "#F97316" },
+    { "code": "CFES", "name": "College of Forestry and Environmental Studies", "color": "#84CC16" },
+    { "code": "CSSPE", "name": "College of Sports Science and Physical Education", "color": "#EAB308" },
+    { "code": "CSWCD", "name": "College of Social Work and Community Development", "color": "#A855F7" }
   ]
 }

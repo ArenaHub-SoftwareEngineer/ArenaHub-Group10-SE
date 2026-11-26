@@ -25,3 +25,60 @@
   .room-player { grid-template-columns: minmax(0, 1fr); }
   .room-player-actions { justify-content: flex-start; }
 }
+
+/* Anti-cheat check-in: game, bracket, match, then the QR and rotating code. */
+.ac-crumbs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: var(--fs-sm); color: var(--text-muted); }
+.ac-crumbs button { background: none; border: 0; padding: 2px 0; color: var(--text-secondary); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font: inherit; }
+.ac-crumbs button:hover { color: var(--text-primary); }
+.ac-crumbs strong { color: var(--text-primary); overflow-wrap: anywhere; }
+.ac-checkin { display: grid; gap: 16px; }
+.ac-checkin .module-notice { margin: 0; }
+.ac-start { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; }
+.ac-start h3 { margin: 0 0 8px; font-size: var(--fs-lg); }
+.ac-how { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--text-secondary); font-size: var(--fs-sm); max-width: 62ch; }
+.ac-live { display: grid; grid-template-columns: auto minmax(220px, 1fr); align-items: center; gap: 16px 24px; padding: 18px 20px; border: 1px solid var(--border); border-radius: 12px; }
+.ac-live img, .ac-qr-placeholder { width: 168px; height: 168px; border-radius: 10px; background: #fff; }
+/* One QR per device: Android, iPhone, Windows PC. */
+.ac-device-qrs { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, max-content)); justify-content: start; gap: 12px; }
+.ac-device-qr { margin: 0; display: grid; justify-items: center; align-content: start; gap: 8px; padding: 12px 12px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-1, transparent); }
+.ac-device-qr figcaption { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-primary); }
+.ac-device-qr figcaption svg { color: var(--brand); }
+.ac-device-qr small { min-height: 1.2em; max-width: 22ch; text-align: center; font-size: var(--fs-xs); color: var(--text-secondary); }
+.ac-live .ac-device-qr img, .ac-device-qr .ac-qr-placeholder { border-radius: 8px; background: #fff; }
+.ac-qr-unused { display: grid; place-items: center; padding: 12px; border: 1px dashed var(--border); border-radius: 8px; color: var(--text-muted, var(--text-secondary)); font-size: var(--fs-xs); text-align: center; }
+.ac-device-qr.is-unused figcaption { color: var(--text-secondary); }
+.ac-device-qr.is-unused figcaption svg { color: currentColor; }
+.ac-device-qrs.is-large { grid-column: auto; justify-content: center; gap: 20px; }
+.ac-device-qrs.is-large .ac-device-qr figcaption { font-size: var(--fs-lg); }
+.ac-device-qrs.is-large .ac-device-qr small { font-size: var(--fs-sm); }
+.ac-live-side { display: grid; justify-items: start; gap: 8px; min-width: 0; }
+.ac-live-side .field-hint { margin: 0; }
+.ac-code { display: grid; justify-items: center; gap: 6px; padding: 14px 18px; border-radius: 12px; border: 1px solid var(--brand-border); background: var(--brand-soft); }
+.ac-code-label { font-size: var(--fs-xs); color: var(--text-secondary); text-transform: uppercase; letter-spacing: .08em; }
+.ac-code-digits { font-size: 2.2rem; line-height: 1; letter-spacing: .12em; font-variant-numeric: tabular-nums; color: var(--text-primary); white-space: nowrap; }
+.ac-code-timer { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-sm); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.ac-code-timer svg { width: 18px; height: 18px; transform: rotate(-90deg); }
+.ac-ring-track, .ac-ring { fill: none; stroke-width: 4; }
+.ac-ring-track { stroke: var(--border); }
+.ac-ring { stroke: var(--brand); stroke-linecap: round; transition: stroke-dasharray 1s linear; }
+.ac-code.is-large { padding: 18px 28px; }
+.ac-code.is-large .ac-code-digits { font-size: clamp(2.6rem, 8vw, 4.4rem); }
+.ac-code.is-large .ac-code-timer { font-size: var(--fs-md, 16px); }
+.ac-projector-address { margin: 0; color: var(--text-secondary); }
+@media (max-width: 860px) {
+  .ac-live { grid-template-columns: 1fr; justify-items: start; }
+  .ac-device-qrs { grid-template-columns: repeat(auto-fit, minmax(150px, max-content)); }
+  .ac-code-digits { font-size: 1.8rem; }
+}
+
+/* Staff test switch: check-in without sign-in. */
+.ac-test-toggle { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 14px; padding: 12px 14px; max-width: 62ch; border: 1px dashed var(--border-strong); border-radius: 10px; cursor: pointer; }
+.ac-test-toggle strong { font-size: var(--fs-sm); font-weight: 550; }
+.ac-test-toggle small { display: block; margin-top: 4px; font-size: var(--fs-xs); line-height: 1.6; color: var(--text-muted); }
+.ac-test-toggle input { width: 19px; height: 19px; flex: none; accent-color: var(--brand); }
+.ac-test-warning { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; line-height: 1.6; }
+
+/* Check-in: the published bracket, picked by clicking a match card. */
+.ac-bracket-board { margin-bottom: 20px; }
+.ac-bracket-board .bracket-canvas-viewport { max-height: min(62vh, 640px); }
+.ac-list-heading { margin: 0 0 10px; font-size: var(--fs-md, 1rem); font-weight: 600; color: var(--text-primary); }

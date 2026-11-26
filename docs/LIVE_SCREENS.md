@@ -1,6 +1,6 @@
 # Live player screens
 
-Facilitators watch every player's screen during a match on **Monitor → Live screens**: choose a game, choose the match, and the wall shows all screens at once with each player's in-game name and team. Click a screen to spotlight it (big view plus a strip of the others), or open it full screen. **Pause match** shows a pause notice on every player's sharing screen.
+Facilitators watch every player's screen during a match on **Anti-cheat → Live screens**: choose a game, choose the match, and the wall shows all screens at once with each player's in-game name and team. Click a screen to spotlight it (big view plus a strip of the others), or open it full screen. **Pause match** shows a pause notice on every player's sharing screen.
 
 ## How it works
 
@@ -127,3 +127,23 @@ Local test (no cloud): run `mediamtx.exe` with `deploy/iphone-relay/mediamtx.yml
 - Browser, end to end with real video: start a LiveKit server (Option B config), then run the Playwright test `tests/e2e/screen-wall.spec.ts` with `LIVEKIT_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` set. The test publishes a generated test pattern, never the real desktop. Without `LIVEKIT_URL` it is skipped.
 - iPhone relay: `tests/room-codes.test.ts` covers stream keys and the relay checks for publish, view and API. A real run (MediaMTX, ffmpeg over RTMP, and Chromium playing over WHEP) passed on 2026-11-25. PRISM on a real iPhone has not been tested yet.
 - Android: `npm run test:companion` builds, unit-tests and lints the app. Screen sharing on a real phone has not been tested yet.
+
+## iPhone relay on the organizer's laptop (no cloud server)
+
+When no cloud VM is available, the iPhone relay runs on the organizer's laptop behind two free tunnels.
+Android and PC screens are not affected: they always go through LiveKit Cloud.
+
+1. Hosted API (Vercel): set only `IPHONE_RELAY_SECRET` (leave `IPHONE_RELAY_RTMP` / `IPHONE_RELAY_WEB` unset), then redeploy.
+   The laptop's `.env` needs the same `IPHONE_RELAY_SECRET` (the launcher creates one on first run if missing).
+2. `npm run relay:laptop`. It starts MediaMTX, a **bore** tunnel (free, open source, no account) that gives the
+   iPhones a public RTMP address on bore.pub, and a Cloudflare quick tunnel for the wall. It checks in with the API
+   every 20 s, so the website always knows the current addresses (both change on every start).
+   To use your own TCP tunnel to `127.0.0.1:1935` instead: `npm run relay:laptop -- --rtmp host:port`
+   (saved in `data/relay-laptop.json`; `--rtmp bore` goes back). playit.gg charges for TCP tunnels, so it is not used.
+3. Players open their setup page after the relay is running; it shows the current address and stream key for PRISM.
+4. Keep the window open and the laptop awake during matches. When it is off, the wall says so and iPhone players
+   are told the relay is offline.
+
+Walls on the laptop itself (or its Wi-Fi) play iPhones over WebRTC, about 1 s behind. Walls anywhere else switch to
+HLS through the tunnel automatically, about 3 s behind (first picture after roughly 10 s).
+Check: `npx tsx .test-data/relay-laptop-e2e.ts` (real MediaMTX, Cloudflare tunnel, ffmpeg and Edge).

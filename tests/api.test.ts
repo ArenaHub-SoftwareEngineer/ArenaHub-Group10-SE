@@ -26,7 +26,7 @@ async function listen(t: any, app: express.Express) {
 
 test('AI API rejects unconfigured, unauthenticated, cross-origin, malformed and unadmitted requests', async t => {
   const app = express();
-  const callers: Record<string, Caller> = { student: viewer(), stranger: viewer({ campus: false, admitted: false }) };
+  const callers: Record<string, Caller> = { student: viewer(), stranger: viewer({ campus: false, admitted: false }), guest: viewer({ email: 'guest@gmail.com', campus: false, admitted: true }) };
   const verify = async (token?: string) => { if (!token || !callers[token]) throw new AuthError(401, 'Sign in.'); return callers[token]; };
   app.use('/unconfigured', createAiRouter({}));
   app.use('/configured', createAiRouter({ VITE_FIREBASE_PROJECT_ID: 'demo-arenahub' }, { verify, published: noData, providers: [] }));
@@ -46,6 +46,8 @@ test('AI API rejects unconfigured, unauthenticated, cross-origin, malformed and 
   }
   // A personal account that never redeemed a campus invite cannot read tournaments, so it cannot ask about them.
   assert.equal((await post('/configured', { query: 'Who plays next?' }, as('stranger'))).status, 403);
+  // An invited guest can watch and comment, but Arena AI is for campus accounts.
+  assert.equal((await post('/configured', { query: 'Who plays next?' }, as('guest'))).status, 403);
   const ok = await post('/configured', { query: 'Who plays next?' }, as('student'));
   assert.equal(ok.status, 200);
   assert.match(ok.headers.get('content-type') || '', /text\/event-stream/);

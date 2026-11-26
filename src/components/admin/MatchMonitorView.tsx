@@ -3,15 +3,18 @@ import { auth } from '../../lib/firebase';
 import { CATEGORY_LABEL, SIGNAL_CATEGORIES, type MonitorPlatform, type RiskResult, type Severity, type SignalCategory } from '../../lib/integrityRisk';
 import { CHEAT_CATALOG, LAYER_LABEL } from '../../lib/cheatCatalog';
 import { Modal } from '../ui/Modal';
-import { Copy, ShieldAlert } from '../ui/Icons';
+import { Copy, Monitor, QrCode, ShieldAlert, Users } from '../ui/Icons';
 import { Req } from '../ui/Req';
 import { errorMessage } from '../../lib/errors';
 import { apiUrl } from '../../lib/apiBase';
 import { antiCheatCall as call } from '../../lib/antiCheatApi';
-import { RoomCodePanel } from './RoomCodePanel';
+import { AntiCheatCheckIn } from './AntiCheatCheckIn';
 import { ScreenWall } from './ScreenWall';
+import { FacilitatorsPanel, type FacilitatorList } from './FacilitatorsPanel';
+import './adminPoster.css';
+import { ReportDialog } from './ReportDialog';
 import { CONNECTION_LABEL, ScanOverview, type ScanOverviewSession } from './ScanOverview';
-import { IOS_INDICATOR_KEYS, IOS_INSPECTION_CHECKS, IOS_SIDELOAD_INDICATORS, type IosClearance, type IosIndicator } from '../../lib/iosAntiCheat';
+import { IOS_INDICATOR_KEYS, IOS_SIDELOAD_INDICATORS, type IosClearance, type IosIndicator } from '../../lib/iosAntiCheat';
 import type { BracketDraft } from '../../lib/types';
 import '../../monitor.css';
 
@@ -51,17 +54,79 @@ function alertsFor(sessions: SessionView[]): MonitorAlert[] {
   }
   return out;
 }
-/** A referee fills these in by hand: software cannot know who is watching or where the recording comes from. */
-export const NOTE_BLANK = '[fill in]';
-/** Drafts the iPhone inspection note from the indicator answers, so the referee only adds what they saw. */
-export function iosNoteDraft(s: Pick<SessionDetail, 'playerName' | 'matchLabel' | 'device'>, indicators: Partial<Record<IosIndicator, 'clear' | 'found'>>) {
-  const found = IOS_INDICATOR_KEYS.filter(key => indicators[key] === 'found').map(key => IOS_SIDELOAD_INDICATORS[key].found);
+type IosAnswers = Partial<Record<IosIndicator, 'clear' | 'found'>>;
+/** What the referee confirms at the table, besides the six places on the phone. */
+const IOS_TABLE_CHECKS = [
+  ['roster', 'Phone and game account match the roster'],
+  ['store', 'Game is the official App Store version'],
+  ['watch', 'A referee is watching and recording is on'],
+] as const;
+type IosTableCheck = typeof IOS_TABLE_CHECKS[number][0];
+/** The inspection note is written from the referee's taps; an optional line of their own is added. */
+export function iosReviewNote(s: Pick<SessionDetail, 'playerName' | 'matchLabel' | 'device'>, answers: IosAnswers, extra: string) {
+  const found = IOS_INDICATOR_KEYS.filter(key => answers[key] === 'found').map(key => IOS_SIDELOAD_INDICATORS[key].found);
+  const phone = [s.device?.model, s.device?.os].filter(Boolean).join(' ') || 'iPhone';
   return [
-    `Inspected ${s.playerName}'s ${[s.device?.model, s.device?.os].filter(Boolean).join(' ') || 'iPhone'} for ${s.matchLabel}. Device and in-game account matched the roster.`,
-    found.length ? `Found: ${found.join('; ')}. The player was told how to remove it.` : `All ${IOS_INDICATOR_KEYS.length} sideload and jailbreak indicators were not present.`,
-    `Recording source: ${NOTE_BLANK}. Supervising referee: ${NOTE_BLANK}.`,
-  ].join(' ');
+    found.length
+      ? `Not cleared: ${s.playerName}'s ${phone} for ${s.matchLabel}. Found: ${found.join('; ')}. The player was told how to fix it.`
+      : `Inspected ${s.playerName}'s ${phone} for ${s.matchLabel}. Device and account matched the roster, the game is the App Store version, all ${IOS_INDICATOR_KEYS.length} sideload and jailbreak checks were clear, and a referee is watching with recording on.`,
+    extra.trim(),
+  ].filter(Boolean).join(' ');
 }
+
+/** Optional referee spot check. The player already confirmed these at check-in, so it stays folded until a referee is with the phone. */
+function IosInspection({ detail, busy, act }: { detail: SessionDetail; busy: boolean; act: (work: () => Promise<unknown>, done: string) => Promise<void> }) {
+  const [answers, setAnswers] = useState<IosAnswers>({});
+  const [table, setTable] = useState<Partial<Record<IosTableCheck, boolean>>>({});
+  const [extra, setExtra] = useState('');
+  const found = IOS_INDICATOR_KEYS.filter(key => answers[key] === 'found');
+  const checked = IOS_INDICATOR_KEYS.filter(key => answers[key]).length + IOS_TABLE_CHECKS.filter(([key]) => table[key]).length;
+  const total = IOS_INDICATOR_KEYS.length + IOS_TABLE_CHECKS.length;
+  const clearance = detail.iosClearance;
+  const cleared = !!clearance?.approved && clearance.validUntil > Date.now();
+  const save = (approved: boolean) => void act(async () => {
+    const note = iosReviewNote(detail, answers, extra);
+    await call(`/sessions/${detail.id}/ios-review`, { body: approved
+      ? { approved, indicators: answers, note, checks: { deviceAndAccount: true, officialGame: true, deviceSettings: true, supervision: true, recording: true } }
+      : { approved, indicators: answers, note } });
+    setAnswers({}); setTable({}); setExtra('');
+  }, approved ? 'Cleared to play for 15 minutes. The player\'s phone turns green.' : 'Not cleared. The player sees what to fix.');
+  const revoked = !!clearance && !clearance.approved;
+  return <details className="operations-section ios-check" open={revoked}>
+    <summary className="ios-check-head">
+      <h3>Referee spot check <small>(optional)</small></h3>
+      <span className={`ios-state ${cleared ? 'is-ok' : clearance && !clearance.approved ? 'is-bad' : 'is-wait'}`}>
+        {cleared ? `Cleared until ${new Date(clearance!.validUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : revoked ? 'Not cleared' : 'Player self-checked'}
+      </span>
+    </summary>
+    <p className="field-hint">The player confirmed these on their own phone at check-in, and you can watch their screen on Live screens. Only open this if you are with the player and want to check the phone yourself. Marking a Problem blocks them until it is fixed.</p>
+    <div className="ios-meter" aria-hidden="true"><i style={{ width: `${checked / total * 100}%` }} /></div>
+    <p className="ios-progress">{checked} of {total} checked</p>
+    <div className="ios-rows" role="group" aria-label="On the phone">
+      {IOS_INDICATOR_KEYS.map(key => { const item = IOS_SIDELOAD_INDICATORS[key]; return <div key={key} className={`ios-row${answers[key] === 'found' ? ' is-found' : answers[key] === 'clear' ? ' is-clear' : ''}`}>
+        <div className="ios-row-text"><strong>{item.ok}</strong><small>{item.where}</small></div>
+        <div className="ios-seg" role="radiogroup" aria-label={item.ok}>
+          <button type="button" role="radio" aria-checked={answers[key] === 'clear'} onClick={() => setAnswers(a => ({ ...a, [key]: 'clear' }))}>OK</button>
+          <button type="button" role="radio" aria-checked={answers[key] === 'found'} className="is-problem" onClick={() => setAnswers(a => ({ ...a, [key]: 'found' }))}>Problem</button>
+        </div>
+        {answers[key] === 'found' && <p className="ios-fix">Tell the player: {item.fix}</p>}
+      </div>; })}
+    </div>
+    <div className="ios-rows" role="group" aria-label="At the table">
+      {IOS_TABLE_CHECKS.map(([key, label]) => <label key={key} className={`ios-row ios-tick${table[key] ? ' is-clear' : ''}`}>
+        <span className="ios-row-text"><strong>{label}</strong></span>
+        <input type="checkbox" checked={table[key] === true} onChange={event => setTable(t => ({ ...t, [key]: event.target.checked }))} />
+      </label>)}
+    </div>
+    <label className="ios-extra">Note (optional)<input value={extra} maxLength={300} onChange={event => setExtra(event.target.value)} placeholder="e.g. Recorded from the observer slot" /></label>
+    <div className="operations-actions">
+      {found.length
+        ? <button type="button" className="arena-primary arena-danger" disabled={busy} onClick={() => save(false)}>Not cleared, tell the player</button>
+        : <button type="button" className="arena-primary" disabled={busy || detail.status !== 'active' || checked < total} onClick={() => save(true)}>Clear to play</button>}
+    </div>
+  </details>;
+}
+
 export function caseSummary(s: SessionDetail) {
   return [
     `[Match monitor] ${s.playerName} - ${s.matchLabel} (${s.gameLabel}, ${DEVICE_LABEL[s.platform]})`,
@@ -87,10 +152,7 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
   const [detail, setDetail] = useState<SessionDetail | null>(null), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [note, setNote] = useState(''), [hold, setHold] = useState(false), [busy, setBusy] = useState(false), [dotaMatch, setDotaMatch] = useState('');
   const [cheatId, setCheatId] = useState(''), [seenNote, setSeenNote] = useState(''), [seenLevel, setSeenLevel] = useState<Severity>('medium');
-  const [iosChecks, setIosChecks] = useState<Partial<Record<keyof typeof IOS_INSPECTION_CHECKS, boolean>>>({}), [iosNote, setIosNote] = useState('');
-  const [iosIndicators, setIosIndicators] = useState<Partial<Record<IosIndicator, 'clear' | 'found'>>>({});
   const [blocking, setBlocking] = useState<{ sha256: string; label: string } | null>(null);
-  const indicatorFound = IOS_INDICATOR_KEYS.some(key => iosIndicators[key] === 'found');
   const load = useCallback(() => call<SessionDetail>(`/sessions/${id}`).then(d => { setDetail(d); setError(''); }).catch(e => setError(e.message)), [id]);
   useEffect(() => { void load(); const timer = setInterval(() => void load(), 5000); return () => clearInterval(timer); }, [load]);
   useEffect(() => { if (detail) { setNote(n => n || detail.reviewNote); setHold(h => h || detail.hold); } }, [detail?.id]);
@@ -100,30 +162,11 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
     <div className="feature-dialog-body monitor-detail">
       {error && <p className="field-error" role="alert">{error}</p>}{notice && <p className="module-notice" role="status">{notice}</p>}
       {!detail ? <p className="field-hint" role="status">Loading session...</p> : <>
+        {detail.platform === 'ios' && <IosInspection detail={detail} busy={busy} act={act} />}
+        {(() => {
+          const report = <>
         <div className="monitor-risk-strip"><span className={`monitor-risk ${detail.risk.level}`}>{detail.risk.score}<small>/100</small></span><div><strong>{detail.risk.level === 'clear' ? 'No listed indicators reported' : `Level: ${detail.risk.level}`}</strong><p className="field-hint">A referee decides. Signals describe the device, not the player's intent.</p></div></div>
         <p className="module-notice"><strong>Detection coverage: {detail.inspection?.status || 'not reported'}. </strong>{detail.inspection?.detail || 'No inspection coverage is available. An empty finding list does not prove a clean device.'}</p>
-        {detail.platform === 'ios' && <section className="operations-section" aria-label="iPhone anti-cheat inspection">
-          <h3>iPhone anti-cheat inspection</h3>
-          <p role="status"><strong>{detail.scan?.label}</strong> {detail.scan?.detail}</p>
-          <p className="field-hint">Inspect the physical playing device with the player. Clearance lasts 15 minutes for match admission. Maintain supervision and recording throughout play, and revoke clearance when supervision stops or the device changes.</p>
-          {detail.iosClearance && <p className="field-hint">Last reviewed at {time(detail.iosClearance.reviewedAt)} by {detail.iosClearance.actor}. {detail.iosClearance.note}</p>}
-          <form className="module-form" onSubmit={event => { event.preventDefault(); void act(async () => { await call(`/sessions/${id}/ios-review`, { body: { approved: true, checks: iosChecks, indicators: iosIndicators, note: iosNote } }); setIosChecks({}); setIosIndicators({}); setIosNote(''); }, 'iPhone inspection saved. Supervised clearance lasts up to 15 minutes.'); }}>
-            {Object.entries(IOS_INSPECTION_CHECKS).map(([key, label]) => <label className="settings-toggle" key={key}>{label}<input type="checkbox" required checked={iosChecks[key as keyof typeof IOS_INSPECTION_CHECKS] === true} onChange={event => setIosChecks(checks => ({ ...checks, [key]: event.target.checked }))} /></label>)}
-            <fieldset className="ios-indicators"><legend>Sideload and jailbreak indicators <span className="ios-progress">Checked {IOS_INDICATOR_KEYS.filter(key => iosIndicators[key]).length} of {IOS_INDICATOR_KEYS.length}</span></legend>
-              <p className="field-hint">Check each place on the phone with the player. Any indicator marked found blocks approval until it is removed and the phone is inspected again.</p>
-              {IOS_INDICATOR_KEYS.map(key => { const item = IOS_SIDELOAD_INDICATORS[key]; return <div className="ios-indicator" key={key} role="radiogroup" aria-label={item.found}>
-                <p><strong>{item.where}</strong><br />{item.found}. <span className="field-hint">{item.why}</span></p>
-                <div className="ah-choice">{([['clear', 'Not present'], ['found', 'Found']] as const).map(([value, label]) => <label key={value} className={iosIndicators[key] === value ? 'is-active' : ''}><input type="radio" name={`ios-${key}`} value={value} required checked={iosIndicators[key] === value} onChange={() => setIosIndicators(current => ({ ...current, [key]: value }))} />{label}</label>)}</div>
-                {iosIndicators[key] === 'found' && <p className="ios-fix"><strong>Tell the player:</strong> {item.fix} Then check this place again.</p>}
-              </div>; })}
-            </fieldset>
-            {indicatorFound && <p className="field-error" role="alert">An indicator is marked found. Revoke clearance with a note, or have the player remove it and inspect again.</p>}
-            <label>iPhone inspection note<textarea required minLength={10} maxLength={2000} value={iosNote} onChange={event => setIosNote(event.target.value)} placeholder="Record the account, device, inspection findings, recording source and supervising referee." /></label>
-            <div className="operations-actions"><button type="button" className="arena-outline" disabled={busy || !IOS_INDICATOR_KEYS.every(key => iosIndicators[key])} onClick={() => setIosNote(iosNoteDraft(detail, iosIndicators))}>Write note from checks</button></div>
-            {iosNote.includes(NOTE_BLANK) && <p className="field-hint" role="status">Replace each {NOTE_BLANK} in the note before saving.</p>}
-            <div className="operations-actions"><button className="arena-primary" disabled={busy || detail.status !== 'active' || indicatorFound || iosNote.includes(NOTE_BLANK)}>Approve supervised iPhone</button><button type="button" className="arena-outline" disabled={busy || iosNote.trim().length < 10 || iosNote.includes(NOTE_BLANK)} onClick={() => void act(async () => { await call(`/sessions/${id}/ios-review`, { body: { approved: false, indicators: iosIndicators, note: iosNote } }); setIosChecks({}); setIosIndicators({}); setIosNote(''); }, 'iPhone clearance revoked. A new inspection is required before admission.')}>Revoke iPhone clearance</button></div>
-          </form>
-        </section>}
         <dl className="monitor-facts">
           <div><dt>Device</dt><dd>{[detail.device?.model, detail.device?.os, detail.device?.agent].filter(Boolean).join(' · ') || (detail.status === 'pending' ? 'Not paired yet' : 'Device details not reported')}</dd></div>
           <div><dt>Last report</dt><dd>{time(detail.lastSeen)}</dd></div>
@@ -187,13 +230,30 @@ function SessionDialog({ id, onClose, onChanged }: { id: string; onClose: () => 
           </div>
         </div>
         <details><summary>Activity log</summary><ol className="monitor-audit">{detail.audit.map((a, i) => <li key={i}><strong>{a.action.replaceAll('-', ' ')}</strong> · {time(a.at)} · {a.note}</li>)}</ol></details>
+          </>;
+          // Nothing is scanned on an iPhone, so the evidence and cheat report stay folded until a referee needs them.
+          return detail.platform === 'ios' ? <details className="monitor-more"><summary>Evidence and cheat report</summary>{report}</details> : report;
+        })()}
       </>}
     </div>
   </Modal>;
 }
 
-export function MatchMonitorView({ brackets = [] }: { brackets?: BracketDraft[] }) {
-  const [tab, setTab] = useState<'screens' | 'checkin'>('screens');
+type MonitorTab = 'checkin' | 'screens' | 'scans' | 'people';
+
+/**
+ * `manage`: admins and organizers (every match, invite facilitators). `facilitator`: an invited facilitator, who sees
+ * only their assigned matches; the server enforces the same limits.
+ */
+export function MatchMonitorView({ brackets = [], facilitator = false, manage = false }: { brackets?: BracketDraft[]; facilitator?: boolean; manage?: boolean }) {
+  // Watching screens is what staff do most, so it is the first view. Check-in hands a match straight to it.
+  const [tab, setTab] = useState<MonitorTab>('screens');
+  const [live, setLive] = useState({ sharing: 0, matches: 0 });
+  const [people, setPeople] = useState<FacilitatorList | null>(null);
+  const loadPeople = useCallback(() => call<FacilitatorList>('/facilitators').then(setPeople).catch(() => setPeople({ facilitators: [], canInvite: true })), []);
+  useEffect(() => { if (manage) void loadPeople(); }, [manage, loadPeople]);
+  const [watchKey, setWatchKey] = useState('');
+  const [report, setReport] = useState<{ id: string; snapshot: File | null } | null>(null);
   const [sessions, setSessions] = useState<SessionView[] | null>(null);
   const [error, setError] = useState('');
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -209,15 +269,34 @@ export function MatchMonitorView({ brackets = [] }: { brackets?: BracketDraft[] 
   }, [refresh]);
   const alerts = alertsFor(sessions ?? []).filter(alert => !dismissed.includes(alert.key));
 
-  return <div className="module-page monitor-page">
-    <header className="dashboard-page-heading"><h1>Monitor</h1>
-      <p>Watch players’ screens live during their match, and check devices before play.</p></header>
-    <div className="page-toolbar"><div className="ah-tabs" role="tablist" aria-label="Monitor views">
-      {([['screens', 'Live screens'], ['checkin', alerts.length ? `Check-in and scans (${alerts.length})` : 'Check-in and scans']] as const).map(([id, label]) =>
-        <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>)}
-    </div></div>
-    {tab === 'screens' ? <ScreenWall brackets={brackets} onOpenSession={setOpenId} /> : <>
-      <RoomCodePanel onOpenSession={setOpenId} />
+  const tabs: { id: MonitorTab; label: string; icon: typeof Monitor; count?: number }[] = [
+    { id: 'screens', label: 'Screens', icon: Monitor, count: live.sharing || undefined },
+    { id: 'checkin', label: 'Check-in', icon: QrCode },
+    { id: 'scans', label: 'Scans', icon: ShieldAlert, count: alerts.length || undefined },
+    ...(manage ? [{ id: 'people' as const, label: 'Facilitators', icon: Users, count: people?.facilitators.length || undefined }] : []),
+  ];
+
+  return <div className="module-page monitor-page adp">
+    <header className="adp-head ac-head">
+      <span className="adp-giant" aria-hidden="true">Anti-cheat</span>
+      <div className="adp-title">
+        <h1>{live.sharing ? <><span className="adp-count">{live.sharing}</span> <span className="is-thin">sharing</span> now</>
+          : <><span className="adp-count">{live.matches}</span> <span className="is-thin">{facilitator ? 'your' : ''}</span> match{live.matches === 1 ? '' : 'es'}</>}</h1>
+        <p>{facilitator ? 'Facilitator · your assigned matches' : 'Watch · check in · report'}</p>
+      </div>
+    </header>
+    <nav className="ac-tabs" role="tablist" aria-label="Anti-cheat views">
+      {tabs.map(item => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} className={`ac-tab${item.id === 'scans' && alerts.length ? ' is-alert' : ''}`} onClick={() => setTab(item.id)}>
+        <item.icon size={18} aria-hidden="true" /><span>{item.label}</span>{item.count ? <b>{item.count}</b> : null}
+      </button>)}
+    </nav>
+    {tab === 'checkin' && <AntiCheatCheckIn brackets={brackets} onReport={id => setReport({ id, snapshot: null })} onWatch={matchId => { setWatchKey('m-' + matchId); setTab('screens'); }} />}
+    {/* Kept mounted (hidden) so the sharing count in the header stays live on every tab. */}
+    <div hidden={tab !== 'screens'}><ScreenWall brackets={brackets} openKey={watchKey} onOpenKey={setWatchKey} onReport={(id, snapshot) => setReport({ id, snapshot })}
+      facilitators={people?.facilitators.filter(person => person.status !== 'staff').map(person => person.email) || []}
+      onSharingChange={(sharing, matches) => setLive({ sharing, matches })} /></div>
+    {tab === 'people' && manage && <FacilitatorsPanel brackets={brackets} data={people} onChange={list => setPeople(current => ({ canInvite: current?.canInvite ?? true, facilitators: list }))} />}
+    {tab === 'scans' && <>
       {error && <p className="field-error" role="alert">{error}</p>}
       <ScanOverview sessions={sessions ?? []} loading={!sessions && !error} onRefresh={() => void refresh()} onOpenSession={setOpenId}
         actions={alerts.length > 0 && <button type="button" className="arena-outline" aria-haspopup="dialog" onClick={() => setAlertsOpen(true)}>
@@ -236,6 +315,7 @@ export function MatchMonitorView({ brackets = [] }: { brackets?: BracketDraft[] 
         </li>)}</ul> : <p className="field-hint">No scan alerts to review.</p>}
       </section>
     </Modal>
+    {report && <ReportDialog key={report.id} sessionId={report.id} snapshot={report.snapshot} onClose={() => setReport(null)} onDetails={() => { setOpenId(report.id); setReport(null); }} />}
     {openId && <SessionDialog key={openId} id={openId} onClose={() => setOpenId('')} onChanged={() => void refresh()} />}
   </div>;
 }

@@ -21,6 +21,8 @@ interface HomeScreenProps {
   liveMatch?: Match; matches: Match[]; publishedBrackets: BracketDraft[];
   onViewLiveMatch: (m: Match) => void;
   onNavigateTab: (tab: string, params?: Record<string, string>) => void; onSelectPublishedBracket: (bracket: BracketDraft) => void;
+  /** False for invited guests: no Arena AI or Anti-cheat sections. */
+  campusMember?: boolean;
 }
 
 type Tone = 'thin' | 'brand';
@@ -28,7 +30,7 @@ type Line = { text: string; tone?: Tone };
 
 const short = (name?: string) => name || 'TBD';
 const code = (team?: { collegeCode?: string; name?: string }) => team?.collegeCode || short(team?.name).slice(0, 3).toUpperCase();
-const GAME_SHORT: Record<string, string> = { mlbb: 'MLBB', dota2: 'Dota 2', 'codm-mp': 'CODM', 'codm-br': 'CODM BR' };
+const GAME_SHORT: Record<string, string> = { mlbb: 'MLBB', dota2: 'Dota 2', 'codm-mp': 'CODM MP', 'codm-br': 'CODM BR' };
 const PHOTO_CREDIT = 'Photos: Alexandros Giannakakis, Raman Shaunia and Alef Morais on Unsplash.';
 
 /** "Today · 2:00 PM", "Tomorrow · 7:30 PM" or "Nov 28 · 3:00 PM"; the plain schedule label when the date or time is unclear. */
@@ -84,7 +86,7 @@ function PosterHead({ id, n, label, lines, calm, action, dot }: {
  * tilting poster card, a ticker of what is on, then numbered chapters (live, up next, games, brackets,
  * Arena AI, fair play), each with heavy display type. Data and actions are the same as before.
  */
-export const HomeScreen: React.FC<HomeScreenProps> = ({ publishedBrackets, onViewLiveMatch, onNavigateTab, onSelectPublishedBracket }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ publishedBrackets, onViewLiveMatch, onNavigateTab, onSelectPublishedBracket, campusMember = true }) => {
   const calm = useCalm();
   const games = useMemo(() => watchGames(publishedBrackets), [publishedBrackets]);
   const cards = games.flatMap(game => game.cards);
@@ -131,7 +133,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ publishedBrackets, onVie
       </ol> : <p className="hp-empty"><strong>No published brackets yet.</strong> Brackets appear here once an organizer publishes them.</p>}
     </section>
 
-    <section className="hp-section hp-ai" aria-labelledby="home-ai">
+    {campusMember && <section className="hp-section hp-ai" aria-labelledby="home-ai">
       <div className="hp-ai-copy">
         <p className="hp-label"><span>{String(++chapter).padStart(2, '0')}</span>Ask Arena AI</p>
         <h2 id="home-ai" className="hp-h2 is-stack">
@@ -144,9 +146,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ publishedBrackets, onVie
         viewport={{ once: true, amount: 0.3 }} transition={{ type: 'spring', stiffness: 70, damping: 18 }}>
         <ArenaAiFilm />
       </motion.div>
-    </section>
+    </section>}
 
-    <FairBand n={++chapter} calm={calm} onOpen={() => onNavigateTab('integrity')} />
+    {campusMember && <FairBand n={++chapter} calm={calm} onOpen={() => onNavigateTab('integrity')} />}
 
     <footer className="ah-footer"><span>ArenaHub · {CAMPUS_SHORT_NAME} · 2026</span><span className="ah-footer-credit">{GAME_ART_CREDIT} {PHOTO_CREDIT}</span><button type="button" className="arena-text-button" onClick={() => onNavigateTab('support')}>Help <ArrowRight size={14} aria-hidden="true" /></button></footer>
   </div>;

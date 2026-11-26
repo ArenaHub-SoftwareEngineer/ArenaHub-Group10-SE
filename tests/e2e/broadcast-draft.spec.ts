@@ -58,7 +58,7 @@ test('one broadcast link previews automatically and requires a thumbnail before 
     await expect(wizard.getByRole('button', { name: 'Save for later' })).toHaveCount(0);
 
     await page.goto('/#/admin/match-monitor');
-    await expect(page.getByRole('heading', { name: 'Monitor', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Anti-cheat', exact: true })).toBeVisible();
     await page.goBack();
     await expect(url).toHaveValue(liveUrl);
     await page.reload();

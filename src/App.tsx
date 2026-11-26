@@ -10,7 +10,7 @@ import type { AccountPanel } from './components/common/ProfileMenu';
  * Role-switcher is REMOVED — shell is determined by ahUser.role from Firestore.
  */
 
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { Loader2 } from './components/ui/Icons';
 import { AccountRestricted } from './components/auth/AccountRestricted';
 
@@ -20,6 +20,7 @@ import { ToastProvider, useToast } from './components/ui/Toast';
 import { hasCampusEmail, redeemSpectatorAccess } from './lib/campusAccess';
 import { AuthEntry } from './components/auth/AuthEntry';
 import { EmailVerificationScreen } from './components/auth/EmailVerificationScreen';
+import { EmailActionPage, EMAIL_ACTION_PATH } from './components/auth/EmailActionPage';
 
 // Spectator Shell
 import { SpectatorLayout } from './components/spectator/SpectatorLayout';
@@ -44,7 +45,7 @@ const BracketStudioView = lazy(() => import('./components/admin/BracketStudioVie
 // Loaded on first use: Fair Play brings the Storage SDK and video review, admission brings the QR reader.
 const PlayerAntiCheat = lazy(() => import('./components/common/PlayerAntiCheat').then(m => ({ default: m.PlayerAntiCheat })));
 const PlayerCheckIn = lazy(() => import('./components/auth/PlayerCheckIn'));
-const TournamentOperations = lazy(() => import('./components/common/TournamentOperations').then(m => ({ default: m.TournamentOperations })));
+const TeamsManager = lazy(() => import('./components/admin/TeamsManager').then(m => ({ default: m.TeamsManager })));
 const StandingsPage = lazy(() => import('./components/spectator/StandingsView').then(m => ({ default: m.StandingsPage })));
 const SpectatorQRReader = lazy(() => import('./components/auth/SpectatorQRReader').then(m => ({ default: m.SpectatorQRReader })));
 const AIAssistantView = lazy(() => import('./components/admin/AIAssistantView').then(m => ({ default: m.AIAssistantView })));
@@ -52,7 +53,8 @@ const AdminLiveStreamManager = lazy(() => import('./components/admin/AdminLiveSt
 const PublishedSchedulePage = lazy(() => import('./components/admin/PublishedSchedulePage').then(m => ({ default: m.PublishedSchedulePage })));
 
 import { PreferencesPage, SupportPage, SchedulePage } from './components/common/WorkspacePages';
-import { readHistoryTab, useWorkspaceRoute } from './lib/navigation';
+import { FACILITATOR_TABS, readHistoryTab, useWorkspaceRoute } from './lib/navigation';
+import { antiCheatCall } from './lib/antiCheatApi';
 import { auth } from './lib/firebase';
 import { firestoreService } from './lib/firestore';
 import type { BracketDraft } from './lib/types';
@@ -91,15 +93,24 @@ function AppLoadingScreen() {
 // we catch it here too.
 function VerifyGate() { return <EmailVerificationScreen />; }
 
+const GUEST_BLOCKED_TABS = ['ai-assistant', 'integrity'];
+
 // ─── Main authenticated app ────────────────────────────────────────────────────
 function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boolean; onSignIn?: () => void }) {
-  const { ahUser, firebaseUser, logout } = useAuth();
+  const { ahUser, firebaseUser, logout, reloadUser } = useAuth();
   const { showToast } = useToast();
+  // Facilitators get the admin shell with Anti-cheat only (see AdminLayout and server/facilitators.ts).
+  const isFacilitator = ahUser?.role === 'facilitator';
 
   // Active View State
   const { hash, navigate } = useWorkspaceRoute();
-  const spectatorTab = readHistoryTab('arena', hash, 'home');
-  const adminTab = readHistoryTab('admin', hash, 'overview');
+  // Signed-in guests (personal email, joined with a student invite) watch and comment only:
+  // Arena AI and Anti-cheat open Home instead.
+  const guestViewer = !!firebaseUser && !hasCampusEmail(firebaseUser.email);
+  const requestedSpectatorTab = readHistoryTab('arena', hash, 'home');
+  const spectatorTab = guestViewer && GUEST_BLOCKED_TABS.includes(requestedSpectatorTab) ? 'home' : requestedSpectatorTab;
+  const requestedAdminTab = readHistoryTab('admin', hash, isFacilitator ? 'match-monitor' : 'overview');
+  const adminTab = isFacilitator && !FACILITATOR_TABS.includes(requestedAdminTab) ? 'match-monitor' : requestedAdminTab;
   const setSpectatorTab = (tab: string, params?: Record<string, string>) => navigate('arena', tab, params);
   const setAdminTab = (tab: string, params?: Record<string, string>) => navigate('admin', tab, params);
   const [isAiSidebarOpen, setIsAiSidebarOpen] = useState(() => window.matchMedia('(min-width: 768px)').matches);
@@ -146,6 +157,8 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
   // Sync default tournament and match
   const officialMatches = publishedBrackets.flatMap(bracket => bracket.matches);
   const eventMatches = publishedBrackets.flatMap(scheduleMatches);
+  // publishedBrackets leaves out Battle Royale events; Anti-cheat check-in lists their lobby games as well.
+  const monitorEvents = useMemo(() => firestoreService.getPublishedEvents(), [publishedBrackets]);
   const viewerLiveMatch = officialMatches.find(isWatchableLiveMatch);
   const activeTournament = tournaments.find(t => t.id === routeParams.get('tournament')) || tournaments[0];
   const missingBracket = selectedPublishedBracketId && !publishedBrackets.some(bracket => bracket.id === selectedPublishedBracketId);
@@ -203,14 +216,29 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
     currentUser.role === 'admin' ||
     currentUser.role === 'organizer' ||
     currentUser.role === 'school-admin' ||
-    currentUser.role === 'moderator');
+    currentUser.role === 'moderator' ||
+    currentUser.role === 'facilitator');
+  const isStaffAccount = isAdminRole && !isFacilitator;
 
   const [accountPanel, setAccountPanel] = useState<AccountPanel | null>(null);
   const appShell = isAdminRole && !publicMode && !hash.startsWith('#/arena/') ? 'admin' : 'spectator';
-  const onCreateBracket = isAdminRole && !publicMode ? () => setAdminTab('bracket-studio', { new: '1' }) : undefined;
-  const onManageSchedule = isAdminRole && !publicMode ? (id?: string) => setAdminTab('schedule', id ? { bracket: id } : undefined) : undefined;
+  const onCreateBracket = isStaffAccount && !publicMode ? () => setAdminTab('bracket-studio', { new: '1' }) : undefined;
+  const onManageSchedule = isStaffAccount && !publicMode ? (id?: string) => setAdminTab('schedule', id ? { bracket: id } : undefined) : undefined;
   const [sharedError, setSharedError] = useState('');
-  useEffect(() => firestoreService.watchSharedWorkspace(isAdminRole), [isAdminRole, firebaseUser?.uid]);
+  useEffect(() => firestoreService.watchSharedWorkspace(isStaffAccount), [isStaffAccount, firebaseUser?.uid]);
+  // An invited facilitator gets the role on their first sign-in. Asked once per browser session.
+  useEffect(() => {
+    const uid = firebaseUser?.uid;
+    if (!uid || !ahUser || ahUser.role !== 'user' || !hasCampusEmail(firebaseUser?.email)) return;
+    const key = 'ah.facilitator.checked.' + uid;
+    try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, '1'); } catch { /* Ask anyway. */ }
+    antiCheatCall<{ role: string; changed: boolean }>('/facilitators/accept', { method: 'POST' })
+      .then(result => {
+        if (result.role !== 'facilitator') return;
+        return reloadUser().then(() => { showToast('You are a match facilitator now. Anti-cheat is open for your matches.', 'success'); setAdminTab('match-monitor'); });
+      })
+      .catch(() => { /* Not invited, or offline: nothing changes. */ });
+  }, [firebaseUser?.uid, ahUser?.role]);
   useEffect(() => firestoreService.subscribe(() => setSharedError(firestoreService.getSharedError())), []);
 
   const accountDialogs = <>
@@ -243,7 +271,11 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               onManageSchedule?.(publishedBrackets.find(bracket => bracket.id === entityId || bracket.matches.some(match => match.id === entityId))?.id);
               return;
             }
-            setAdminTab(({ 'current-live': 'live-stream', brackets: 'bracket-studio' }[tab] || tab), entityId && tab === 'integrity' ? { case: entityId } : entityId && tab === 'operations' ? { entity: entityId } : undefined);
+            // Every notification lands on the exact item: the evidence case, the chat report, or the match on the broadcast desk.
+            const liveBracket = tab === 'current-live' && entityId ? publishedBrackets.find(bracket => bracket.matches.some(match => match.id === entityId)) : undefined;
+            setAdminTab(({ 'current-live': 'live-stream', brackets: 'bracket-studio' }[tab] || tab),
+              !entityId ? undefined : tab === 'integrity' ? { case: entityId } : tab === 'reports' ? { report: entityId }
+                : liveBracket ? { streamBracket: liveBracket.id, streamMatch: entityId } : tab === 'brackets' ? { editBracket: entityId } : undefined);
           }}
           onExitToSpectator={() => setSpectatorTab('home')}
           onLogout={publicMode ? () => onSignIn?.() : handleLogout}
@@ -265,16 +297,16 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
               })}
             />
           )}
-          {adminTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'desk'} brackets={publishedBrackets} staff initialEntityId={routeParams.get('entity')} />}
+          {adminTab === 'teams' && <TeamsManager events={monitorEvents} />}
           {adminTab === 'support' && <SupportPage onNavigate={setAdminTab} />}
           {adminTab === 'settings' && <PreferencesPage user={currentUser} onSignIn={onSignIn} />}
-          {adminTab === 'match-monitor' && <MatchMonitorView brackets={publishedBrackets} />}
+          {adminTab === 'match-monitor' && <MatchMonitorView brackets={monitorEvents} facilitator={isFacilitator} manage={['admin', 'organizer', 'school-admin'].includes(currentUser.role)} />}
           {adminTab === 'users' && <UsersView users={users} />}
           {adminTab === 'logs' && <SystemLogView auditLogs={auditLogs} users={users} reports={reports} brackets={publishedBrackets} onNavigate={tab => setAdminTab(tab)} />}
           {adminTab === 'games' && (
             <GamesCategoriesView games={games} categories={categories} />
           )}
-          {adminTab === 'reports' && <ReportsView reports={reports} matches={eventMatches} initialCaseId={routeParams.get('case')} />}
+          {adminTab === 'reports' && <ReportsView key={routeParams.get('report') || 'reports'} reports={reports} matches={eventMatches} initialCaseId={routeParams.get('case')} initialReportId={routeParams.get('report')} />}
           {adminTab === 'bracket-studio' && <BracketStudioView key={startNewBracket ? 'new' : editBracketId ?? ''} initialBracketId={editBracketId} startNew={startNewBracket} />}
           {adminTab === 'schedule' && <PublishedSchedulePage brackets={publishedBrackets} games={games} bracketId={selectedPublishedBracketId}
             onChoose={id => onManageSchedule?.(id)} />}
@@ -295,20 +327,23 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
         </AdminLayout>
       ) : (
         <SpectatorLayout
-          onNotificationNavigate={(tab, entityId) => setSpectatorTab(tab === 'brackets' ? 'choose-tournament' : tab, entityId && tab === 'integrity' ? { case: entityId } : entityId && tab === 'operations' ? { entity: entityId } : undefined)}
+          onNotificationNavigate={(tab, entityId) => {
+            if (tab === 'current-live' && entityId && officialMatches.some(match => match.id === entityId)) { setSpectatorTab('live', { match: entityId }); return; }
+            if (tab === 'brackets' && entityId && publishedBrackets.some(bracket => bracket.id === entityId)) { setSpectatorTab('brackets', { bracket: entityId }); return; }
+            setSpectatorTab(({ brackets: 'choose-tournament', operations: 'teams' } as Record<string, string>)[tab] || tab, entityId && tab === 'integrity' ? { case: entityId } : undefined);
+          }}
           currentUser={currentUser}
           onOpenAccountPanel={setAccountPanel}
           activeTab={spectatorTab}
           routeKey={hash}
           onTabChange={setSpectatorTab}
           onLogout={publicMode ? () => onSignIn?.() : handleLogout}
-          onOpenAdmin={() => { if (isAdminRole) setAdminTab('overview'); }}
+          onOpenAdmin={() => { if (isAdminRole) setAdminTab(isFacilitator ? 'match-monitor' : 'overview'); }}
           isGuest={publicMode}
           live={liveCards.map(card => ({ ...liveRailItem(card), onOpen: () => card.state === 'live' ? setSpectatorTab('live', { match: card.match.id, game: card.gameId }) : setSpectatorTab('current-live', { game: card.gameId }) }))}
         >
           <Suspense fallback={<TabLoading />}>
           {spectatorTab === 'integrity' && <PlayerAntiCheat key={routeParams.get('case') || 'new'} matches={eventMatches} teams={teams} onSignIn={onSignIn} initialCaseId={routeParams.get('case')} />}
-          {spectatorTab === 'operations' && <TournamentOperations key={routeParams.get('entity') || 'team'} brackets={publishedBrackets} initialEntityId={routeParams.get('entity')} />}
           {spectatorTab === 'standings' && <StandingsPage brackets={publishedBrackets} selectedId={selectedPublishedBracketId} onSelect={id => setSpectatorTab('standings', { bracket: id })} />}
           {spectatorTab === 'schedule' && <SchedulePage brackets={publishedBrackets} onManage={onManageSchedule} onSelect={m => setSpectatorTab('live', { match: m.id })} />}
           {spectatorTab === 'home' && (
@@ -320,6 +355,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
                 setSpectatorTab('live', { match: m.id });
               }}
               onNavigateTab={setSpectatorTab}
+              campusMember={!guestViewer}
               onSelectPublishedBracket={(bracket) => {
                 setSpectatorTab('brackets', { bracket: bracket.id });
               }}
@@ -402,7 +438,7 @@ function AuthenticatedApp({ publicMode = false, onSignIn }: { publicMode?: boole
             />
           )}
 
-          {spectatorTab === 'support' && <SupportPage onNavigate={setSpectatorTab} />}
+          {spectatorTab === 'support' && <SupportPage onNavigate={setSpectatorTab} guest={guestViewer} />}
           {spectatorTab === 'settings' && <PreferencesPage user={currentUser} onSignIn={onSignIn} />}
           {accountDialogs}
           </Suspense>
@@ -475,7 +511,7 @@ export default function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <Suspense fallback={<AppLoadingScreen />}><AppGate /></Suspense>
+        <Suspense fallback={<AppLoadingScreen />}>{location.pathname === EMAIL_ACTION_PATH ? <EmailActionPage /> : <AppGate />}</Suspense>
       </AuthProvider>
     </ToastProvider>
   );

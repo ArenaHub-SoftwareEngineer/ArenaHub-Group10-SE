@@ -29,7 +29,8 @@ export async function matchScanReadiness(data: PublishedData, id: string, store:
   const { match, game, players, rosterVersion } = scanMatch(data, id);
   const sessions = await store.sessions(id);
   const items = await Promise.all(players.map(async player => {
-    const row = sessions.find(session => session.player_key === player.playerKey && session.game === game);
+    // A no-sign-in test check-in never clears a roster player: nobody verified who ran it.
+    const row = sessions.find(session => session.player_key === player.playerKey && session.game === game && session.email_check !== 'unsigned');
     return { ...player, sessionId: row?.id || null, scan: row && row.roster_version === rosterVersion ? await store.scan(row) : { status: 'required' as const, label: row ? 'Roster changed: rescan' : 'Scan required', detail: row ? 'Create a new code linked to the current published lineup. Earlier roster scans cannot clear a replacement player.' : 'Create a code for this roster player and run the companion before joining.', checkedAt: null, validUntil: null, blockers: [], warnings: [] } };
   }));
   const ready = items.filter(player => player.scan.status === 'ready').length;

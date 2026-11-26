@@ -12,13 +12,14 @@
 // and devices report every 30 s here (15 s on the laptop), so 20 devices cost about 2,400 writes an hour.
 // Staff lists re-read only sessions that changed since the last read, and Dota live data is stored at most
 // every 30 s per player. Screen recordings are not available: they need the event laptop's disk.
+import type { RelayPlaceStore } from './iphoneRelay.ts';
 import { randomBytes, randomInt } from 'node:crypto';
 import { FieldPath, FieldValue, getFirestore, type DocumentReference, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { DEFAULT_MONITOR_CONFIG, monitorConfigSchema, PAIRING_ALPHABET, type MonitorConfig, type MonitorPlatform, type Signal } from '../src/lib/integrityRisk.ts';
 import { IOS_CLEARANCE_MS, foundIndicators, iosReviewSchema, type IosClearance, type IosReviewInput } from '../src/lib/iosAntiCheat.ts';
 import { adminApp } from './firebaseAdmin.ts';
 import { PAIRING_TTL_MS, RETENTION_MS, RoomError, WrongDeviceError, claimingPlatform, connectionOf, lostGapSignal, policyVersionOf, riskOf, roomOpen, scanOf, sha256, slotBlocked, withExpiry,
-  type MediaItem, type MonitorStore, type Pairing, type PairingInput, type RoomInput, type RoomRow, type SessionRow, type StoredSignal } from './monitorStore.ts';
+  type FacilitatorInvite, type IphoneSetup, type MediaItem, type MonitorStore, type Pairing, type PairingInput, type RoomInput, type RoomRow, type SessionRow, type StoredSignal } from './monitorStore.ts';
 
 type Doc = SessionRow & { signals?: Record<string, StoredSignal>; ios_clearance?: IosClearance | null; updated_at?: number };
 const NO_RECORDINGS = 'Screen recordings need the event laptop. The hosted server does not store them.';
@@ -50,6 +51,20 @@ export class FirestoreIntegrityStore implements MonitorStore {
   private remember(row: Doc | undefined) { if (row) this.cache.set(row.id, row); return row; }
 
   // ---------- Settings and audit ----------
+  /** Where the organizer's laptop relay is now (iPhone live screens, laptop mode). */
+  relayPlaces(): RelayPlaceStore {
+    const doc = this.db.collection('monitorSettings').doc('iphoneRelay');
+    return {
+      get: async () => {
+        const snap = await doc.get();
+        if (!snap.exists) return null;
+        const { rtmp, web, at, hls, livekit } = snap.data() || {};
+        return typeof rtmp === 'string' && typeof web === 'string' && typeof at === 'number'
+          ? { rtmp, web, at, hls: hls === true, ...(typeof livekit === 'string' && livekit ? { livekit } : {}) } : null;
+      },
+      set: async place => { await doc.set({ rtmp: place.rtmp, web: place.web, at: place.at || this.now(), hls: !!place.hls, livekit: place.livekit || '' }); },
+    };
+  }
   async config(): Promise<MonitorConfig> {
     if (this.configCache && this.now() - this.configCache.at < 15_000) return structuredClone(this.configCache.value);
     const snap = await this.db.collection('monitorSettings').doc('config').get();
@@ -283,9 +298,9 @@ export class FirestoreIntegrityStore implements MonitorStore {
   async createRoom(input: RoomInput, actor: string) {
     const now = this.now();
     const room: RoomRow = { id: randomBytes(9).toString('base64url'), label: input.label, match_id: input.matchId, game: input.game, roster_version: input.rosterVersion, players: input.players,
-      secret: randomBytes(32).toString('base64url'), record: input.record ? 1 : 0, hours: input.hours, created_by: actor, created_at: now, expires_at: now + input.hours * 3600_000, closed_at: null, joined: {}, ...(input.testRoom ? { test_room: true } : {}), ...(input.verifiedCheckIn ? { verified_checkin: true } : {}) };
+      secret: randomBytes(32).toString('base64url'), record: input.record ? 1 : 0, hours: input.hours, created_by: actor, created_at: now, expires_at: now + input.hours * 3600_000, closed_at: null, joined: {}, ...(input.testRoom ? { test_room: true } : {}), ...(input.verifiedCheckIn ? { verified_checkin: true } : {}), ...(input.noSignIn ? { no_sign_in: true } : {}) };
     await this.roomsCol.doc(room.id).set(plain(room));
-    await this.audit(actor, 'room-opened', '', `${input.label} (${input.players.length || 'typed'} players)`);
+    await this.audit(actor, 'room-opened', '', `${input.label} (${input.players.length || 'typed'} players)${input.noSignIn ? ', TEST: no sign-in' : ''}`);
     return room;
   }
   async room(id: string) {
@@ -307,11 +322,40 @@ export class FirestoreIntegrityStore implements MonitorStore {
     else await ref.delete();
     await this.audit(actor, 'screen-facilitator', '', key + ' · ' + (emails.join(', ') || 'removed'));
   }
+  async facilitatorInvites() {
+    const snap = await this.db.collection('monitorFacilitators').limit(200).get();
+    return snap.docs.map(doc => doc.data() as FacilitatorInvite).sort((a, b) => a.email.localeCompare(b.email));
+  }
+  async saveFacilitatorInvite(invite: FacilitatorInvite, actor: string) {
+    await this.db.collection('monitorFacilitators').doc(invite.email).set(invite);
+    await this.audit(actor, 'facilitator-invite', '', invite.email + (invite.accepted_at ? ' · active' : ' · invited'));
+  }
+  async deleteFacilitatorInvite(email: string, actor: string) {
+    await this.db.collection('monitorFacilitators').doc(email).delete();
+    await this.audit(actor, 'facilitator-removed', '', email);
+  }
+  async iphoneSetups(playerIds: string[]) {
+    const ids = [...new Set(playerIds)].filter(id => /^[\w-]{1,64}$/.test(id));
+    if (!ids.length) return [];
+    const col = this.db.collection('monitorIphoneSetups');
+    const snaps = await this.db.getAll(...ids.map(id => col.doc(id)));
+    return snaps.filter(snap => snap.exists).map(snap => snap.data() as IphoneSetup);
+  }
+  async saveIphoneSetup(setup: IphoneSetup) {
+    await this.db.collection('monitorIphoneSetups').doc(setup.player_id).set(setup);
+  }
   async closeRoom(id: string, actor: string) {
     const room = await this.room(id);
     if (!room || room.closed_at) return false;
     await this.roomsCol.doc(id).update({ closed_at: this.now() });
     await this.audit(actor, 'room-closed', '', room.label);
+    return true;
+  }
+  async newRoomCode(id: string, actor: string) {
+    const room = await this.room(id);
+    if (!room || room.closed_at) return false;
+    await this.roomsCol.doc(id).update({ code_start: this.now() });
+    await this.audit(actor, 'room-new-code', '', room.label);
     return true;
   }
   async joinRoom(roomId: string, slot: string, input: PairingInput) {
@@ -334,13 +378,14 @@ export class FirestoreIntegrityStore implements MonitorStore {
     await this.audit('room', 'pairing-created', row.id, `${input.playerName} joined room ${input.matchLabel}`);
     return pairing;
   }
-  async resetRoomSlot(roomId: string, slot: string, actor: string) {
+  async resetRoomSlot(roomId: string, slot: string, actor: string, moved?: string) {
     const room = await this.room(roomId), held = room?.joined?.[slot];
     if (!room || !held) return false;
     const name = (await this.session(held.sessionId))?.player_name || slot;
-    await this.end(held.sessionId, actor, 'Staff reset this player in the room so they can join again');
-    await this.roomsCol.doc(roomId).update(new FieldPath('joined', slot), FieldValue.delete(), 'resets', FieldValue.arrayUnion({ slot, name, sessionId: held.sessionId, by: actor, at: this.now() }));
-    await this.audit(actor, 'room-slot-reset', held.sessionId, `${room.label}: ${slot}`);
+    await this.end(held.sessionId, actor, moved || 'Staff reset this player in the room so they can join again');
+    if (moved) await this.roomsCol.doc(roomId).update(new FieldPath('joined', slot), FieldValue.delete());
+    else await this.roomsCol.doc(roomId).update(new FieldPath('joined', slot), FieldValue.delete(), 'resets', FieldValue.arrayUnion({ slot, name, sessionId: held.sessionId, by: actor, at: this.now() }));
+    await this.audit(actor, moved ? 'room-slot-moved' : 'room-slot-reset', held.sessionId, `${room.label}: ${slot}`);
     return true;
   }
 }

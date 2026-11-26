@@ -15,7 +15,11 @@ const input = (over: Record<string, unknown> = {}) => ({ platform: 'pc' as const
 test('pairing and check-in alone never clear a required scan', () => {
   assert.equal(preMatchScan(input({ status: 'pending', facts: null })).status, 'required');
   assert.equal(preMatchScan(input({ facts: null })).status, 'scanning');
-  assert.equal(preMatchScan(input({ platform: 'ios', game: 'mlbb' })).status, 'required');
+  assert.equal(preMatchScan(input({ platform: 'ios', game: 'mlbb', status: 'pending' })).status, 'required');
+});
+test("an iPhone that checked in is cleared by the player's own confirmation until a referee marks a problem", () => {
+  const self = preMatchScan(input({ platform: 'ios', game: 'mlbb' }));
+  assert.equal(self.status, 'ready'); assert.equal(self.label, 'iPhone checked in');
 });
 test('a basic PC scan passes before the game launches and does not require screenshots', () => {
   const result = preMatchScan(input());

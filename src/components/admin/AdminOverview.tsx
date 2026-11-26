@@ -14,6 +14,7 @@ import { useToast } from '../ui/Toast';
 import { errorMessage } from '../../lib/errors';
 import { MatchMap, TILE_WORD } from '../three/MatchMap';
 import { LogList, useNow } from './SystemLog';
+import { useMutedCategories } from '../../lib/logFeed';
 import './adminOverview.css';
 import { matchName } from '../../lib/matchName';
 
@@ -64,7 +65,8 @@ export function AdminOverview({ brackets, auditLogs, users, reports, onOpenBrack
   const lanes = useMemo(() => matchMap(brackets), [brackets]);
   const totals = mapTotals(lanes);
   const people = useMemo(() => summarizeUsers(users, now), [users, now]);
-  const log = useMemo(() => buildSystemLog({ auditLogs, users, reports, brackets }), [auditLogs, users, reports, brackets]);
+  const [mutedLog] = useMutedCategories();
+  const log = useMemo(() => buildSystemLog({ auditLogs, users, reports, brackets }).filter(entry => !mutedLog.includes(entry.category)), [auditLogs, users, reports, brackets, mutedLog]);
   const openReports = reports.filter(report => report.status === 'open').length;
   const noBroadcast = live.filter(({ match }) => !isWatchableLiveMatch(match));
 

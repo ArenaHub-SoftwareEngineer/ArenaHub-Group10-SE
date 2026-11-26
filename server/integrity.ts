@@ -5,7 +5,7 @@
 // The store is SQLite on the event laptop, or Firestore on the hosted API (INTEGRITY_STORE=firestore).
 import express from 'express';
 import { bearer, callerVerifier, type VerifyCaller } from './auth.ts';
-import { defaultScreenKey, screenCredential, screenWallRouter } from './screenWall.ts';
+import { defaultScreenKey, iphonePlayerId, screenCredential, screenWallRouter } from './screenWall.ts';
 import { iphoneRelayFromEnv, type IphoneRelay } from './iphoneRelay.ts';
 import { liveScreensFromEnv, matchScreenKey, roomScreenKey, screenMatches, type LiveScreens } from './liveScreens.ts';
 import { networkInterfaces } from 'node:os';
@@ -18,14 +18,15 @@ import QRCode from 'qrcode';
 import { z } from 'zod';
 import { deviceFactsSchema, evaluateFacts, evaluateGsi, GAME_LABEL, GAME_PLATFORMS, MONITOR_GAMES, PLATFORM_LABEL, SEVERITIES, SIGNAL_CATEGORY, pairingLink, parseGsi, statOutliers, steamIdToAccountId, SIGNAL_CATALOG, type MonitorGame, type MonitorPlatform } from '../src/lib/integrityRisk.ts';
 import { IntegrityStore } from './integrityStore.ts';
-import { firestoreStoreFromEnv } from './firestoreIntegrityStore.ts';
-import { RoomError, WrongDeviceError, currentRoomCode, emailHash, nameSlot, roomCodeMatches, roomOpen, sha256, slotBlocked, ROOM_WINDOW_MS, type MonitorStore, type RoomRow, type SessionRow } from './monitorStore.ts';
-import { AuthError, verifyStaffToken } from './staffAuth.ts';
+import { FirestoreIntegrityStore, firestoreStoreFromEnv } from './firestoreIntegrityStore.ts';
+import { RoomError, WrongDeviceError, currentRoomCode, emailHash, nameSlot, normalizeRoomCode, roomCodeMatches, roomOpen, sha256, slotBlocked, unsignedSession, ROOM_CODE_LENGTH, ROOM_WINDOW_MS, type MonitorStore, type RoomRow, type SessionRow } from './monitorStore.ts';
+import { AuthError, verifyStaffToken, type MonitorStaff } from './staffAuth.ts';
+import { facilitatorRouter, firebaseRoleAdmin, type RoleAdmin } from './facilitators.ts';
 import { clientAddress } from './publicAccess.ts';
 import { inspectionCoverage, reportedFingerprint } from '../src/lib/integrityRisk.ts';
 import { PRACTICE_NOTE, practicePlatform, practiceVerdict } from '../src/lib/practiceScan.ts';
 import { monitorAddress } from '../src/lib/monitorAddress.ts';
-import { originAllowed } from './cors.ts';
+import { allowedOrigins, originAllowed } from './cors.ts';
 import { publishedReader, type PublishedReader } from './data.ts';
 import { matchScanReadiness, scanMatch, scanMatchLabel, ScanAdmissionError } from './scanAdmission.ts';
 import { rosterEmailReader, type RosterEmailReader } from './privateRoster.ts';
@@ -59,6 +60,8 @@ const roomInput = z.object({
   record: z.boolean().default(false),
   testRoom: z.boolean().default(false),
   verifiedCheckIn: z.boolean().default(false),
+  /** Staff test switch: this match check-in accepts players who are not signed in (marked unverified). */
+  noSignIn: z.boolean().default(false),
 });
 const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[a-z]{2,24}$/i;
 const joinInput = z.object({
@@ -80,9 +83,17 @@ const checkInInput = z.object({
   /** The scheduled match the player is about to play. Its staff watch this player's live screen. */
   matchId: z.string().min(1).max(80).optional(),
 });
+/** A match check-in: the room fixes the match and game, and the player's school email finds their roster seat. */
+const matchCheckInInput = z.object({
+  code: z.string().max(20),
+  platform: z.enum(['android', 'ios', 'pc']),
+  /** Only when the roster has no school email for this player: they pick their own name. */
+  slot: z.string().regex(/^p\d{1,3}$/).optional(),
+});
 
-type Deps = { screens?: LiveScreens | null; relay?: IphoneRelay | null; store?: MonitorStore; dataDir?: string; verifyCaller?: VerifyCaller; verifyStaff?: (token: string | undefined) => Promise<string>; fetcher?: typeof fetch; published?: PublishedReader; rosterEmails?: RosterEmailReader };
-type StaffRequest = express.Request & { staffUid?: string };
+type Deps = { screens?: LiveScreens | null; relay?: IphoneRelay | null; store?: MonitorStore; dataDir?: string; verifyCaller?: VerifyCaller; verifyStaff?: (token: string | undefined) => Promise<string | MonitorStaff>; roles?: RoleAdmin | null; fetcher?: typeof fetch; published?: PublishedReader; rosterEmails?: RosterEmailReader };
+/** `scope`: the screen keys a facilitator is assigned to (m-<matchId>, r-<roomId>). Absent for full staff. */
+type StaffRequest = express.Request & { staffUid?: string; scope?: Set<string> };
 type Handler = (req: express.Request, res: express.Response, next: express.NextFunction) => unknown;
 /** Express 4 does not catch rejected promises; this passes them to the error handler. */
 const h = (fn: Handler): express.RequestHandler => (req, res, next) => { Promise.resolve(fn(req, res, next)).catch(next); };
@@ -148,11 +159,16 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   const router = express.Router();
   router.use((_req, res, next) => { res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' }); next(); });
   // Live screens run through LiveKit, so they work on the laptop server and on the hosted (Vercel) API alike.
-  const screens = deps.screens !== undefined ? deps.screens : liveScreensFromEnv(env);
   const verifyCaller = deps.verifyCaller || callerVerifier(env, fetcher);
   // iPhone screens arrive through a separate free relay, because Safari cannot share the screen (iphoneRelay.ts).
-  const relay = deps.relay !== undefined ? deps.relay : iphoneRelayFromEnv(env, fetcher);
+  // Laptop mode keeps the laptop's current addresses in Firestore on the hosted API, so every instance sees them.
+  const relayPlaces = store instanceof FirestoreIntegrityStore ? () => store.relayPlaces() : undefined;
+  const relay = deps.relay !== undefined ? deps.relay : iphoneRelayFromEnv(env, fetcher, relayPlaces);
+  // While the relay laptop is checked in with its own LiveKit, Android and PC screens use that one (no minute limits).
+  const screens = deps.screens !== undefined ? deps.screens
+    : liveScreensFromEnv(env, relay?.laptop ? async () => (await relay.place())?.livekit || null : undefined);
   router.use(screenWallRouter(store, verifyCaller, screens, req => originAllowed(req, env), relay));
+  router.use(facilitatorRouter(store, verifyCaller, deps.roles === undefined ? firebaseRoleAdmin(env) : deps.roles, req => originAllowed(req, env)));
   const lastCall = new Map<string, number>();
   // Code lookups allow short bursts (a page reload, Chrome's app fallback) but still stop guessing: 10 per 10 seconds per address.
   const lookups = new Map<string, number[]>();
@@ -193,7 +209,8 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   };
   /** Proof for staff that a scan really ran: the first time it passed is kept even after it goes stale. */
   const notePassed = async (row: SessionRow) => {
-    if (row.passed_at) return;
+    // A test check-in without sign-in has nobody behind it, so its scan is never kept as proof.
+    if (row.passed_at || unsignedSession(row)) return;
     const scan = await store.scan(row);
     if (scan.status === 'ready') await store.markPassed(row, store.now());
   };
@@ -357,6 +374,12 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     const now = store.now();
     return (await store.rooms()).find(room => !room.verified_checkin && roomOpen(room, now) && roomCodeMatches(room, typed, now));
   };
+  /** The ArenaHub website players sign in on: PLAYER_SITE_URL, else the first https site allowed to call this API, else this host. */
+  const playerSite = (req: express.Request) => {
+    const listed = [env.PLAYER_SITE_URL || '', ...allowedOrigins(env)].map(origin => { try { return new URL(origin); } catch { return null; } })
+      .find(url => url?.protocol === 'https:');
+    return listed ? listed.origin : !hostedUrl ? defaultPlayerAddress(req) : '';
+  };
   const roomMatchId = (room: RoomRow) => room.match_id || `room:${room.id}`;
   const WRONG_ROOM = 'That room code is wrong or has changed. Type the code that is on the referee screen now.';
   const checkInRoom = async (req: express.Request, res: express.Response) => {
@@ -368,8 +391,92 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   router.get('/device/checkin/:id', h(async (req, res) => {
     if (tooManyLookups(`checkin-info:${clientAddress(req)}`, 120)) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
     const room = await checkInRoom(req, res);
-    if (room) res.json({ expiresAt: room.expires_at });
+    // A match check-in asks for the code on the staff screen; the old shared check-in does not.
+    if (room) res.json({ expiresAt: room.expires_at, ...(room.match_id ? { match: { label: room.label, game: room.game || null, gameLabel: room.game ? GAME_LABEL[room.game] : '', codeLength: ROOM_CODE_LENGTH, noSignIn: room.no_sign_in === true } } : {}) });
   }));
+
+  // ---------- Match check-in: link + rotating code + school account ----------
+  const WRONG_CODE = 'That code is wrong or has changed. Type the 8-digit code on the organizer screen now.';
+  /** Checks the code and the caller, then finds the caller's roster seat from their school email. */
+  const matchCheckInCaller = async (req: express.Request, res: express.Response, room: RoomRow, code: unknown) => {
+    if (!room.match_id || !room.game) { res.status(409).json({ error: 'This check-in link is not for a match. Ask your organizer for the current QR.' }); return; }
+    if (tooManyLookups(`checkin-code:${clientAddress(req)}`, 20)) { res.status(429).json({ error: 'Too many tries. Wait a few seconds and type the code again.' }); return; }
+    if (typeof code !== 'string' || !roomCodeMatches(room, code, store.now())) { res.status(404).json({ error: WRONG_CODE }); return; }
+    const sessions = new Map((await store.sessions(roomMatchId(room))).map(row => [row.id, row]));
+    const heldSession = (slot: string) => { const held = room.joined?.[slot]; return held ? sessions.get(held.sessionId) : undefined; };
+    const taken = (slot: string) => !!slotBlocked(heldSession(slot), store.now());
+    const token = bearer(req.get('authorization'));
+    // Staff test switch: no sign-in. Only when staff turned it on for this open room, and only without a token,
+    // so a signed-in player always goes through the full account check below. The guest gets no email, cannot
+    // reconnect over anyone and can only pick seats that have no roster email.
+    if (!token && room.no_sign_in === true) {
+      return { guest: true as const, uid: `guest:${clientAddress(req)}`, email: '', seat: undefined, taken, mine: (_slot: string) => false, guestHeld: (_slot: string) => false };
+    }
+    let caller;
+    try { caller = await verifyCaller(token); }
+    catch (error) { res.status(error instanceof AuthError ? error.status : 401).json({ error: error instanceof AuthError ? error.message : 'Sign in with your school account to continue.' }); return; }
+    if (!caller.campus) { res.status(403).json({ error: 'Use a verified school email account to check in.' }); return; }
+    const email = caller.email.trim().toLowerCase(), hash = emailHash(email);
+    // A seat held by this same account is not "taken" for them: they may be reconnecting.
+    const mine = (slot: string) => !!email && heldSession(slot)?.email === email;
+    // A signed-in player may take back a seat that a no-sign-in test check-in is holding.
+    const guestHeld = (slot: string) => unsignedSession(heldSession(slot));
+    return { guest: false as const, uid: caller.uid, email, seat: room.players.find(player => player.emailHash === hash), taken: (slot: string) => taken(slot) && !mine(slot) && !guestHeld(slot), mine, guestHeld };
+  };
+  const seatView = (player: RoomRow['players'][number], taken: boolean, rejoin = false) => ({ slot: player.slot, name: player.name, team: player.team, college: player.college, taken, rejoin });
+  router.post('/device/checkin/:id/identify', express.json({ limit: '2kb' }), h(async (req, res) => {
+    if (!originAllowed(req, env)) { res.status(403).json({ error: 'Open the check-in from your ArenaHub website.' }); return; }
+    const room = await checkInRoom(req, res);
+    if (!room) return;
+    const found = await matchCheckInCaller(req, res, room, req.body?.code);
+    if (!found) return;
+    const game = room.game as MonitorGame;
+    res.json({
+      label: room.label, game, gameLabel: GAME_LABEL[game], platforms: GAME_PLATFORMS[game],
+      you: found.seat ? seatView(found.seat, found.taken(found.seat.slot), found.mine(found.seat.slot)) : null,
+      // Only seats without a roster email can be picked by hand; an emailed seat belongs to that account.
+      players: found.seat ? [] : room.players.filter(player => !player.emailHash).map(player => seatView(player, found.taken(player.slot))),
+    });
+  }));
+  const matchCheckIn = async (req: express.Request, res: express.Response, room: RoomRow) => {
+    const input = matchCheckInInput.safeParse(req.body);
+    if (!input.success) { res.status(400).json({ error: 'Type the code and try again.' }); return; }
+    const found = await matchCheckInCaller(req, res, room, input.data.code);
+    if (!found) return;
+    if (tooFast(`checkin:${found.uid}`, 1500)) { res.status(429).json({ error: 'Wait a second and try again.' }); return; }
+    const game = room.game as MonitorGame, { platform } = input.data;
+    if (!GAME_PLATFORMS[game].includes(platform)) {
+      res.status(409).json({ error: game === 'dota2' ? 'Dota 2 is checked on the Windows PC you play on. Open this link on that PC.' : `${GAME_LABEL[game]} is checked on the phone you play on. Open this link on that phone.` }); return;
+    }
+    let seat = found.seat, emailCheck: 'match' | 'unknown' | 'unsigned' = found.guest ? 'unsigned' : 'match';
+    if (!seat) {
+      seat = room.players.find(player => player.slot === input.data.slot);
+      if (!seat) { res.status(400).json({ error: found.guest ? 'Choose your name from the list.' : 'Your school email is not on this match roster. Choose your name from the list.' }); return; }
+      if (seat.emailHash) { res.status(403).json({ error: `${seat.name} is linked to a school email. Sign in with that account, or ask your organizer.` }); return; }
+      if (!found.guest) emailCheck = 'unknown';
+    }
+    // Checking in again from the same account (a dropped connection, a restarted phone) replaces the old session.
+    // A signed-in player also replaces a no-sign-in test check-in on their seat. Staff still see both in the log.
+    const held = room.joined?.[seat.slot];
+    if (held && found.mine(seat.slot)) await store.end(held.sessionId, 'player', 'The player checked in again from the same school account');
+    else if (held && found.guestHeld(seat.slot)) await store.end(held.sessionId, 'player', 'A signed-in player took this seat back from a test check-in without sign-in');
+    // One school account is one player: checking in as another name moves the account to that seat, so the same
+    // person never fills (or passes) two seats.
+    if (!found.guest) for (const other of Object.keys(room.joined || {})) {
+      if (other !== seat.slot && found.mine(other)) await store.resetRoomSlot(room.id, other, found.uid, `The same school account checked in as ${seat.name} instead`);
+    }
+    try {
+      const pairing = await store.joinRoom(room.id, seat.slot, {
+        matchId: room.match_id, matchLabel: room.label, game, platform, flexible: GAME_PLATFORMS[game].length > 1,
+        playerName: seat.name, team: seat.team, playerKey: seat.playerKey, rosterVersion: room.roster_version, record: store.recordings && room.record === 1, expectedSteamId: '',
+        hours: Math.min(12, Math.max(0.5, (room.expires_at - store.now()) / 3600_000)), email: found.email, college: seat.college, emailCheck,
+      });
+      res.status(201).json({ code: pairing.code, screenKey: screenCredential(room, pairing.id, defaultScreenKey(room)) });
+    } catch (error) {
+      if (error instanceof RoomError) { res.status(error.status).json({ error: error.message }); return; }
+      throw error;
+    }
+  };
   // Signed-in players choose their match from the published schedule. Only the caller's own token reads it,
   // so the Firestore rules decide what they may see.
   router.get('/device/checkin/:id/matches', h(async (req, res) => {
@@ -388,6 +495,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     if (tooManyLookups(`checkin-join:${clientAddress(req)}`, 120)) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
     const room = await checkInRoom(req, res);
     if (!room) return;
+    if (room.match_id) { await matchCheckIn(req, res, room); return; }
     const input = checkInInput.safeParse(req.body);
     if (!input.success) { res.status(400).json({ error: 'Enter your in-game name, team and college, then choose your game.' }); return; }
     const token = bearer(req.get('authorization'));
@@ -424,7 +532,19 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   router.post('/device/room', express.json({ limit: '2kb' }), h(async (req, res) => {
     if (tooManyLookups(clientAddress(req))) { res.status(429).json({ error: 'Wait a moment and try again.' }); return; }
     const room = await findRoom(req.body?.code);
-    if (!room) { res.status(404).json({ error: WRONG_ROOM }); return; }
+    if (!room) {
+      // A match check-in code typed on the short address: send the player to that match's sign-in page.
+      // The code goes along so they do not type it twice; the check-in page checks it again.
+      const typed = typeof req.body?.code === 'string' ? req.body.code : '', now = store.now();
+      const match = typed && (await store.rooms()).find(item => item.verified_checkin && item.match_id && roomOpen(item, now) && roomCodeMatches(item, typed, now));
+      const site = match && playerSite(req);
+      if (match && site) {
+        const url = new URL('/player-check-in', site);
+        url.searchParams.set('room', match.id); url.searchParams.set('code', normalizeRoomCode(typed));
+        res.json({ checkIn: url.href }); return;
+      }
+      res.status(404).json({ error: WRONG_ROOM }); return;
+    }
     const sessions = new Map((await store.sessions(roomMatchId(room))).map(row => [row.id, row]));
     const taken = (slot: string) => { const held = room.joined?.[slot]; return !!slotBlocked(held ? sessions.get(held.sessionId) : undefined, store.now()); };
     const games = room.game ? [room.game] : MONITOR_GAMES;
@@ -495,19 +615,45 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   const staff = express.Router();
   staff.use((req, res, next) => {
     if (!originAllowed(req, env)) { res.status(403).json({ error: 'Open the match monitor from your ArenaHub website.' }); return; }
-    verifyStaff(req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1]).then(uid => { (req as StaffRequest).staffUid = uid; next(); })
+    verifyStaff(req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1]).then(async who => {
+      const person = typeof who === 'string' ? { uid: who, facilitator: false, email: '' } : who;
+      (req as StaffRequest).staffUid = person.uid;
+      // A facilitator only reaches the matches they are assigned to.
+      if (person.facilitator) (req as StaffRequest).scope = new Set(Object.entries(await store.screenStaff()).filter(([, emails]) => emails.includes(person.email)).map(([key]) => key));
+      next();
+    })
       .catch(error => res.status(error instanceof AuthError ? error.status : 401).json({ error: error instanceof AuthError ? error.message : 'Sign in as tournament staff.' }));
   });
   staff.use(express.json({ limit: '128kb' }));
   const uidOf = (req: express.Request) => (req as StaffRequest).staffUid || 'staff';
-  const sessionOr404 = async (req: express.Request, res: express.Response) => { const row = await store.session(String(req.params.id)); if (!row) res.status(404).json({ error: 'Session not found.' }); return row; };
+  const scopeOf = (req: express.Request) => (req as StaffRequest).scope;
+  /** Full staff reach everything; a facilitator reaches a match or check-in room they are assigned to. */
+  const inScope = (req: express.Request, matchId?: string, roomId?: string) => {
+    const scope = scopeOf(req);
+    return !scope || (!!matchId && scope.has('m-' + matchId)) || (!!roomId && scope.has('r-' + roomId));
+  };
+  const NOT_ASSIGNED = 'You are not assigned to this match. Ask the organizer.';
+  /** Settings that change every match (fingerprints, trusted signatures, scan rules) stay with organizers. */
+  const organizerOnly = (req: express.Request, res: express.Response) => {
+    if (!scopeOf(req)) return false;
+    res.status(403).json({ error: 'Only an organizer can change this.' });
+    return true;
+  };
+  const sessionOr404 = async (req: express.Request, res: express.Response) => {
+    const row = await store.session(String(req.params.id));
+    if (!row) { res.status(404).json({ error: 'Session not found.' }); return undefined; }
+    if (!inScope(req, row.match_id, row.room_id)) { res.status(403).json({ error: NOT_ASSIGNED }); return undefined; }
+    return row;
+  };
   const staffBearer = (req: express.Request) => req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1] || '';
   const scanError = (res: express.Response, error: unknown) => res.status(error instanceof ScanAdmissionError ? error.status : 503).json({ error: error instanceof ScanAdmissionError ? error.message : 'Published rosters could not be checked. Try again before starting the match.' });
   staff.get('/matches/:id/readiness', h(async (req, res) => {
+    if (!inScope(req, String(req.params.id))) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     try { res.json(await matchScanReadiness(await published(staffBearer(req)), String(req.params.id), store)); }
     catch (error) { scanError(res, error); }
   }));
   staff.post('/matches/:id/admit', h(async (req, res) => {
+    if (!inScope(req, String(req.params.id))) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     try {
       const readiness = await matchScanReadiness(await freshPublished(staffBearer(req)), String(req.params.id), store);
       if (!readiness.canStart) { res.status(409).json({ error: `Anti-cheat scan required: ${readiness.ready} of ${readiness.total} players are ready. Open Anti-cheat and resolve the remaining scans.`, readiness }); return; }
@@ -524,6 +670,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   });
   staff.get('/config', h(async (_req, res) => { res.json(await store.config()); }));
   staff.put('/config', h(async (req, res) => {
+    if (organizerOnly(req, res)) return;
     try { res.json(await store.saveConfig(req.body, uidOf(req))); }
     catch (error) { res.status(400).json({ error: error instanceof z.ZodError ? error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ').slice(0, 500) : 'Invalid settings.' }); }
   }));
@@ -533,6 +680,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     try { if (typeof req.body?.serverUrl === 'string' && req.body.serverUrl.trim()) server = monitorAddress(req.body.serverUrl); } catch { /* Invalid destinations never enter a player command or game config. */ }
     // No address given: use the best one this server knows, so staff never have to type it.
     if (!server && !(typeof req.body?.serverUrl === 'string' && req.body.serverUrl.trim())) server = defaultPlayerAddress(req);
+    if (input.success && !inScope(req, input.data.matchId)) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     if (!input.success || !server) { res.status(400).json({ error: input.success ? 'Choose the laptop address that devices can reach.' : input.error.issues[0].message }); return; }
     let rosterVersion = '';
     if (input.data.playerKey) {
@@ -554,7 +702,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   }));
   staff.get('/sessions', h(async (req, res) => {
     const matchId = typeof req.query.matchId === 'string' ? req.query.matchId : undefined;
-    res.json(await Promise.all((await store.sessions(matchId)).map(sessionView)));
+    res.json(await Promise.all((await store.sessions(matchId)).filter(row => inScope(req, row.match_id, row.room_id)).map(sessionView)));
   }));
   staff.get('/sessions/:id', h(async (req, res) => {
     const row = await sessionOr404(req, res); if (!row) return;
@@ -618,6 +766,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     res.json({ url: `/api/integrity/media/${ticket}` });
   }));
   staff.post('/sessions/:id/trust-signature', h(async (req, res) => {
+    if (organizerOnly(req, res)) return;
     const row = await sessionOr404(req, res); if (!row) return;
     const cert = typeof req.body?.cert === 'string' ? req.body.cert.toLowerCase() : '';
     if (row.platform !== 'android' || !/^[0-9a-f]{64}$/.test(cert)) { res.status(400).json({ error: 'Choose a game signature reported by an Android companion.' }); return; }
@@ -629,6 +778,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   // A referee confirmed that a flagged file is a cheat. Its fingerprint joins the PC list, so renamed copies on other PCs are caught too.
   // Only a fingerprint this PC actually reported can be added here; anything else goes through the settings form.
   staff.post('/sessions/:id/block-fingerprint', h(async (req, res) => {
+    if (organizerOnly(req, res)) return;
     const row = await sessionOr404(req, res); if (!row) return;
     const sha256 = typeof req.body?.sha256 === 'string' ? req.body.sha256.toLowerCase() : '';
     // "|" separates fields in the settings text box, so it cannot appear in a label.
@@ -670,17 +820,20 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
 
   // ---------- Rooms: the staff side ----------
   /** Where players type the room code: the hosted address on its own, or this server's join page. */
-  const joinAddress = (req: express.Request) => hostedUrl ? { joinUrl: `${hostedUrl}/join.html`, shortUrl: hostedUrl.replace(/^https:\/\//, '') } : { joinUrl: `${defaultPlayerAddress(req)}/join.html`, shortUrl: '' };
+  const joinAddress = (req: express.Request) => hostedUrl ? { joinUrl: `${hostedUrl}/join.html`, shortUrl: `${hostedUrl.replace(/^https:\/\//, '')}/join` } : { joinUrl: `${defaultPlayerAddress(req)}/join.html`, shortUrl: '' };
   type Entry = { slot: string; name: string; team: string; college: string; onRoster: boolean; session: SessionRow | null };
   /** The "Scanned players" list: every roster player (joined or not), plus typed-in names, with proof of each scan. */
   const roomView = async (room: RoomRow, req: express.Request) => {
     const now = store.now(), sessions = await store.sessions(roomMatchId(room));
     const byId = new Map(sessions.map(row => [row.id, row]));
     const latestFor = (playerKey: string) => sessions.find(row => row.player_key && row.player_key === playerKey && row.status !== 'declined') || sessions.find(row => row.player_key === playerKey) || null;
+    // Accounts that hold a seat now. An older session of that account on another seat is a seat they moved away from.
+    const seated = new Set(Object.values(room.joined || {}).map(held => byId.get(held.sessionId)?.email).filter(Boolean));
     const entries: Entry[] = room.players.map(player => {
       const held = room.joined?.[player.slot];
       // A roster player also counts when staff made their code by hand outside the room.
-      return { slot: player.slot, name: player.name, team: player.team, college: player.college, onRoster: true, session: (held && byId.get(held.sessionId)) || latestFor(player.playerKey) };
+      const earlier = held ? null : latestFor(player.playerKey);
+      return { slot: player.slot, name: player.name, team: player.team, college: player.college, onRoster: true, session: (held && byId.get(held.sessionId)) || (earlier?.email && seated.has(earlier.email) ? null : earlier) };
     });
     for (const [slot, held] of Object.entries(room.joined || {})) if (slot.startsWith('name:') || slot.startsWith('account:')) {
       const row = byId.get(held.sessionId) || null;
@@ -691,9 +844,11 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
     for (const entry of entries) if (entry.session?.email) emails.set(entry.session.email, (emails.get(entry.session.email) || new Set()).add(entry.slot));
     const players = await Promise.all(entries.map(async entry => {
       const row = entry.session, scan = row ? await store.scan(row) : null, connection = row ? store.connection(row) : null;
-      const result = !row ? 'not-registered' : row.status === 'declined' ? 'declined' : scan!.status === 'ready' ? 'passed' : scan!.status === 'blocked' ? 'flagged' : connection === 'lost' ? 'not-reporting' : row.status === 'ended' ? (row.passed_at ? 'passed-earlier' : 'ended') : 'waiting';
+      const result = !row ? 'not-registered' : row.status === 'declined' ? 'declined' : unsignedSession(row) && (scan!.status === 'ready' || row.status === 'ended') ? 'test-unsigned' : scan!.status === 'ready' ? 'passed' : scan!.status === 'blocked' ? 'flagged' : connection === 'lost' ? 'not-reporting' : row.status === 'ended' ? (row.passed_at ? 'passed-earlier' : 'ended') : 'waiting';
       const flags: string[] = [];
+      if (unsignedSession(row)) flags.push('Test check-in without sign-in: nobody verified who this is, so it never counts as a pass');
       if (row?.email_check === 'mismatch') flags.push('Email does not match the school email on the roster');
+      if (row?.email_check === 'unknown' && room.verified_checkin && entry.onRoster) flags.push('Picked their own name: the roster has no school email for this player');
       if (!entry.onRoster) flags.push('Not on the published roster');
       const sameEmail = row?.email ? [...(emails.get(row.email) || [])].filter(slot => slot !== entry.slot) : [];
       if (sameEmail.length) flags.push(`Same email as ${sameEmail.map(slot => entries.find(e => e.slot === slot)?.name || slot).join(', ')}`);
@@ -702,33 +857,47 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
       const device = row?.device ? JSON.parse(row.device) as { model?: string; os?: string } : null;
       return { slot: entry.slot, name: entry.name, team: entry.team || row?.team || '', college: row?.college || entry.college, onRoster: entry.onRoster, result, flags, resets,
         sessionId: row?.id || null, email: row?.email || '', emailCheck: row?.email_check || '', gameLabel: row ? GAME_LABEL[row.game] : '', platform: row?.platform || null, device: device ? `${device.model || ''} ${device.os || ''}`.trim() : '',
-        joinedAt: row?.created_at || null, passedAt: row?.passed_at ?? null, scanLabel: scan?.label || '', checkedAt: scan?.checkedAt ?? null };
+        joinedAt: row?.created_at || null, passedAt: row?.passed_at ?? null, scanLabel: scan?.label || '', checkedAt: scan?.checkedAt ?? null,
+        iphoneSetupAt: null as number | null };
     }));
+    // iPhone players whose PRISM stream the relay has already received: set up once, ready for every match.
+    if (relay) {
+      const ids = new Map(entries.flatMap(entry => entry.session?.platform === 'ios' ? [[entry.slot, iphonePlayerId(relay, entry.session)] as const] : []));
+      const setups = new Map((await store.iphoneSetups([...ids.values()])).map(setup => [setup.player_id, setup.verified_at]));
+      for (const player of players) player.iphoneSetupAt = setups.get(ids.get(player.slot) || '') ?? null;
+    }
     const { code, changesAt } = currentRoomCode(room, now);
     return {
       id: room.id, label: room.label, matchId: room.match_id, game: room.game || null, gameLabel: room.game ? GAME_LABEL[room.game] : 'Player chooses', record: room.record === 1,
-      testRoom: room.test_room === true, verifiedCheckIn: room.verified_checkin === true,
+      testRoom: room.test_room === true, verifiedCheckIn: room.verified_checkin === true, noSignIn: room.no_sign_in === true,
       createdAt: room.created_at, expiresAt: room.expires_at, open: roomOpen(room, now), closedAt: room.closed_at,
-      ...(roomOpen(room, now) ? { code: room.verified_checkin ? null : code, changesAt: room.verified_checkin ? room.expires_at : changesAt } : { code: null, changesAt: null }), windowMs: ROOM_WINDOW_MS, ...joinAddress(req),
+      ...(roomOpen(room, now) ? { code: room.verified_checkin && !room.match_id ? null : code, changesAt: room.verified_checkin && !room.match_id ? room.expires_at : changesAt } : { code: null, changesAt: null }), windowMs: ROOM_WINDOW_MS, ...joinAddress(req),
       passed: players.filter(p => p.result === 'passed' || p.result === 'passed-earlier').length, total: players.length, players,
+      serverNow: now,
     };
   };
   staff.get('/rooms', h(async (req, res) => {
-    const rooms = (await store.rooms()).filter(room => (req.query.verified !== '1' || room.verified_checkin)
+    const rooms = (await store.rooms()).filter(room => inScope(req, room.match_id, room.id) && (req.query.verified !== '1' || room.verified_checkin)
       && (roomOpen(room, store.now()) || store.now() - (room.closed_at || room.expires_at) < 12 * 3600_000));
     res.json(await Promise.all(rooms.map(room => roomView(room, req))));
   }));
   staff.get('/rooms/:id', h(async (req, res) => {
     const room = await store.room(String(req.params.id));
     if (!room) { res.status(404).json({ error: 'Room not found.' }); return; }
+    if (!inScope(req, room.match_id, room.id)) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     res.json(await roomView(room, req));
   }));
   staff.post('/rooms', h(async (req, res) => {
     const input = roomInput.safeParse(req.body);
     if (!input.success) { res.status(400).json({ error: input.error.issues[0].message }); return; }
+    // Facilitators open check-in for their own matches; scrims and test rooms stay with organizers.
+    if (scopeOf(req) && !(input.data.matchId && inScope(req, input.data.matchId))) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     let room: RoomRow;
-    if (input.data.verifiedCheckIn && (input.data.testRoom || input.data.matchId || input.data.game)) {
-      res.status(400).json({ error: 'A check-in QR is shared across games.' }); return;
+    if (input.data.verifiedCheckIn && (input.data.testRoom || (!input.data.matchId && input.data.game))) {
+      res.status(400).json({ error: 'A check-in QR is either for one match or shared across games.' }); return;
+    }
+    if (input.data.noSignIn && !(input.data.matchId && input.data.verifiedCheckIn)) {
+      res.status(400).json({ error: 'Check-in without sign-in is only for a match check-in.' }); return;
     }
     if (input.data.testRoom && (input.data.matchId || input.data.game)) {
       res.status(400).json({ error: 'Test rooms let players choose a game and stay separate from matches.' }); return;
@@ -743,7 +912,7 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
       });
       // One code per match: opening a new room closes the old one.
       for (const old of await store.rooms()) if (old.match_id === input.data.matchId && roomOpen(old, store.now())) await store.closeRoom(old.id, uidOf(req));
-      room = await store.createRoom({ label: scanMatchLabel(source.match), matchId: input.data.matchId, game: source.game, rosterVersion: source.rosterVersion, players, record: store.recordings && input.data.record, hours: input.data.hours }, uidOf(req));
+      room = await store.createRoom({ label: scanMatchLabel(source.match), matchId: input.data.matchId, game: source.game, rosterVersion: source.rosterVersion, players, record: store.recordings && input.data.record, hours: input.data.hours, verifiedCheckIn: input.data.verifiedCheckIn, noSignIn: input.data.noSignIn }, uidOf(req));
     } else {
       const label = input.data.label || 'Scrim';
       if (label.length < 2) { res.status(400).json({ error: 'Name the scrim in 2 to 80 characters.' }); return; }
@@ -754,12 +923,22 @@ export function createIntegrityRouter(env: Record<string, string | undefined>, d
   staff.post('/rooms/:id/close', h(async (req, res) => {
     const room = await store.room(String(req.params.id));
     if (!room) { res.status(404).json({ error: 'Room not found.' }); return; }
+    if (!inScope(req, room.match_id, room.id)) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     await store.closeRoom(room.id, uidOf(req));
+    res.json(await roomView((await store.room(room.id))!, req));
+  }));
+  staff.post('/rooms/:id/new-code', h(async (req, res) => {
+    const room = await store.room(String(req.params.id));
+    if (!room || !roomOpen(room, store.now())) { res.status(404).json({ error: 'Check-in is not open for this match.' }); return; }
+    if (!inScope(req, room.match_id, room.id)) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
+    if (room.test_room) { res.status(400).json({ error: 'A test room keeps one code.' }); return; }
+    await store.newRoomCode(room.id, uidOf(req));
     res.json(await roomView((await store.room(room.id))!, req));
   }));
   staff.post('/rooms/:id/reset', h(async (req, res) => {
     const room = await store.room(String(req.params.id)), slot = typeof req.body?.slot === 'string' ? req.body.slot : '';
     if (!room || !room.joined?.[slot]) { res.status(404).json({ error: 'That player has not joined this room.' }); return; }
+    if (!inScope(req, room.match_id, room.id)) { res.status(403).json({ error: NOT_ASSIGNED }); return; }
     await store.resetRoomSlot(room.id, slot, uidOf(req));
     res.json(await roomView((await store.room(room.id))!, req));
   }));

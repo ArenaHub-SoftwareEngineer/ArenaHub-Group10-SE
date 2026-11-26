@@ -143,13 +143,15 @@ async function pairIphone(call: Awaited<ReturnType<typeof setup>>['call'], playe
   return await response.json() as { id: string; code: string };
 }
 
-for (const game of ['mlbb', 'codm-br', 'codm-mp'] as MonitorGame[]) test(`${game}: mixed iPhone and Android admission requires staff inspection and expires`, async t => {
+for (const game of ['mlbb', 'codm-br', 'codm-mp'] as MonitorGame[]) test(`${game}: mixed iPhone and Android admission clears on check-in, a referee check is optional and only a problem blocks`, async t => {
   const { call, pair, observe, store, tick } = await setup(t, fixture(game));
   const android = pair(rosterPlayerKey('bravo', 'bravo-p'), game); observe(android.id);
   const iphone = await pairIphone(call, rosterPlayerKey('alpha', 'alpha-p'), game);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval)).status, 409);
   const claimed = store.claim(iphone.code, { model: 'iPhone' })!;
-  assert.equal((await call('/matches/match/admit', {})).status, 409);
+  // The player's own confirmation at check-in is enough; no referee is needed.
+  assert.equal(store.scan(store.session(iphone.id)!).label, 'iPhone checked in');
+  assert.equal((await call('/matches/match/admit', {})).status, 200);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval, null)).status, 401);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval, claimed.token)).status, 403);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, { ...iosApproval, checks: { ...iosApproval.checks, supervision: false } })).status, 400);
@@ -165,9 +167,10 @@ for (const game of ['mlbb', 'codm-br', 'codm-mp'] as MonitorGame[]) test(`${game
   assert.equal(status.scan.status, 'ready'); assert.equal(status.record, false);
   assert.equal(store.session(iphone.id)!.last_seen, lastSeen);
   assert.equal(store.auditFor(iphone.id).filter((row: any) => row.action === 'ios-inspection-approved').length, 1);
+  // An expired referee check falls back to the player's confirmation instead of blocking.
   tick(IOS_CLEARANCE_MS); observe(android.id);
-  assert.equal(store.scan(store.session(iphone.id)!).status, 'stale');
-  assert.equal((await call('/matches/match/admit', {})).status, 409);
+  assert.equal(store.scan(store.session(iphone.id)!).label, 'iPhone checked in');
+  assert.equal((await call('/matches/match/admit', {})).status, 200);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval)).status, 200);
   assert.equal((await call('/matches/match/admit', {})).status, 200);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, { approved: false, note: 'Player changed device and referee supervision stopped.' })).status, 200);
@@ -181,7 +184,7 @@ test('iPhone clearance is invalidated by policy, roster, device stop and a newer
   const claimed = store.claim(iphone.code, {})!;
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval)).status, 200);
   const policy = store.config(); policy.android.blockedPackages.push({ match: 'test.fixture', label: 'Fixture', severity: 'high' }); store.saveConfig(policy, 'staff');
-  assert.equal(store.scan(store.session(iphone.id)!).status, 'required');
+  assert.equal(store.scan(store.session(iphone.id)!).label, 'iPhone checked in');
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval)).status, 200);
   const changed = structuredClone(data); changed.brackets[0].matches[0].team1!.players[0].ign = 'Replacement'; setData(changed);
   assert.equal((await call(`/sessions/${iphone.id}/ios-review`, iosApproval)).status, 409);

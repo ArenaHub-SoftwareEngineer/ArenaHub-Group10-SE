@@ -151,7 +151,7 @@ export function groupByDay(entries: LogEntry[], now: number): { key: string; lab
 export const STAFF_ROLES: UserRole[] = ['admin', 'organizer', 'moderator', 'school-admin'];
 export const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Admin', organizer: 'Organizer', moderator: 'Moderator', 'school-admin': 'School admin',
-  player: 'Player', spectator: 'Spectator', user: 'Member',
+  player: 'Player', spectator: 'Spectator', user: 'Member', facilitator: 'Facilitator',
 };
 
 export interface UserSummary {

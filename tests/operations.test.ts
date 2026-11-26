@@ -76,10 +76,10 @@ test('video sampling respects the selected segment and rejects invented or missi
 
 
 import { readHistoryTab } from '../src/lib/navigation';
-test('team and tournament desk routes remain reachable with notification links and browser history', () => {
-  assert.equal(readHistoryTab('arena', '#/arena/operations', 'home'), 'operations');
-  assert.equal(readHistoryTab('admin', '#/admin/operations?entity=private-record', 'overview'), 'operations');
-  assert.equal(readHistoryTab('arena', '#/arena/operations?entity=match-1', 'home'), 'operations');
+test('old desk links open the Teams page for staff and Home for viewers', () => {
+  assert.equal(readHistoryTab('admin', '#/admin/teams', 'overview'), 'teams');
+  assert.equal(readHistoryTab('admin', '#/admin/operations?entity=private-record', 'overview'), 'teams');
+  assert.equal(readHistoryTab('arena', '#/arena/operations?entity=match-1', 'home'), 'home');
   assert.equal(readHistoryTab('arena', '#/arena/integrity?case=case-1', 'home'), 'integrity');
   assert.equal(readHistoryTab('arena', '#/admin/operations', 'home'), 'home');
   assert.equal(readHistoryTab('admin', '#/admin/unknown', 'overview'), 'overview');

@@ -15,7 +15,7 @@
   line-height: 1;
 }
 .bracket-team-badge.is-empty { border-style: dashed; background: transparent; opacity: .5; }
-.bracket-team-badge > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.bracket-team-badge > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .bracket-team-badge > svg { max-width: 75%; max-height: 75%; }
 [data-bracket-theme="navy-gold"] {
   --bg-base: #111223;

@@ -34,7 +34,7 @@ export function PreMatchScanPanel({ matchId: id }: { matchId: string }) {
         <div><strong>{player.playerName}</strong><p className="field-hint">{player.team}</p></div>
         <div><span className={`scan-status scan-${player.scan.status}`}>{player.scan.label}</span><p className="field-hint">{player.scan.detail}</p>{player.scan.blockers.length > 0 && <ul>{player.scan.blockers.slice(0, 5).map((reason, index) => <li key={index}>{reason}</li>)}</ul>}{player.scan.blockers.length > 5 && <p className="field-hint">{player.scan.blockers.length - 5} more restricted entries. Open the player scan below for the full findings.</p>}{player.scan.warnings.length > 0 && <p className="field-hint">Other observations: {player.scan.warnings.slice(0, 3).join(' ')}</p>}</div>
       </li>)}</ul>
-      <p className="field-hint">Companion scans check configured indicators. iPhone clearance requires a referee inspection, continuous supervision and recording. Read each player's coverage and clearance status before starting.</p>
+      <p className="field-hint">Companion scans check configured indicators. iPhone players confirm their phone settings at check-in and are watched on Live screens; a referee check is optional. Read each player's coverage and clearance status before starting.</p>
     </>}
   </section>;
 }

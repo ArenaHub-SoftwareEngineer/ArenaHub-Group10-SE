@@ -35,8 +35,8 @@ If the website stays on Firebase Hosting, set its `VITE_API_BASE_URL` to that pe
 Decided 23 Nov 2026: players join from one fixed address, with no event laptop. The website stays on Firebase Hosting. The API, the match monitor and the join page run on Vercel (`vercel.json`, `api/index.ts`), and the monitor keeps its data in Firestore (`server/firestoreIntegrityStore.ts`). **None of this has been deployed yet.** It has been tested locally against the Firestore emulator (`tests/firestore-monitor.integration.test.ts`, plus `tests/room-codes.test.ts` for the room flow).
 
 How players join:
-1. Staff open **Anti-cheat → Room code** and choose a match (or Scrim). The panel shows a 6-character code that changes every 5 minutes. The previous code keeps working for 1 more minute. Only signed-in staff can see it. Players are never shown the code; **Show on screen** puts it up large for a projector.
-2. Players type the Vercel address (for example `arenahub-scan.vercel.app`), type the code, check their device, and register: their name from the roster (or "I am not on the list"), email and college.
+1. Staff open **Anti-cheat → Check-in**, choose the game, the bracket and a match that has not finished (live matches stay open, so a dropped player can set up again), then **Open check-in**. The panel shows the QR, the link, and an 8-digit code that changes every 3 minutes. The previous code keeps working for 1 more minute. Only signed-in staff can see it. Players are never shown the code; **Show on screen** puts it up large for a projector.
+2. Players scan the QR (or type the Vercel address and the code, which forwards them), sign in with their ArenaHub school account, and type the code. Their school email is matched to the staff-only roster email, so they do not type a name; a roster player with no email on file picks their name and staff see that flagged. The older typed-registration flow still works for scrim rooms: players type the Vercel address (for example `arenahub-scan.vercel.app`), type the code, check their device, and register: their name from the roster (or "I am not on the list"), email and college.
 3. The server issues an ordinary single-use pairing code, and the existing Android app, PC agent and iPhone check-in take over unchanged.
 4. **Scanned players** under the code lists every roster player: Passed (with the time it first passed, kept as proof), Flagged, Waiting, Not reporting, Declined, or Not registered. It flags an email that does not match the staff-only roster email (only a hash of that email is stored), the same email used by two players, typed names that are not on the roster, and staff resets of a player.
 
@@ -120,3 +120,28 @@ The smoke test checks that `/api/health` answers, that the website origin passes
 ## 6. Staff accounts
 
 Grant organizer, moderator and school-admin access with `npm run set-role` ([ROLES.md](ROLES.md)).
+
+## 2026-11-26: one address (arenahub-live.vercel.app)
+
+The website and its server now share one Vercel address. `npm run deploy` builds the site into `dist/`
+(same-origin API, `VITE_API_BASE_URL` empty), bundles `api/index.js`, and deploys. Vercel serves `dist/`
+as static files; only `/api/*` reaches the function. `/join` opens the player check-in page.
+Security headers for Vercel are written into `vercel.json` by `scripts/sync-security.mjs` (prebuild).
+
+The old Firebase link becomes a 301 redirect with `npm run deploy:redirect` (`firebase.redirect.json`,
+`hosting-redirect/`). Before running it, add `arenahub-live.vercel.app` under Firebase Console >
+Authentication > Settings > Authorized domains, or Google sign-in fails on the Vercel address.
+Firebase keeps Firestore, Auth and rules.
+
+## 2026-11-26 (later): website back on Firebase, so Google sign-in works
+
+Google sign-in failed on arenahub-live.vercel.app with `auth/unauthorized-domain`: Firebase Auth only
+trusts localhost, arenahub-esports.firebaseapp.com and arenahub-esports.web.app. So the split is now:
+
+- **https://arenahub-esports.web.app** is the one link people open (website, Google sign-in works).
+- **https://arenahub-live.vercel.app** keeps `/api/*`, `/join` (player check-in) and the PC screen page
+  (`pov.*`). Any other path on Vercel redirects (302) to the same path on web.app.
+- `.env.production` sets `VITE_API_BASE_URL=https://arenahub-live.vercel.app`; Vercel's `CORS_ORIGINS`
+  includes https://arenahub-esports.web.app.
+- `npm run deploy` builds once and deploys both (Firebase Hosting, then Vercel). `npm run deploy:site`
+  deploys only the website. `deploy:redirect` and `firebase.redirect.json` were removed.

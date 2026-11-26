@@ -78,7 +78,7 @@ export function SpectatorQRReader({ onVerified, admissionMode = false }: { onVer
     } catch (e) { if (mounted.current) setError(errorMessage(e, 'The QR image could not be read.')); }
     finally { if (mounted.current) setBusy(false); }
   };
-  return <section className="auth-qr-reader"><div className="auth-qr-intro"><QrCode size={28} /><h3>Join with a student invitation</h3><p>Scan a current QR shared by an approved {CAMPUS_SHORT_NAME} student. Then sign in or create your own account.</p></div>
+  return <section className="auth-qr-reader"><div className="auth-qr-intro"><QrCode size={28} /><h3>Join with a student invitation</h3><p>Scan a {CAMPUS_SHORT_NAME} student's QR, or type the 10-character code they read out. Guests can watch matches and comment in chat.</p></div>
     {ready && <p className="auth-flow-success" role="status"><CheckCircle2 size={17} />{admissionMode ? 'Invitation checked. You can complete spectator admission.' : 'Invitation ready. Your account still needs to sign in and verify its email.'}</p>}
     {ready && admissionMode && <button type="button" disabled={busy} className="arena-primary auth-submit" onClick={() => void accept(pendingSpectatorInvite() || input)}>Complete admission</button>}
     {busy && <p className="auth-flow-hint" role="status">Checking the invitation…</p>}{error && <p className="auth-flow-error" role="alert">{error}</p>}
@@ -86,7 +86,7 @@ export function SpectatorQRReader({ onVerified, admissionMode = false }: { onVer
     <div className="auth-qr-actions">{camera || cameraPending ? <button type="button" className="arena-outline" onClick={stopCamera}><X size={16} /> Stop camera</button> : <button type="button" disabled={busy} className="arena-outline" onClick={() => void startCamera()}><Camera size={16} /> Use camera</button>}
       <label className={`arena-outline auth-qr-upload ${busy || cameraPending ? 'is-disabled' : ''}`}><Upload size={16} /> Upload image<input type="file" aria-label="Upload invitation QR image" accept="image/png,image/jpeg,image/webp" disabled={busy || cameraPending} onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; void readImage(file); }} /></label>
     </div>
-    <form onSubmit={e => { e.preventDefault(); stopCamera(); void accept(input); }} className="auth-flow-form"><label><Req>Invitation link or code</Req><input autoComplete="off" spellCheck={false} value={input} maxLength={2000} disabled={busy} onChange={e => setInput(e.target.value)} placeholder="Paste the invitation link" required /></label><button type="submit" className="arena-outline" disabled={busy || cameraPending || !input.trim()}>Check invitation</button></form>
+    <form onSubmit={e => { e.preventDefault(); stopCamera(); void accept(input); }} className="auth-flow-form"><label><Req>Invite code or link</Req><input autoComplete="off" autoCapitalize="characters" spellCheck={false} enterKeyHint="go" value={input} maxLength={2000} disabled={busy} onChange={e => setInput(e.target.value)} placeholder="e.g. 7K3QM-X9PRT" required /></label><button type="submit" className="arena-outline" disabled={busy || cameraPending || !input.trim()}>Check invitation</button></form>
     <p className="auth-flow-hint">QR images are read on your device. Admission is checked with ArenaHub; a QR alone does not sign you in.</p>
   </section>;
 }

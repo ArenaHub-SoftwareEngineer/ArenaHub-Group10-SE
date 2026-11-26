@@ -35,6 +35,9 @@ test('players share their screens over WebRTC; staff choose game and match, watc
       await join.locator(`#games button[data-value="${game}"]`).click();
       await join.locator('#name').fill(name);
       await join.getByRole('button', { name: 'Join and start my scan' }).click();
+      // One step at a time: start the scan (the arenahub:// launch is suppressed), then move on to screen sharing.
+      await join.locator('#startScan, #openApp').filter({ visible: true }).evaluate((link: HTMLAnchorElement) => { link.addEventListener('click', e => e.preventDefault()); link.click(); });
+      await join.getByRole('button', { name: 'My scan passed, next step' }).click();
       const opened = capture.waitForEvent('page');
       await join.getByRole('link', { name: 'Open screen sharing' }).click();
       const pov = await opened;
@@ -48,7 +51,7 @@ test('players share their screens over WebRTC; staff choose game and match, watc
     await signIn(page, ORGANIZER);
     await page.goto('/#/admin/match-monitor');
     const wall = page.getByRole('region', { name: 'Live player screens' });
-    await expect(page.getByRole('tab', { name: 'Live screens' })).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: 'Live screens' }).click();
     // Step 1: game. Step 2: match. A test room is not tied to one game, so it is listed under every game.
     await wall.locator('[data-game="mlbb"]').click();
     await wall.getByRole('button', { name: 'Facilitators' }).first().waitFor();

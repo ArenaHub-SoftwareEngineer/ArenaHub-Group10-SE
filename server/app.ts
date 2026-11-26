@@ -7,6 +7,7 @@ import { createFairPlayRouter } from './fairPlay';
 import { createIntegrityRouter } from './integrity';
 import { publicAccessGuard, viaTunnel } from './publicAccess';
 import { createPresenceRouter } from './presence';
+import { createEmailVerificationRouter } from './emailVerification';
 import { corsPolicy } from './cors';
 import { adminMode } from './firebaseAdmin';
 import { publicErrorHandler, securityHeaders } from './securityHeaders';
@@ -61,6 +62,7 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
     });
   });
   app.use('/api/presence', cors, createPresenceRouter());
+  app.use('/api/account', cors, createEmailVerificationRouter(env));
   app.use('/api/ai', cors, createAiRouter(env));
   app.use('/api/fair-play', cors, createFairPlayRouter(env));
   if (options.integrity !== false) app.use('/api/integrity', cors, integrityOrUnavailable(env));
@@ -69,7 +71,7 @@ export function createApp(env: Record<string, string | undefined>, options: AppO
   if (options.joinSite) {
     const site = resolve(options.joinSite), page = resolve(site, 'join.html');
     app.get(['/', '/join', '/join.html'], (_req, res) => res.set('Cache-Control', 'no-cache').sendFile(page));
-    app.get(['/arenahub-logo.svg', '/fonts/:file', '/pov.html', '/pov.js', '/pov.css', '/vendor/livekit-client.umd.js'], express.static(site, { index: false, fallthrough: false, maxAge: '1d' }));
+    app.get(['/arenahub-logo.svg', '/fonts/:file', '/pov.html', '/pov.js', '/pov.css', '/vendor/livekit-client.umd.js'], express.static(site, { index: false, fallthrough: false, maxAge: '1d', setHeaders: (res, file) => { if (file.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache'); } }));
     app.use((_req, res) => { res.redirect(302, '/'); });
   }
 

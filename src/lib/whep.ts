@@ -1,7 +1,11 @@
 // Plays one stream from the iPhone relay (MediaMTX) over WebRTC, using WHEP: post an SDP offer, get the answer back.
 // Watch-only: the browser receives video and sends nothing. Candidates are gathered before the offer is sent, so no
 // follow-up requests (trickle ICE) are needed.
-export interface WhepSession { stream: MediaStream; close: () => void }
+export interface WhepSession {
+  stream: MediaStream; close: () => void;
+  /** Resolves true once media flows, false when it has not within `ms` (a laptop relay behind a tunnel). */
+  connected: (ms: number) => Promise<boolean>;
+}
 
 export async function playWhep(url: string, user: string, pass: string, onFail: () => void): Promise<WhepSession> {
   const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
@@ -18,6 +22,15 @@ export async function playWhep(url: string, user: string, pass: string, onFail: 
   pc.addTransceiver('video', { direction: 'recvonly' });
   pc.ontrack = event => { stream.addTrack(event.track); };
   pc.onconnectionstatechange = () => { if (!closed && (pc.connectionState === 'failed' || pc.connectionState === 'closed')) { close(); onFail(); } };
+  const connected = (ms: number) => new Promise<boolean>(resolve => {
+    if (pc.connectionState === 'connected') return resolve(true);
+    const timer = setTimeout(() => { pc.removeEventListener('connectionstatechange', check); resolve(pc.connectionState === 'connected'); }, ms);
+    function check() {
+      if (pc.connectionState === 'connected') { clearTimeout(timer); pc.removeEventListener('connectionstatechange', check); resolve(true); }
+      else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') { clearTimeout(timer); pc.removeEventListener('connectionstatechange', check); resolve(false); }
+    }
+    pc.addEventListener('connectionstatechange', check);
+  });
   try {
     await pc.setLocalDescription(await pc.createOffer());
     await new Promise<void>(resolve => {
@@ -32,7 +45,7 @@ export async function playWhep(url: string, user: string, pass: string, onFail: 
     const location = response.headers.get('Location');
     if (location) resource = new URL(location, url).href;
     await pc.setRemoteDescription({ type: 'answer', sdp: await response.text() });
-    return { stream, close };
+    return { stream, close, connected };
   } catch (error) {
     close();
     throw error;

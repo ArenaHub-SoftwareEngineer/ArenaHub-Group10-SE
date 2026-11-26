@@ -2,12 +2,15 @@
  * ArenaHub Data Types & Contracts
  */
 
-export type UserRole = 'user' | 'admin' | 'spectator' | 'player' | 'moderator' | 'organizer' | 'school-admin';
+export type UserRole = 'user' | 'admin' | 'spectator' | 'player' | 'moderator' | 'organizer' | 'school-admin' | 'facilitator';
 
 export type UserStatus = 'active' | 'suspended' | 'banned';
 
 export interface User {
+  /** False only when an admin revoked this student's guest invite QR. */
   spectatorInviteApproved?: boolean;
+  /** From the profile; synced from Firebase Auth when the person signs in. */
+  emailVerified?: boolean;
   id: string;
   name: string;
   email: string;

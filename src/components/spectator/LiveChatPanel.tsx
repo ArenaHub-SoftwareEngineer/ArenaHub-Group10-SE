@@ -22,6 +22,8 @@ interface LiveChatPanelProps {
   currentUser: User;
   readOnly: boolean;
   canPost: boolean;
+  /** Reporting a message is for campus accounts; guests can still post. */
+  canReport?: boolean;
   /** When true the staff controls (slow mode, mute list) are shown. */
   isAdmin?: boolean;
   /** Callback to open Arena AI panel anchored to this match. */
@@ -37,7 +39,7 @@ const failure = (error: unknown, fallback: string) => {
 };
 
 /** Live match chat with timed mutes, kicks, slow mode, a pinned message and staff badges. */
-export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUser, readOnly, canPost, isAdmin = false, onOpenArenaAI }) => {
+export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUser, readOnly, canPost, canReport = true, isAdmin = false, onOpenArenaAI }) => {
   const { showToast } = useToast();
   const staff = isAdmin || (canPost && isStaffRole(currentUser.role));
   const [messages, setMessages] = useState<LiveChatMessage[]>([]);
@@ -134,7 +136,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
       const code = (err as { code?: string })?.code;
       showToast(code === 'permission-denied'
         ? (state.slowModeSec ? `Slow mode is on. Wait ${slowModeLabel(state.slowModeSec)} between messages.` : 'Could not send. You may be muted, or posting too fast.')
-        : 'Could not send the message. Check your school sign-in and try again.', 'error');
+        : 'Could not send the message. Check your connection and try again.', 'error');
       void lastMessageAt(matchId, currentUser.id).then(setLastSent);
     } finally { setSending(false); }
   };
@@ -234,7 +236,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
               <button type="button" role="menuitem" className="is-danger" onClick={() => { setMenuFor(null); setKickTarget(message); }}>Remove from chat…</button>
             </>}
           </div>}
-        </> : canPost && !message.ai && <button type="button" className="watch-chat-report" aria-label={`Report message by ${message.author}`} data-tip="Report"
+        </> : canPost && canReport && !message.ai && <button type="button" className="watch-chat-report" aria-label={`Report message by ${message.author}`} data-tip="Report"
           onClick={() => { void reportLiveMessage(matchId, message).then(() => showToast('Message reported privately to tournament staff.', 'success')).catch(() => showToast('This message may already be reported by you, or reporting is unavailable.', 'error')); }}><Flag size={14} /></button>}
       </article>)}
     </div>
@@ -243,7 +245,7 @@ export const LiveChatPanel: React.FC<LiveChatPanelProps> = ({ matchId, currentUs
       : <form className="watch-chat-form" onSubmit={send}>
         {anonymous && alias ? <AnonAvatar alias={aliasOf(alias) || alias} className="watch-chat-avatar is-anon" /> : <span className="watch-chat-avatar" aria-hidden="true">{initials(currentUser.name || 'You')}</span>}
         <div className="watch-chat-input-wrap">
-          <input type="text" aria-label="Match chat message" value={input} onChange={event => handleInputChange(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : 'Chat… or type /arenaai'} maxLength={500} disabled={!available || sending} />
+          <input type="text" aria-label="Match chat message" value={input} onChange={event => handleInputChange(event.target.value)} placeholder={slowLeft ? `Slow mode: wait ${slowLeft}s` : onOpenArenaAI ? 'Chat… or type /arenaai' : 'Say something…'} maxLength={500} disabled={!available || sending} />
           {/* Arena AI slash-command pop-over */}
           {aiPopover && onOpenArenaAI && <div className="watch-chat-ai-popover">
             <button type="button" className="watch-chat-ai-popover-btn" onClick={() => { setInput(''); setAiPopover(false); onOpenArenaAI(); }}>

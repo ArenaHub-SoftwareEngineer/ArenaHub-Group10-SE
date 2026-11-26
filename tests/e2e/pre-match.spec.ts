@@ -18,31 +18,44 @@ test('staff can save and reload the protected-game DLL policy through the config
   }
 });
 
-test('player anti-cheat entry prioritizes the required app scan and keeps disputes secondary', async ({ page }, info) => {
+test('player anti-cheat walks one step at a time: game, device, practice, check in', async ({ page }, info) => {
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await page.route('https://i.ytimg.com/**', route => route.fulfill({ status: 204 }));
   const errors = watchErrors(page);
   await signIn(page, STUDENT); await page.goto('/#/arena/integrity');
   await expect(page.getByRole('heading', { name: 'Anti-cheat', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Scan before you play' })).toBeVisible();
   await expect(page.locator('details').filter({ hasText: 'Disputes and appeals' })).not.toHaveAttribute('open', '');
-  await expect(page.getByText(/check-in QR or link/)).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open room check-in' })).toHaveAttribute('href', /\/join\.html$/);
+  const flow = page.locator('.anticheat-flow');
+  // Step 1: only the game tiles.
+  await expect(flow.getByRole('heading', { name: 'Which game are you playing?' })).toBeVisible();
+  await expect(flow.getByRole('link')).toHaveCount(0);
+  await page.screenshot({ path: info.outputPath('player-step-game.png'), fullPage: true });
+
+  // Dota 2 skips the device step and goes straight to the PC practice scan.
+  await flow.getByRole('button', { name: /Dota 2/ }).click();
+  await expect(flow.getByRole('heading', { name: 'Practice first (optional)' })).toBeVisible();
+  await expect(flow.getByRole('link', { name: 'Scan this PC' })).toHaveAttribute('href', /^arenahub:\/\/practice\?s=http%3A%2F%2F127\.0\.0\.1%3A\d+$/);
+  await flow.getByText('The button does nothing? Type a command instead').click();
+  await expect(flow).toContainText('arenahub-agent.exe --practice --server http://127.0.0.1:');
+  await flow.getByRole('button', { name: 'Next: match-day check-in' }).click();
+  await expect(flow.getByRole('heading', { name: 'On match day: check in' })).toBeVisible();
+  await expect(flow.getByRole('link', { name: 'Open room check-in' })).toHaveAttribute('href', /\/join\.html$/);
+  await expect(flow).toContainText('Start my scan');
+
+  // Back to the start, then a phone game asks for the device.
+  await flow.getByRole('button', { name: /Change game/ }).click();
+  await flow.getByRole('button', { name: /Mobile Legends/ }).click();
+  await expect(flow.getByRole('heading', { name: /Which device do you play/ })).toBeVisible();
+  await flow.getByRole('button', { name: /^Android/ }).click();
+  await expect(flow).toContainText('Server address for the app:');
+  await flow.getByRole('button', { name: 'Back' }).click();
+  await flow.getByRole('button', { name: /^iPhone/ }).click();
+  await expect(flow.locator('.anticheat-ios-list li')).toHaveCount(6);
+  await flow.getByRole('checkbox', { name: /Developer Mode/ }).check();
+  await expect(flow.getByText('1 of 6 reviewed.')).toBeVisible();
+  await expect(flow).toContainText('Turn Developer Mode off.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: info.outputPath('player-required-scan.png'), fullPage: true });
-  // Practice before match day: no code, one way per device, and the iPhone self-check list.
-  const practice = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Practice before match day' }) });
-  await expect(practice.getByRole('link', { name: 'Scan this PC' })).toHaveAttribute('href', /^arenahub:\/\/practice\?s=http%3A%2F%2F127\.0\.0\.1%3A\d+$/);
-  await practice.getByText('Start it by typing a command instead').click();
-  await expect(practice).toContainText('arenahub-agent.exe --practice --server http://127.0.0.1:');
-  await expect(practice).toContainText('Server address for the app:');
-  await practice.getByText('The six referee checks').click();
-  await expect(practice.locator('.anticheat-ios-checks li')).toHaveCount(6);
-  await practice.getByRole('checkbox', { name: /Developer Mode/ }).check();
-  await expect(practice.getByText('1 of 6 reviewed. A referee grants match clearance.')).toBeVisible();
-  await expect(practice).toContainText('Turn Developer Mode off.');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
-  await practice.screenshot({ path: info.outputPath('player-practice.png') });
+  await page.screenshot({ path: info.outputPath('player-step-practice.png'), fullPage: true });
   expect(errors).toEqual([]);
 });
 
@@ -186,36 +199,30 @@ test('collector 3.2: iPhone sideload indicators gate approval and Dota install f
   await page.screenshot({ path: info.outputPath('dota-install-findings.png') });
   await pcDialog.getByRole('button', { name: /close/i }).first().click();
 
-  // iPhone: every indicator needs an explicit answer; Found blocks approval.
+  // iPhone: one tap per line. A Problem swaps Clear to play for Not cleared; all OK plus the table checks clears.
   await page.locator('.monitor-session').filter({ hasText: `Indigo ${suffix}` }).getByRole('button', { name: 'Open session' }).click();
   const dialog = page.getByRole('dialog', { name: new RegExp(`^Indigo ${suffix} ·`) });
-  const indicators = dialog.getByRole('group', { name: 'Sideload and jailbreak indicators' });
-  await expect(indicators).toBeVisible({ timeout: 20_000 });
-  await expect(indicators.getByRole('radiogroup')).toHaveCount(6);
-  for (const box of await dialog.locator('.settings-toggle input[type=checkbox]').all()) await box.check();
-  for (const group of await indicators.getByRole('radiogroup').all()) await group.getByText('Not present', { exact: true }).click();
-  await indicators.getByRole('radiogroup', { name: 'Developer Mode is on' }).getByText('Found', { exact: true }).click();
-  await expect(dialog.getByRole('alert').filter({ hasText: 'An indicator is marked found' })).toBeVisible();
-  const approve = dialog.getByRole('button', { name: 'Approve supervised iPhone' });
+  const phone = dialog.getByRole('group', { name: 'On the phone' });
+  await expect(phone).toBeVisible({ timeout: 20_000 });
+  await expect(phone.getByRole('radiogroup')).toHaveCount(6);
+  const approve = dialog.getByRole('button', { name: 'Clear to play' });
   await expect(approve).toBeDisabled();
-  await expect(indicators).toContainText('Checked 6 of 6');
-  await expect(indicators.locator('.ios-fix')).toHaveText('Tell the player: Turn Developer Mode off. Then check this place again.');
-  await indicators.locator('.ios-indicator').filter({ hasText: 'Developer Mode is on' }).scrollIntoViewIfNeeded();
+  for (const group of await phone.getByRole('radiogroup').all()) await group.getByRole('radio', { name: 'OK' }).click();
+  await phone.getByRole('radiogroup', { name: 'Developer Mode is off' }).getByRole('radio', { name: 'Problem' }).click();
+  await expect(phone.locator('.ios-fix')).toHaveText('Tell the player: Turn Developer Mode off.');
+  await expect(approve).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Not cleared, tell the player' })).toBeEnabled();
   await page.screenshot({ path: info.outputPath('ios-indicator-found.png') });
   const axe = await new AxeBuilder({ page: page as never }).include('.feature-dialog').disableRules(['color-contrast']).analyze();
   expect(axe.violations.map(v => v.id)).toEqual([]);
-  await indicators.getByRole('radiogroup', { name: 'Developer Mode is on' }).getByText('Not present', { exact: true }).click();
-  await expect(indicators.locator('.ios-fix')).toHaveCount(0);
-  // The drafted note leaves the two things only a person knows; saving waits until they are filled in.
-  await dialog.getByRole('button', { name: 'Write note from checks' }).click();
-  const note = dialog.getByLabel('iPhone inspection note');
-  await expect(note).toHaveValue(new RegExp(`^Inspected Indigo ${suffix}'s .+ All 6 sideload and jailbreak indicators were not present\\. Recording source: \\[fill in\\]\\. Supervising referee: \\[fill in\\]\\.$`));
+  await phone.getByRole('radiogroup', { name: 'Developer Mode is off' }).getByRole('radio', { name: 'OK' }).click();
+  await expect(phone.locator('.ios-fix')).toHaveCount(0);
   await expect(approve).toBeDisabled();
-  await expect(dialog.getByText('Replace each [fill in] in the note before saving.')).toBeVisible();
-  await note.fill((await note.inputValue()).replace('Recording source: [fill in]', 'Recording source: observer slot').replace('Supervising referee: [fill in]', 'Supervising referee: Referee B'));
+  for (const box of await dialog.getByRole('group', { name: 'At the table' }).getByRole('checkbox').all()) await box.check();
+  await expect(dialog.getByText('9 of 9 checked')).toBeVisible();
   await expect(approve).toBeEnabled();
   await approve.click();
-  await expect(dialog.getByText('iPhone inspection saved.')).toBeVisible();
+  await expect(dialog.getByText('Cleared to play for 15 minutes.')).toBeVisible();
   expect(errors).toEqual([]);
 });
 

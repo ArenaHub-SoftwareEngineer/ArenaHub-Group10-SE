@@ -58,7 +58,7 @@ export function ShareMatchDialog({ open, onClose, match, gameName, canInvite }: 
     }).catch((error: { code?: string }) => {
       if (!active) return;
       setGuestError(error?.code === 'permission-denied'
-        ? 'Your account is not approved to invite guests yet. Ask an organizer to approve student QR access for you.'
+        ? 'Guest invites are turned off for your account. Ask an organizer if this is a mistake.'
         : `Could not create an invitation. Check your connection and ${CAMPUS_SHORT_NAME} account, then try again.`);
     });
     return () => { active = false; };

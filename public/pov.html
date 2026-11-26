@@ -1,32 +1,115 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Share your game · ArenaHub</title><link rel="stylesheet" href="/pov.css"><script src="/vendor/livekit-client.umd.js" defer></script><script src="/pov.js" defer></script></head>
-<body><main><img src="/arenahub-logo.svg" alt="ArenaHub" width="48" height="48"><h1>Share your game</h1>
-<p id="identity"></p><p id="match"></p>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Share your game · ArenaHub</title><link rel="preload" href="/fonts/google-sans-flex-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="/pov.css?v=20261126g"><script src="/vendor/livekit-client.umd.js" defer></script><script src="/pov.js?v=20261126g" defer></script></head>
+<body><main>
+<header class="head"><img src="/arenahub-logo.svg" alt="ArenaHub" width="28" height="32"><div><h1>Share your game</h1><p id="identity"></p><p id="match" hidden></p></div></header>
 <p id="status" role="status">Checking your match…</p>
-<section id="paused" role="alert" hidden><strong>The referee paused this match.</strong><span id="pausedNote">Stop playing and pause the game now. Keep sharing until the referee resumes.</span></section>
+<section id="paused" role="alert" hidden><strong>The referee paused this match.</strong><span id="pausedNote">Pause your game now. Keep sharing.</span></section>
 <section id="controls" hidden>
-<p>Your match facilitators watch your screen live during the match. Only staff can see it. Other players, including your opponents, cannot. Audio is off.</p>
-<div id="pc" hidden><p class="hint">Choose <strong>Entire screen</strong> so a full-screen game stays visible. A window share can turn black when the game goes full screen.</p>
+<div id="pc" hidden><p class="lead">Only match staff can see it. No sound.</p><p class="hint">Choose <strong>Entire screen</strong>.</p>
 <button id="start" type="button">Share my screen</button><button id="stop" type="button" hidden>Stop sharing</button>
 <video muted playsinline id="preview" hidden aria-label="What staff see"></video></div>
-<div id="android" hidden><a id="androidApp">Share with the Android Companion</a><a href="/api/integrity/downloads/arenahub-companion.apk">Download the Android Companion</a><p>If the link does not open the app, copy your private link and paste it into <strong>Share game screen</strong> in the companion.</p></div>
-<div id="ios" hidden>
-<div id="iosRelay" hidden>
-<p class="hint">An iPhone cannot share its screen from a web page, so you use a free streaming app. It takes about two minutes, once.</p>
-<ol class="steps">
-<li><strong>Install "PRISM: Live Streaming App"</strong> by NAVER Corp. (free) from the App Store. <a id="prismApp" class="inline" href="https://apps.apple.com/app/id1319056339" target="_blank" rel="noreferrer">Open in App Store</a></li>
-<li>In PRISM, add a <strong>Custom RTMP</strong> channel and paste these two values:
-<div class="field"><span>RTMP server</span><code id="rtmpServer"></code><button type="button" data-copy="rtmpServer">Copy</button></div>
-<div class="field"><span>Stream key</span><code id="rtmpKey"></code><button type="button" data-copy="rtmpKey">Copy</button></div></li>
-<li>Choose <strong>Screen</strong> mode, then go live. When iOS asks, pick PRISM and tap <strong>Start Broadcast</strong>.</li>
-<li>Open your game. Your facilitators now see your screen. Stop the broadcast from the red bar or Control Center after the match.</li>
+<div id="android" hidden>
+<ol class="and-steps">
+<li><span class="n">1</span><div><strong>Get the ArenaHub Companion</strong><p class="hint">Skip this if the app is already on this phone.</p><a class="btn" href="/api/integrity/downloads/arenahub-companion.apk">Download the app</a></div></li>
+<li><span class="n">2</span><div><strong>Open the app with your link</strong><p class="hint">Your private link goes in by itself.</p><a id="androidApp" class="btn primary">Share with the Android Companion</a></div></li>
+<li><span class="n">3</span><div><strong>Tap Start broadcast</strong><p class="hint">When Android asks, choose <strong>Entire screen</strong>, then <strong>Start</strong>. End your live from the app or its notification.</p></div></li>
 </ol>
-<p class="hint">Keep the stream key private: it works only for you and only for this match. Any app with a Custom RTMP screen broadcast, such as Streamlabs, also works.</p>
+<div class="and-fallback"><strong>App did not open?</strong><p class="hint">Copy your link, open the app, tap <strong>Share game screen</strong>, then <strong>Paste my link</strong>.</p><button id="androidCopy" type="button" data-copy-link>Copy private sharing link</button></div>
 </div>
-<p id="iosNone" hidden>An iPhone cannot share its screen from a web page, and iPhone sharing is not switched on for this event. Your facilitator watches you from the in-game observer slot. Tell them you are ready.</p>
+<div id="ios" hidden>
+<p id="iosLoading" class="wait-line">Checking your iPhone setup…</p>
+<section id="iosAsk" class="wiz ask" hidden aria-labelledby="iosAskTitle">
+<div class="ready-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>Your PRISM is already set up</div>
+<h2 id="iosAskTitle" tabindex="-1">Is this the iPhone you set up?</h2>
+<p id="iosAskNote">ArenaHub already received your screen from PRISM before.</p>
+<div class="wiz-actions"><button type="button" class="btn primary" data-same>Yes, this iPhone</button><button type="button" class="btn ghost" data-redo>No, set up this iPhone</button></div>
+</section>
+<section id="iosWizard" class="wiz" aria-label="Set up iPhone screen sharing" hidden>
+<div class="wiz-bar" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+<p id="wizCount" class="wiz-count">Step 1 of 5</p>
+
+<article class="wiz-step" data-step="1">
+<div class="app-card"><svg class="prism-icon" viewBox="0 0 64 64" aria-hidden="true"><use href="#prismGlyph"/></svg><div><strong>PRISM: Live Streaming App</strong><span>NAVER Corp. · Free</span></div></div>
+<h2 tabindex="-1">Get PRISM</h2>
+<p>Free app. Make sure the developer is NAVER Corp.</p>
+<div class="wiz-actions"><a id="prismApp" class="btn primary" href="https://apps.apple.com/app/id1319056339" target="_blank" rel="noreferrer">Get PRISM</a><button type="button" class="btn ghost" data-next>I have it</button></div>
+</article>
+
+<article class="wiz-step" data-step="2" hidden>
+<div class="phone" aria-hidden="true"><div class="phone-screen anim-screen">
+<div class="mock-frame">16:9</div><p class="mock-cap">Video aspect ratio: 16:9</p>
+<div class="mock-seg"><b class="seg-screen">Screen</b><span>Camera</span><span>VTuber</span></div>
+<div class="mock-ready">Ready</div>
+<span class="finger"></span>
+</div></div>
+<h2 tabindex="-1">Tap Screen, then Ready</h2>
+<p>Open PRISM and do what the phone shows.</p>
+<div class="wiz-actions"><button type="button" class="btn ghost" data-back>Back</button><button type="button" class="btn primary" data-next>Next</button></div>
+</article>
+
+<article class="wiz-step" data-step="3" hidden>
+<div class="phone" aria-hidden="true"><div class="phone-screen anim-rtmp">
+<p class="mock-title">Welcome!</p><p class="mock-cap">Broadcast on the platform you want.</p>
+<div class="mock-grid"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><b class="rtmp-tile"><em>+</em>Custom RTMP</b></div>
+<span class="finger"></span>
+</div></div>
+<h2 tabindex="-1">Tap Custom RTMP</h2>
+<p>It's the last tile, with a plus sign.</p>
+<div class="wiz-actions"><button type="button" class="btn ghost" data-back>Back</button><button type="button" class="btn primary" data-next>Next</button></div>
+</article>
+
+<article class="wiz-step" data-step="4" hidden>
+<h2 tabindex="-1">Copy and paste your codes</h2>
+<p>Paste each one into the PRISM box with the same name, then tap Save.</p>
+<div id="iosCodes">
+<div class="copy-row"><label for="rtmpServer"><em>1</em>Stream URL</label><div class="copy-box"><input id="rtmpServer" readonly spellcheck="false" autocomplete="off" placeholder="Waiting for your code…"><button type="button" class="copy-btn" data-copy="rtmpServer" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Copy</span></button></div></div>
+<div class="copy-row"><label for="rtmpKey"><em>2</em>Stream Key</label><div class="copy-box"><input id="rtmpKey" readonly spellcheck="false" autocomplete="off" placeholder="Waiting for your code…"><button type="button" class="copy-btn" data-copy="rtmpKey" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span>Copy</span></button></div></div>
+</div>
+<p id="iosCodesOff" class="wait-line" hidden>Your codes will show up here when the organizer turns on iPhone sharing.</p>
+<p id="iosCodesChanged" class="codes-changed" role="alert" hidden>The Stream URL changed because the organizer restarted iPhone sharing. Copy it again and paste it into PRISM, then go live again.</p>
+<p class="hint">Keep the Stream Key private.</p>
+<div class="wiz-actions"><button type="button" class="btn ghost" data-back>Back</button><button type="button" class="btn primary" data-next>Saved</button></div>
+</article>
+
+<article class="wiz-step" data-step="5" hidden>
+<div class="ready-badge ready-only"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17 19 7"/></svg>iPhone already set up</div>
+<div id="liveLink" class="link3d" aria-hidden="true">
+<div class="link3d-tile"><svg class="prism-icon" viewBox="0 0 64 64"><use href="#prismGlyph"/></svg><span>Your iPhone</span></div>
+<div class="link3d-dots"><i></i><i></i><i></i><i></i><i></i></div>
+<div class="link3d-tile"><img src="/arenahub-logo.svg" alt=""><span>Staff</span></div>
+</div>
+<p id="liveState" class="live-state" role="status">Waiting for your broadcast</p>
+<div class="phone golive" aria-hidden="true"><div class="phone-screen">
+<div class="gl-scene gl-a"><div class="mock-frame">16:9</div><p class="mock-cap">Capture orientation: Landscape</p>
+<div class="gl-card"><span class="gl-avatar">R</span><span><b>RTMP</b>Custom RTMP</span></div><div class="gl-golive"><i></i>Go Live</div></div>
+<div class="gl-scene gl-b"><p class="gl-warn">Everything on your screen will be recorded.</p><div class="gl-sheet"><span class="gl-rec"></span><b>Screen Broadcast</b>
+<span class="gl-row"><svg viewBox="0 0 64 64"><use href="#prismGlyph"/></svg>PRISM Live<em>&#10003;</em></span><span class="gl-row gl-start">Start Broadcast</span></div></div>
+<div class="gl-scene gl-c"><span class="gl-pill"></span><p class="gl-warn">Everything on your screen will be recorded.</p><div class="gl-sheet"><span class="gl-rec is-on"></span><b>Screen Broadcast</b>
+<span class="gl-row"><svg viewBox="0 0 64 64"><use href="#prismGlyph"/></svg>PRISM Live<small>00:01</small></span><span class="gl-row gl-mid">Stop Broadcast</span></div><p class="gl-next">Now open your game</p></div>
+<span class="finger"></span>
+</div></div>
+<h2 tabindex="-1"><span class="setup-only">Go live, then play</span><span class="ready-only">Open PRISM and tap Go Live</span></h2>
+<p class="ready-only">Your codes are saved in PRISM, so there is nothing to paste.</p>
+<ol class="mini-steps">
+<li><span class="ready-only">Open PRISM, then tap</span><span class="setup-only">In PRISM, tap</span> <strong>Go Live</strong>.</li>
+<li>Check <strong>PRISM Live</strong>, then tap <strong>Start Broadcast</strong>.</li>
+<li>When the red dot shows at the top, open your game. Leave PRISM running.</li>
+</ol>
+<p class="hint">If PRISM says <strong>“The RTMP connection … has failed” (1_1 / 150)</strong>, tap OK, wait 30 seconds, then tap <strong>Go Live</strong> again. Your codes stay the same. If it keeps failing, tell the staff.</p>
+<details class="hint lock-tips"><summary><strong>Locking your iPhone stops the stream.</strong> Do this once before your match.</summary>
+<ol class="mini-steps">
+<li><strong>Settings → Display &amp; Brightness → Auto-Lock → Never.</strong> Turn <strong>Low Power Mode</strong> off, because it locks the phone after 30 seconds.</li>
+<li>To stop the side button from locking the phone by accident, go to <strong>Settings → Accessibility → Guided Access</strong>, turn it on and set a passcode. In your game, press the side button 3 times, tap <strong>Options</strong>, turn <strong>Side Button</strong> off, then tap <strong>Start</strong>. To leave, press it 3 times again and type the passcode.</li>
+<li>If the stream stops anyway, keep playing first. At your next safe moment, open PRISM and tap <strong>Go Live</strong>. Your codes are saved, so this takes about 10 seconds. Tell your facilitator it dropped, so a gap in your stream is not counted against you.</li>
+</ol></details>
+<div class="wiz-actions setup-only"><button type="button" class="btn ghost" data-back>Back</button><button type="button" class="btn ghost" data-restart>Start over</button></div>
+<button type="button" class="btn ghost redo ready-only" data-redo>Using a different iPhone? Set it up again</button>
+</article>
+</section>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="prismGlyph" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#050506"/><g fill="none" stroke-width="2.6" stroke-linejoin="round"><path d="M32 12 52 48H12Z" stroke="#ff3b4e" transform="translate(-.9 0)"/><path d="M32 12 52 48H12Z" stroke="#3bb4ff" transform="translate(.9 0)"/><path d="M32 12 52 48H12Z" stroke="#fff"/><path d="M32 22.5 43.5 43H20.5Z" stroke="#fff"/><path d="M32 32 37 40.5H27Z" stroke="#fff"/></g></symbol></svg>
 </div>
 <details id="mirror"><summary>Share a mirrored phone from a computer</summary><p>Open your private link on the capture computer, then share the mirror window.</p>
 <ul><li>iPhone with Windows: connect a compatible iPhone video adapter to an HDMI capture card. In OBS, add the card as a Video Capture Device and open its windowed projector.</li>
 <li>iPhone with Mac: connect by USB, open QuickTime Player, choose New Movie Recording, and select the iPhone as the source. Leave the preview open.</li>
 <li>Android: open the player-approved scrcpy mirror with <code>scrcpy --no-control --no-audio</code>.</li></ul></details>
-<button id="copy" type="button">Copy private sharing link</button></section></main></body></html>
+<button id="copy" type="button" data-copy-link>Copy private sharing link</button></section></main></body></html>

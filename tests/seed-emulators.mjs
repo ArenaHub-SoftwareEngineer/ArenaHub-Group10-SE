@@ -27,7 +27,7 @@ try {
     if (!update.ok) throw new Error('Could not configure the local account: ' + fixture.email);
     await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'users', user.uid), {
       uid: user.uid, name: fixture.name, email: fixture.email, role: fixture.admin ? 'admin' : 'user', status: 'active',
-      collegeName: 'Western Mindanao State University', spectatorInviteApproved: !fixture.admin,
+      collegeName: 'Western Mindanao State University',
       avatarInitials: fixture.initials, emailVerified: true, joinedAt: new Date(),
     }, { merge: true }));
     await signOut(auth);
@@ -36,9 +36,31 @@ try {
     if (token.signInProvider !== 'google.com' || !signedIn.user.emailVerified || (token.claims.admin === true) !== fixture.admin) {
       throw new Error('Local Google sign-in or role verification failed: ' + fixture.email);
     }
-    console.log('Verified local Google sign-in: ' + fixture.email + (fixture.admin ? ' (Admin)' : ' (User, QR approved)'));
+    console.log('Verified local Google sign-in: ' + fixture.email + (fixture.admin ? ' (Admin)' : ' (User)'));
     await signOut(auth);
   }
+  // A personal-email guest who joined with a student invite: watches and comments, no Arena AI.
+  const guestEmail = 'guest@example.com', password = 'ArenaHub-QA-Only-27!';
+  let signUp = await fetch(endpoint + '/identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + apiKey, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: guestEmail, password, returnSecureToken: true }),
+  });
+  if (!signUp.ok) signUp = await fetch(endpoint + '/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + apiKey, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: guestEmail, password, returnSecureToken: true }),
+  });
+  const guest = await signUp.json();
+  if (!guest.localId) throw new Error('Could not create the local guest account.');
+  const verified = await fetch(endpoint + '/identitytoolkit.googleapis.com/v1/accounts:update?key=' + apiKey, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' }, body: JSON.stringify({ localId: guest.localId, emailVerified: true }),
+  });
+  if (!verified.ok) throw new Error('Could not verify the local guest account.');
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'users', guest.localId), {
+      uid: guest.localId, name: 'Test Guest', email: guestEmail, role: 'user', status: 'active', collegeName: 'Spectator',
+      avatarInitials: 'TG', emailVerified: true, joinedAt: new Date(),
+    }, { merge: true });
+    await setDoc(doc(ctx.firestore(), 'spectatorAdmissions', guest.localId), { email: guestEmail, invite: '7K3QMX9PRT', admittedAt: new Date() });
+  });
+  console.log('Seeded local guest: ' + guestEmail + ' (admitted with a student invite)');
 } finally {
   await env.cleanup();
   await deleteApp(app);

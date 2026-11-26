@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
 
 const allowed = {
-  arena: ['home', 'live', 'current-live', 'choose-tournament', 'brackets', 'teams', 'ai-assistant', 'support', 'settings', 'schedule', 'integrity', 'operations', 'standings'],
-  admin: ['overview', 'users', 'games', 'reports', 'logs', 'schedule', 'bracket-studio', 'ai-assistant', 'live-stream', 'match-monitor', 'operations', 'support', 'settings'],
+  arena: ['home', 'live', 'current-live', 'choose-tournament', 'brackets', 'teams', 'ai-assistant', 'support', 'settings', 'schedule', 'integrity', 'standings'],
+  admin: ['overview', 'users', 'games', 'reports', 'logs', 'schedule', 'bracket-studio', 'ai-assistant', 'live-stream', 'match-monitor', 'teams', 'support', 'settings'],
 };
 export type Workspace = keyof typeof allowed;
+/** A facilitator's admin shell: Anti-cheat plus their own account pages. */
+export const FACILITATOR_TABS = ['match-monitor', 'support', 'settings'];
 
 function resolveTab(scope: Workspace, tab: string) {
-  return scope === 'admin' && tab === 'integrity' ? 'reports' : tab;
+  // 'operations' was the Tournament desk, replaced by Teams.
+  return scope === 'admin' && tab === 'integrity' ? 'reports' : scope === 'admin' && tab === 'operations' ? 'teams' : tab;
 }
 
 function canonicalHash(hash: string) {

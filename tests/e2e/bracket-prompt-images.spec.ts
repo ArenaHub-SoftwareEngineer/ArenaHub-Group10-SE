@@ -67,6 +67,8 @@ test('the MLBB prompt keeps its matchups and carries a team image into the publi
   expect(file.readUInt32BE(16) * 9).toBe(file.readUInt32BE(20) * 16);
   await download.saveAs(testInfo.outputPath('mlbb-bracket.png'));
 
+  await page.getByRole('button', { name: 'All brackets' }).click();
+  await page.getByRole('tab', { name: /^Drafts/ }).click();
   const row = page.locator('.studio-bracket-library-row').filter({ hasText: 'MLBB 16-TEAM BO3 CHAMPIONSHIP' }).first();
   await expect(row).toBeVisible({ timeout: 25_000 });
   const published = await page.evaluate(async () => {

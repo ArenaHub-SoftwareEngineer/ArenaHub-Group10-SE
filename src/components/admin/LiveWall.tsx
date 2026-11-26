@@ -8,11 +8,12 @@ import { ConnectionQuality, ConnectionState, Track, type Participant } from 'liv
 import { antiCheatCall } from '../../lib/antiCheatApi';
 import { errorMessage } from '../../lib/errors';
 import { firestoreService } from '../../lib/firestore';
-import { playWhep } from '../../lib/whep';
+import { RelayVideo, type RelayFeed } from './RelayVideo';
 import type { Match } from '../../lib/types';
 import type { MonitorGame } from '../../lib/integrityRisk';
 import { Modal } from '../ui/Modal';
-import { Grid, Maximize2, Minimize2, MonitorOff, MonitorUp, Pause, Play, ShieldAlert, Users, Video, X } from '../ui/Icons';
+import { Flag, Grid, Maximize2, Minimize2, MonitorOff, MonitorUp, Pause, Play, Users, Video, X } from '../ui/Icons';
+import { snapshotOf } from './ReportDialog';
 
 export interface WallSeat { name: string; team: string }
 export interface WallMatch {
@@ -20,8 +21,6 @@ export interface WallMatch {
   status?: Match['status']; hasBroadcast?: boolean; seats: WallSeat[]; order: string;
 }
 interface RoomState { paused: boolean; by?: string; at?: number; note?: string }
-/** An iPhone screen arrives from the relay (MediaMTX) instead of LiveKit, because Safari cannot share the screen. */
-interface RelayFeed { url: string; auth: React.MutableRefObject<{ user: string; pass: string }> }
 interface RelayStream { path: string; sessionId: string; name: string; team: string }
 interface Tile { id: string; name: string; team: string; color: string; sessionId?: string; participant?: Participant; track?: TrackReference; relay?: RelayFeed }
 interface Team { name: string; color: string; tiles: Tile[] }
@@ -103,91 +102,22 @@ function Signal({ participant }: { participant: Participant }) {
   return <span className="lw-weak">{quality === ConnectionQuality.Lost ? 'Connection lost' : 'Weak connection'}</span>;
 }
 
-type RelayState = 'connecting' | 'live' | 'retrying';
-/**
- * One relay connection per iPhone, shared by every tile that shows it. Spotlight and full screen remount the tile;
- * without sharing, each remount would start a new connection and show black until the next key frame.
- */
-interface SharedRelay { users: number; state: RelayState; stream?: MediaStream; close?: () => void; busy: boolean; retry?: number; idle?: number; listeners: Set<() => void> }
-const relayConnections = new WeakMap<RelayFeed, SharedRelay>();
-function relayConnection(feed: RelayFeed) {
-  let entry = relayConnections.get(feed);
-  if (entry) return entry;
-  const shared: SharedRelay = { users: 0, state: 'connecting', busy: false, listeners: new Set() };
-  relayConnections.set(feed, shared);
-  const set = (state: RelayState) => { shared.state = state; shared.listeners.forEach(listener => listener()); };
-  const fail = () => {
-    shared.stream = undefined; shared.close = undefined;
-    if (!shared.users) return;
-    set('retrying');
-    shared.retry = window.setTimeout(() => { shared.retry = undefined; start(); }, 3000);
-  };
-  function start() {
-    if (shared.busy || shared.stream || shared.retry !== undefined) return;
-    shared.busy = true;
-    const { user, pass } = feed.auth.current;
-    playWhep(feed.url, user, pass, fail)
-      .then(session => {
-        shared.busy = false;
-        if (!shared.users) { session.close(); return; }
-        shared.stream = session.stream; shared.close = session.close;
-        set('live');
-      })
-      .catch(() => { shared.busy = false; fail(); });
-  }
-  entry = Object.assign(shared, {
-    acquire(listener: () => void) {
-      shared.users++; shared.listeners.add(listener);
-      window.clearTimeout(shared.idle);
-      start();
-      return () => {
-        shared.users--; shared.listeners.delete(listener);
-        // Wait a moment: a remounting tile picks the same connection up again.
-        if (!shared.users) shared.idle = window.setTimeout(() => {
-          if (shared.users) return;
-          window.clearTimeout(shared.retry); shared.retry = undefined;
-          shared.close?.(); shared.stream = undefined; shared.close = undefined; shared.state = 'connecting';
-        }, 3000);
-      };
-    },
-  });
-  return entry;
-}
-
-/** One iPhone screen from the relay. It reconnects by itself if the phone's connection drops for a moment. */
-function RelayVideo({ feed, label }: { feed: RelayFeed; label: string }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const [state, setState] = useState<RelayState>('connecting');
-  useEffect(() => {
-    const connection = relayConnection(feed) as SharedRelay & { acquire: (listener: () => void) => () => void };
-    const sync = () => {
-      setState(connection.state);
-      if (video.current && video.current.srcObject !== (connection.stream || null)) video.current.srcObject = connection.stream || null;
-    };
-    const release = connection.acquire(sync);
-    sync();
-    return release;
-  }, [feed]);
-  return <>
-    <video ref={video} className="lw-video" autoPlay muted playsInline aria-label={label} />
-    {state !== 'live' && <span className="lw-weak">{state === 'connecting' ? 'Connecting to iPhone…' : 'Reconnecting to iPhone…'}</span>}
-  </>;
-}
-
 /** iPhone screens that are live in this match. Polled, because the relay has no push channel to the wall. */
 function useRelayStreams(key: string) {
   const [streams, setStreams] = useState<RelayStream[]>([]);
   const [web, setWeb] = useState('');
+  const [hls, setHls] = useState(false);
   // Passes are renewed on every poll, but a playing stream keeps its connection, so they live in a ref.
   const auth = useRef({ user: '', pass: '' });
   useEffect(() => {
     let live = true, timer: number | undefined;
     const poll = () => {
-      antiCheatCall<{ configured: boolean; web?: string; user?: string; pass?: string; streams: RelayStream[] }>(`/screenwall/${key}/relay`)
+      antiCheatCall<{ configured: boolean; web?: string; hls?: boolean; user?: string; pass?: string; streams: RelayStream[] }>(`/screenwall/${key}/relay`)
         .then(body => {
           if (!live || !body.configured) return;
           auth.current = { user: body.user || '', pass: body.pass || '' };
           setWeb(body.web || '');
+          setHls(!!body.hls);
           setStreams(current => {
             const next = body.streams || [];
             return current.length === next.length && current.every((item, index) => item.path === next[index].path && item.name === next[index].name) ? current : next;
@@ -204,16 +134,16 @@ function useRelayStreams(key: string) {
   return useMemo(() => streams.map(stream => {
     const url = `${web}/${stream.path}/whep`;
     let feed = feeds.current.get(url);
-    if (!feed) { feed = { url, auth }; feeds.current.set(url, feed); }
+    if (!feed) { feed = { url, hls: hls ? `${web}/${stream.path}/index.m3u8` : undefined, auth }; feeds.current.set(url, feed); }
     return { ...stream, feed };
-  }), [streams, web]);
+  }), [streams, web, hls]);
 }
 
 interface TileProps {
   tile: Tile; spotlight: boolean; maximized: boolean; compact?: boolean; size?: number;
-  onSpotlight: () => void; onMaximize: () => void; onOpenSession: (id: string) => void;
+  onSpotlight: () => void; onMaximize: () => void; onReport: (tile: Tile) => void;
 }
-function ScreenTile({ tile, spotlight, maximized, compact, size, onSpotlight, onMaximize, onOpenSession }: TileProps) {
+function ScreenTile({ tile, spotlight, maximized, compact, size, onSpotlight, onMaximize, onReport }: TileProps) {
   const platform = tile.relay ? PLATFORM.ios : PLATFORM[tile.participant?.attributes?.platform || ''];
   const sharing = !!tile.track || !!tile.relay;
   const state = sharing ? 'live' : tile.participant ? 'connected' : 'offline';
@@ -238,7 +168,7 @@ function ScreenTile({ tile, spotlight, maximized, compact, size, onSpotlight, on
     <button type="button" className="lw-hit" onClick={tap}
       aria-label={maximized ? `Exit full screen: ${tile.name}` : spotlight ? `Back to grid from ${tile.name}` : `Spotlight ${tile.name}`} aria-pressed={maximized ? undefined : spotlight} />
     {!compact && <div className="lw-actions">
-      {tile.sessionId && <button type="button" onClick={() => onOpenSession(tile.sessionId!)} aria-label={`Review ${tile.name}`} title="Review player"><ShieldAlert size={16} aria-hidden="true" /></button>}
+      {tile.sessionId && <button type="button" onClick={() => onReport(tile)} aria-label={`Report ${tile.name}`} title="Report this player (takes a snapshot)"><Flag size={16} aria-hidden="true" /></button>}
       {!maximized && <button type="button" onClick={onMaximize} aria-label={`Full screen: ${tile.name}`} title="Full screen"><Maximize2 size={16} aria-hidden="true" /></button>}
     </div>}
     <div className="lw-name">
@@ -250,7 +180,9 @@ function ScreenTile({ tile, spotlight, maximized, compact, size, onSpotlight, on
   </div>;
 }
 
-function Wall({ match, manage, facilitators, onBack, onEditFacilitators, onOpenSession }: WallProps) {
+function Wall({ match, manage, facilitators, onBack, onEditFacilitators, onReport }: WallProps) {
+  // Report grabs the frame on screen right now, before anything else changes, and hands it to the report form.
+  const report = (tile: Tile) => { if (tile.sessionId) void snapshotOf(tile.name).then(file => onReport(tile.sessionId!, file)); };
   const participants = useParticipants();
   const screens = useTracks([{ source: Track.Source.ScreenShare, withPlaceholder: false }]) as TrackReference[];
   const connection = useConnectionState();
@@ -323,7 +255,7 @@ function Wall({ match, manage, facilitators, onBack, onEditFacilitators, onOpenS
   useEffect(() => { if (maximized && !big) setMaximized(''); }, [maximized, big]);
 
   const tileProps = (tile: Tile, extra: Partial<TileProps> = {}): TileProps => ({
-    tile, onOpenSession, spotlight: tile === focused, maximized: tile.id === maximized,
+    tile, onReport: report, spotlight: tile === focused, maximized: tile.id === maximized,
     onSpotlight: () => setSpotlight(current => current === tile.id ? '' : tile.id), onMaximize: () => toggleMaximize(tile), ...extra,
   });
   const status = connection === ConnectionState.Connected ? `${sharing} of ${Math.max(tiles.length, match.seats.length)} sharing`
@@ -363,7 +295,7 @@ function Wall({ match, manage, facilitators, onBack, onEditFacilitators, onOpenS
         {document.fullscreenEnabled && <button type="button" className="lw-ctl" onClick={() => nativeFull ? (setMaximized(''), exitNative()) : enterNative()}
           aria-label={nativeFull ? 'Exit full screen' : 'Full screen'} title={nativeFull ? 'Exit full screen' : 'Full screen'}>{nativeFull ? <Minimize2 size={20} aria-hidden="true" /> : <Maximize2 size={20} aria-hidden="true" />}</button>}
         {manage && onEditFacilitators && <button type="button" className="lw-ctl" onClick={onEditFacilitators} aria-label="Facilitators" title="Facilitators"><Users size={20} aria-hidden="true" /></button>}
-        {focused?.sessionId && <button type="button" className="lw-ctl" onClick={() => onOpenSession(focused.sessionId!)} aria-label={`Review ${focused.name}`} title="Review player"><ShieldAlert size={20} aria-hidden="true" /></button>}
+        {focused?.sessionId && <button type="button" className="lw-ctl" onClick={() => report(focused)} aria-label={`Report ${focused.name}`} title="Report this player (takes a snapshot)"><Flag size={20} aria-hidden="true" /></button>}
       </div>
       <button type="button" className={`lw-ctl lw-ctl-main ${state.paused ? 'is-resume' : 'is-pause'}`} onClick={() => setPausing(true)}>
         {state.paused ? <><Play size={20} aria-hidden="true" /><span>Resume match</span></> : <><Pause size={20} aria-hidden="true" /><span>Pause match</span></>}
@@ -401,7 +333,7 @@ function PauseDialog({ match, state, onClose }: { match: WallMatch; state: RoomS
 
 interface WallProps {
   match: WallMatch; manage: boolean; facilitators: string[];
-  onBack: () => void; onEditFacilitators?: () => void; onOpenSession: (sessionId: string) => void;
+  onBack: () => void; onEditFacilitators?: () => void; onReport: (sessionId: string, snapshot: File | null) => void;
 }
 export default function LiveWall(props: WallProps) {
   const [access, setAccess] = useState<{ url: string; token: string }>();

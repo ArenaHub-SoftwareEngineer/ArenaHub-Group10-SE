@@ -27,12 +27,13 @@ export function GameArtworkTiles({ label, selected, opensDialog, onSelect, child
       <span className="artwork-media">
         <img src={game.image} alt="" />
         {game.id.startsWith('codm') && <span className="artwork-codm-logo" aria-hidden="true"/>}
+        {game.mode && <span className="artwork-mode-badge" aria-hidden="true">{game.id === 'codm-br' ? 'BR' : 'MP'}</span>}
         <span className="artwork-action" aria-hidden="true"><ArrowUpRight size={18}/></span>
       </span>
       {/* Every tile names its game in visible text, which is also its accessible name (label and visible text must match). */}
       <span className="artwork-caption">
-        <strong>{game.mode ? 'CODM' : game.name}</strong>
-        {(game.mode || meta?.[game.id]) && <small>{[game.mode, meta?.[game.id]].filter(Boolean).join(' · ')}</small>}
+        <strong>{game.name}</strong>
+        {meta?.[game.id] && <small>{meta[game.id]}</small>}
       </span>
     </button>)}
     {children}

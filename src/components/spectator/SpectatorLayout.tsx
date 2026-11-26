@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { User } from '../../lib/types';
-import { Home, CalendarDays, Trophy, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Flag, Settings2, HelpCircle } from '../ui/Icons';
+import { Home, CalendarDays, Trophy, PlaySquare, GitBranch, Users, ShieldCheck, Bot, Settings2, HelpCircle } from '../ui/Icons';
 import { hasCampusEmail } from '../../lib/campusAccess';
 import { CAMPUS_LOGO, CAMPUS_SHORT_NAME } from '../../lib/institution';
 import { AppShell, type ShellGroup, type ShellLive } from '../ui/AppShell';
@@ -39,18 +39,18 @@ export const SpectatorLayout: React.FC<SpectatorLayoutProps> = ({
       { id: 'standings', label: 'Standings', icon: Trophy, keywords: 'rankings table records' },
       { id: 'teams', label: 'Teams', title: 'Players & teams', icon: Users, keywords: 'rosters colleges ranks' },
     ] },
-    { label: 'Compete', items: [
-      { id: 'operations', label: 'Squad', title: 'My team', icon: Flag, keywords: 'registration check-in roster' },
+    // Guests who joined with a student invite watch and comment; competing and Arena AI are for campus accounts.
+    ...(campus ? [{ label: 'Compete', items: [
       { id: 'integrity', label: 'Anti-cheat', icon: ShieldCheck, keywords: 'required scan companion android windows fair play appeal' },
-    ] },
+    ] }] : []),
     { label: 'Account', items: [
-      { id: 'ai-assistant', label: 'Assistant', title: 'Arena AI', icon: Bot, keywords: 'assistant ask' },
+      ...(campus ? [{ id: 'ai-assistant', label: 'Assistant', title: 'Arena AI', icon: Bot, keywords: 'assistant ask' }] : []),
       { id: 'support', label: 'Help', title: 'Support', icon: HelpCircle, keywords: 'help faq' },
       { id: 'settings', label: 'Settings', icon: Settings2, keywords: 'profile preferences account' },
     ] },
-  ], []);
+  ], [campus]);
 
-  const status = isGuest ? 'Preview' : campus ? `${CAMPUS_SHORT_NAME} member` : 'Spectator';
+  const status = isGuest ? 'Preview' : campus ? `${CAMPUS_SHORT_NAME} member` : 'Guest viewer';
   return <div className="spectator-shell">
     <AppShell workspace="arena" context={campus ? CAMPUS_SHORT_NAME : undefined} contextLogo={campus ? CAMPUS_LOGO || undefined : undefined} groups={groups} live={live} navLabel="Viewer navigation" isActive={isActive} onNavigate={onTabChange}
       mobileTabs={['home', 'current-live', 'choose-tournament', 'schedule']} pageKey={activeTab} widePage={['schedule', 'brackets', 'live'].includes(activeTab)}

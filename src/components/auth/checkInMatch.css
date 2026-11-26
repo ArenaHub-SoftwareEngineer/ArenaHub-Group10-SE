@@ -10,3 +10,17 @@
 .checkin-matches strong { font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .checkin-matches small { color: var(--text-secondary); font-size: var(--fs-xs); }
 .checkin-matches small.is-live { color: var(--live); font-weight: 600; }
+
+/* Match check-in: the match, the rotating code, and the roster seat found from the school email. */
+.checkin-match-card { display: grid; gap: 2px; width: 100%; padding: 12px 14px; margin-bottom: 14px; text-align: left; border: 1px solid var(--border); border-radius: var(--radius-btn, 8px); background: var(--surface-raised, var(--surface)); }
+.checkin-match-card small { color: var(--text-secondary); font-size: var(--fs-xs); }
+.checkin-match-card strong { overflow-wrap: anywhere; }
+.checkin-code { font-size: 1.6rem; letter-spacing: .3em; text-align: center; font-variant-numeric: tabular-nums; }
+.checkin-identity { display: grid; gap: 10px; }
+.checkin-identity .field-hint, .checkin-identity .field-error { margin: 0; }
+.checkin-seat { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--brand-border); border-radius: var(--radius-btn, 8px); background: var(--brand-soft); }
+.checkin-seat strong { font-size: var(--fs-lg); overflow-wrap: anywhere; }
+.checkin-seat span { color: var(--text-secondary); font-size: var(--fs-sm); }
+
+/* Staff test check-in without sign-in: always say the scan will not count. */
+.checkin-test-note { width: 100%; text-align: left; line-height: 1.6; }

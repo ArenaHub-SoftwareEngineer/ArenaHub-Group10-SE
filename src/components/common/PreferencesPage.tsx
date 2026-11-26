@@ -100,7 +100,7 @@ export function PreferencesPage({ user, onSignIn, inDialog = false }: { user: Us
     } finally { setBusy(false); }
   };
   const row = (title: string, detail: string, next: Editor, label = 'Edit') => <div className="preference-row"><div><strong>{title}</strong><p>{detail}</p></div><button className="settings-edit" onClick={() => open(next)}>{label}<Pencil size={13} /></button></div>;
-  const canInvite = firebaseUser?.emailVerified && ahUser?.status === 'active' && ahUser.spectatorInviteApproved && hasCampusEmail(firebaseUser.email);
+  const canInvite = firebaseUser?.emailVerified && ahUser?.status === 'active' && ahUser.spectatorInviteApproved !== false && hasCampusEmail(firebaseUser.email);
   const sections = [
     { id: 'profile', label: 'Profile', icon: UserRound },
     ...(!guest ? [{ id: 'security', label: 'Sign-in & security', icon: ShieldCheck }] : []),

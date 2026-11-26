@@ -1,0 +1,184 @@
+/*
+ * Admin Teams page (TeamsManager). Crest grid, then one college: 3D medallion, game tabs, roster.
+ * Built on the admin poster system (adminPoster.css). --crest is the college colour from institution.config.json;
+ * it tints the 3D and hairlines only, never text. Rules kept: no left accent bars, full 1px borders, tokens only.
+ */
+.app-shell .teams-page { --tm-ease: cubic-bezier(.16, 1, .3, 1); }
+
+/* ================= Crest grid ================= */
+.app-shell .tm-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: clamp(10px, 1.4vw, 18px); perspective: 1200px; }
+.app-shell .tm-grid > li { animation: tm-in .6s calc(var(--i, 0) * 45ms) var(--tm-ease) both; min-width: 0; }
+@keyframes tm-in { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
+
+.app-shell .tm-card {
+  --rx: 0deg; --ry: 0deg; --mx: 50%; --my: 30%;
+  position: relative; width: 100%; display: grid; justify-items: center; gap: 14px; padding: clamp(20px, 2.4vw, 30px) 16px 18px;
+  border: 1px solid var(--border); border-radius: calc(var(--radius) + 6px); overflow: hidden; cursor: pointer; color: inherit; text-align: center;
+  background:
+    radial-gradient(120% 70% at 50% 0%, color-mix(in srgb, var(--crest) 16%, transparent), transparent 70%),
+    var(--surface);
+  transform: rotateX(var(--rx)) rotateY(var(--ry)); transform-style: preserve-3d;
+  transition: transform .5s var(--tm-ease), border-color .2s ease, box-shadow .3s ease;
+}
+.app-shell .tm-card:hover { border-color: color-mix(in srgb, var(--crest) 55%, var(--border-strong)); box-shadow: 0 18px 40px -22px rgb(0 0 0 / .7); transition: transform .12s linear, border-color .2s ease, box-shadow .3s ease; }
+.app-shell .tm-card:active { transform: rotateX(var(--rx)) rotateY(var(--ry)) scale(.985); }
+.app-shell .tm-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.app-shell .tm-card-glare { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s ease;
+  background: radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / .1), transparent 45%); }
+.app-shell .tm-card:hover .tm-card-glare { opacity: 1; }
+
+.app-shell .tm-badge {
+  position: relative; width: clamp(108px, 11vw, 150px); aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  background: radial-gradient(circle at 35% 30%, var(--surface-elevated), var(--surface-soft));
+  border: 1px solid color-mix(in srgb, var(--crest) 50%, var(--border));
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--crest) 9%, transparent), 0 14px 30px -14px rgb(0 0 0 / .8);
+  transform: translateZ(40px); animation: tm-float 5s ease-in-out infinite; animation-delay: calc(var(--i, 0) * -.37s);
+}
+/* A logo fills the whole circle; the circle's own edge trims the corners. */
+.app-shell .tm-badge img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.app-shell .tm-badge b { font-size: clamp(26px, 2.6vw, 36px); font-weight: 1000; letter-spacing: -.04em; color: var(--text-primary); }
+.app-shell .tm-badge.is-empty { border-style: dashed; }
+.app-shell .tm-badge-shine { position: absolute; inset: -20%; pointer-events: none; transform: translateX(-120%) rotate(25deg);
+  background: linear-gradient(90deg, transparent 35%, rgb(255 255 255 / .28) 50%, transparent 65%);
+  animation: tm-shine 5.5s ease-in-out infinite; animation-delay: calc(var(--i, 0) * .41s); }
+.app-shell .tm-card:hover .tm-badge-shine { animation-duration: 1.4s; }
+@keyframes tm-float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -5px; } }
+@keyframes tm-shine { 0%, 70% { transform: translateX(-120%) rotate(25deg); } 90%, 100% { transform: translateX(120%) rotate(25deg); } }
+
+.app-shell .tm-card-name { display: grid; gap: 2px; min-width: 0; max-width: 100%; transform: translateZ(24px); }
+.app-shell .tm-card-name strong { font-size: var(--fs-lg); font-weight: 800; letter-spacing: -.02em; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-shell .tm-card-name small { font-size: var(--fs-xs); font-weight: 600; color: var(--text-muted); }
+.app-shell .tm-card-games { display: flex; gap: 6px; justify-content: center; transform: translateZ(16px); }
+.app-shell .tm-game-dot { position: relative; width: 26px; height: 26px; border-radius: 7px; overflow: hidden; border: 1px solid var(--border-strong); background: var(--surface-soft); }
+.app-shell .tm-game-dot img { width: 100%; height: 100%; object-fit: cover; opacity: .45; filter: grayscale(1); }
+.app-shell .tm-game-dot::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); box-shadow: 0 0 0 2px var(--surface); }
+.app-shell .tm-game-dot.is-ready { border-color: var(--success-border); }
+.app-shell .tm-game-dot.is-ready img { opacity: 1; filter: none; }
+.app-shell .tm-game-dot.is-ready::after { background: var(--success); }
+.app-shell .tm-game-dot.is-partial img { opacity: .8; filter: none; }
+.app-shell .tm-game-dot.is-partial::after { background: var(--warning); }
+
+/* ================= One college ================= */
+.app-shell .tm-detail { display: grid; gap: clamp(16px, 2vw, 24px); min-width: 0; }
+.app-shell .tm-back { justify-self: start; }
+.app-shell .tm-hero {
+  position: relative; display: grid; grid-template-columns: minmax(220px, 340px) 1fr; align-items: center; gap: clamp(16px, 3vw, 40px);
+  padding: clamp(12px, 2vw, 24px); border: 1px solid var(--border); border-radius: calc(var(--radius) + 8px); overflow: hidden;
+  background: radial-gradient(70% 120% at 15% 50%, color-mix(in srgb, var(--crest) 18%, transparent), transparent 70%), var(--surface);
+}
+.app-shell .tm-hero-crest { position: relative; width: 100%; aspect-ratio: 1; max-width: 340px; }
+.app-shell .tm-crest3d { position: absolute; inset: 0; }
+.app-shell .tm-crest3d-flat {
+  position: absolute; inset: 14%; border-radius: 50%; display: grid; place-items: center; overflow: hidden; transition: opacity .5s ease;
+  background: radial-gradient(circle at 35% 30%, #2c2c33, #101014); border: 6px solid var(--crest);
+}
+.app-shell .tm-crest3d-flat img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.app-shell .tm-crest3d-flat b { font-size: clamp(36px, 5vw, 64px); font-weight: 1000; color: #f4f4f6; letter-spacing: -.04em; }
+.app-shell .tm-crest3d.is-ready .tm-crest3d-flat { opacity: 0; }
+.app-shell .tm-crest3d .adp-stage-canvas canvas { opacity: 0; transition: opacity .6s ease; }
+.app-shell .tm-crest3d.is-ready .adp-stage-canvas canvas { opacity: 1; }
+
+.app-shell .tm-hero-text { display: grid; gap: 10px; min-width: 0; align-content: center; animation: adp-rise .7s .1s var(--tm-ease) both; }
+.app-shell .tm-hero-college { font-size: var(--fs-sm); font-weight: 600; color: var(--text-muted); }
+.app-shell .tm-hero-text h2 { margin: 0; font-size: clamp(36px, 5vw, 76px); font-weight: 1000; line-height: .9; letter-spacing: -.05em; text-transform: uppercase; color: var(--text-primary); overflow-wrap: anywhere; }
+.app-shell .tm-hero-stat { margin: 0; font-size: var(--fs-md); color: var(--text-secondary); }
+.app-shell .tm-hero-stat strong { font-size: var(--fs-2xl); font-weight: 900; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.app-shell .tm-hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 4px; }
+.app-shell .tm-hero-hint { font-size: var(--fs-xs); color: var(--text-muted); }
+.app-shell .tm-logo-button { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.app-shell .tm-logo-button:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app-shell .tm-logo-button input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.app-shell .tm-logo-button input:disabled { cursor: not-allowed; }
+.app-shell .tm-logo-button.is-busy { cursor: progress; }
+.app-shell .tm-logo-remove { display: inline-flex; align-items: center; gap: 8px; }
+.app-shell .tm-logo-remove:not(:disabled):hover { color: var(--danger, #ef4444); border-color: color-mix(in srgb, var(--danger, #ef4444) 50%, var(--border)); }
+
+/* Game tabs: picture cards */
+.app-shell .tm-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; }
+.app-shell .tm-game {
+  position: relative; isolation: isolate; display: grid; align-content: end; gap: 8px; min-height: 112px; padding: 12px 14px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-soft); color: inherit; text-align: left; cursor: pointer;
+  transition: transform .25s var(--tm-ease), border-color .2s ease;
+}
+.app-shell .tm-game-art { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; opacity: .35; filter: grayscale(.6); transition: opacity .3s ease, filter .3s ease, transform .6s var(--tm-ease); }
+.app-shell .tm-game::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgb(10 10 12 / .1), rgb(10 10 12 / .88)); }
+.app-shell .tm-game:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.app-shell .tm-game:hover .tm-game-art { opacity: .6; transform: scale(1.04); }
+.app-shell .tm-game[aria-selected=true] { border-color: var(--text-primary); box-shadow: inset 0 0 0 1px var(--text-primary); }
+.app-shell .tm-game[aria-selected=true] .tm-game-art { opacity: .75; filter: none; }
+.app-shell .tm-game:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app-shell .tm-game-text { display: grid; gap: 1px; min-width: 0; }
+.app-shell .tm-game-text strong { font-size: var(--fs-md); font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-shell .tm-game-text small { font-size: var(--fs-xs); color: rgb(255 255 255 / .72); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-shell .tm-game-status { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: rgb(10 10 12 / .7); color: rgb(255 255 255 / .8); border: 1px solid rgb(255 255 255 / .18); }
+.app-shell .tm-game.is-ready .tm-game-status { color: var(--success); border-color: var(--success-border); }
+.app-shell .tm-game.is-partial .tm-game-status { color: var(--warning); border-color: var(--warning-border); }
+
+/* Roster */
+.app-shell .tm-roster { min-width: 0; animation: adp-rise .45s var(--tm-ease) both; }
+.app-shell .teams-loading { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+.app-shell .tm-form { display: grid; gap: 14px; }
+.app-shell .tm-roster-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.app-shell .tm-roster-head h3 { margin: 0; font-size: var(--fs-xl); font-weight: 800; color: var(--text-primary); }
+.app-shell .tm-roster-head p { margin: 0; font-size: var(--fs-sm); color: var(--text-muted); }
+.app-shell .tm-players { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 480px), 1fr)); gap: 10px; }
+.app-shell .tm-player {
+  display: grid; grid-template-columns: 76px 1fr 32px; gap: 14px; align-items: start; padding: 14px; min-width: 0;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  animation: tm-in .45s calc(var(--i, 0) * 40ms) var(--tm-ease) both; transition: border-color .2s ease;
+}
+.app-shell .tm-player:focus-within { border-color: var(--border-strong); }
+.app-shell .tm-photo {
+  position: relative; width: 76px; height: 76px; border-radius: 50%; overflow: hidden; display: grid; place-content: center; justify-items: center; gap: 2px;
+  background: var(--surface-soft); border: 1px dashed var(--border-strong); color: var(--text-muted); cursor: pointer; font-size: 11px; font-weight: 600;
+  transition: border-color .2s ease, color .2s ease, transform .25s var(--tm-ease);
+}
+.app-shell .tm-photo:hover { color: var(--text-primary); border-color: var(--text-muted); transform: scale(1.04); }
+.app-shell .tm-photo:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.app-shell .tm-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.app-shell .tm-photo:has(img) { border: 2px solid color-mix(in srgb, var(--crest) 60%, var(--border)); }
+.app-shell .tm-photo input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.app-shell .tm-player-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; min-width: 0; }
+.app-shell .tm-player-fields label { display: grid; gap: 4px; font-size: var(--fs-xs); color: var(--text-secondary); min-width: 0; }
+.app-shell .tm-player-fields label small { color: var(--text-muted); font-weight: 400; font-size: inherit; margin-left: 4px; }
+.app-shell .tm-player-fields :is(input, select) { height: 40px; min-height: 40px; box-sizing: border-box; width: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-soft); color: var(--text-primary); padding: 0 10px; font-size: var(--fs-sm); }
+.app-shell .tm-player-fields :is(input, select):focus { outline: 2px solid var(--focus); outline-offset: 0; border-color: transparent; }
+.app-shell .tm-remove { align-self: start; }
+.app-shell .tm-add {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 104px; border: 1px dashed var(--border-strong); border-radius: var(--radius);
+  background: transparent; color: var(--text-secondary); font-size: var(--fs-sm); font-weight: 700; cursor: pointer; transition: border-color .2s ease, color .2s ease, background .2s ease;
+}
+.app-shell .tm-add:hover { color: var(--text-primary); border-color: var(--text-muted); background: var(--surface-soft); }
+.app-shell .tm-savebar {
+  position: relative; bottom: 12px; z-index: 5; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(10px);
+}
+.app-shell .tm-savebar > span { margin-right: auto; font-size: var(--fs-sm); color: var(--text-muted); }
+.app-shell .tm-savebar { bottom: 0; }
+.app-shell .tm-savebar.is-dirty { position: sticky; bottom: 12px; border-color: var(--warning-border); box-shadow: 0 12px 30px -12px rgb(0 0 0 / .6); }
+.app-shell .tm-savebar.is-dirty > span { color: var(--warning); font-weight: 600; }
+
+@media (max-width: 760px) {
+  .app-shell .tm-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-shell .tm-card { padding: 18px 10px 14px; gap: 10px; }
+  .app-shell .tm-badge { width: 92px; }
+  .app-shell .tm-card-name strong { font-size: var(--fs-md); }
+  .app-shell .tm-game-dot { width: 22px; height: 22px; }
+  .app-shell .tm-hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .app-shell .tm-hero-crest { max-width: 240px; }
+  .app-shell .tm-hero-actions { justify-content: center; }
+  .app-shell .tm-games { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .app-shell .tm-game { flex: 0 0 72%; min-height: 96px; scroll-snap-align: start; }
+  .app-shell .tm-player { grid-template-columns: 60px 1fr 28px; gap: 10px; padding: 10px; }
+  .app-shell .tm-photo { width: 60px; height: 60px; }
+  .app-shell .tm-player-fields { grid-template-columns: 1fr; }
+  .app-shell .tm-player-fields :is(input, select) { font-size: var(--fs-md); min-height: 44px; }
+  .app-shell .tm-savebar.is-dirty { bottom: calc(var(--tabbar-h, 64px) + 8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell :is(.tm-grid > li, .tm-badge, .tm-badge-shine, .tm-player, .tm-roster, .tm-hero-text) { animation: none; }
+  .app-shell .tm-card { transform: none; }
+}
+:root[data-motion=reduced] .app-shell :is(.tm-grid > li, .tm-badge, .tm-badge-shine, .tm-player, .tm-roster, .tm-hero-text) { animation: none; }

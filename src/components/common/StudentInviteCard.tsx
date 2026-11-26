@@ -1,11 +1,11 @@
 import { CAMPUS_SHORT_NAME } from '../../lib/institution';
 import React, { useEffect, useState } from 'react';
-import { currentStudentInvite } from '../../lib/campusAccess';
+import { currentStudentInvite, formatInviteCode } from '../../lib/campusAccess';
 import type { User } from 'firebase/auth';
 import { QrCode } from '../ui/Icons';
 
 export function StudentInviteCard({ user }: { user: User }) {
-  const [invite, setInvite] = useState<{ url: string; expiresAt: number; image: string } | null>(null);
+  const [invite, setInvite] = useState<{ url: string; code: string; expiresAt: number; image: string } | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState('');
@@ -39,13 +39,15 @@ export function StudentInviteCard({ user }: { user: User }) {
 
   return <section className="arena-panel student-invite">
     <h2 className="settings-section-title"><QrCode size={17} /> Spectator invitation</h2>
-    <p className="studio-muted">Show this QR to someone you want to invite to watch. It refreshes every 20 minutes.</p>
+    <p className="studio-muted">Show this QR, or read out the code, to someone you want to invite. Guests can watch matches and comment in chat. It refreshes every 20 minutes.</p>
     {error ? <>
       <p className="module-error" role="alert">{error}</p>
       <button type="button" className="arena-outline" onClick={() => setAttempt(value => value + 1)}>Retry</button>
     </> : invite && remaining > 0 ? <div className="student-invite-content">
       <img width="224" height="224" src={invite.image} alt="Scan this QR to open ArenaHub spectator sign-up" />
       <div>
+        <p className="studio-muted">Invite code</p>
+        <p className="student-invite-code" aria-label={`Invite code ${invite.code.split('').join(' ')}`}>{formatInviteCode(invite.code)}</p>
         <p className="studio-muted">Refreshes in</p>
         <p className="student-invite-timer" role="timer">{Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}</p>
         <button type="button" className="arena-outline" onClick={async () => {

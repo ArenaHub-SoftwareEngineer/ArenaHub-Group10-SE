@@ -1,7 +1,7 @@
 import { before, after, test } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp, collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, writeBatch, serverTimestamp, collection, getDocs, query, where, Timestamp, deleteField } from 'firebase/firestore';
 
 let env;
 const projectId = 'demo-arenahub';
@@ -89,7 +89,7 @@ test('tournament publishing requires verified active staff; the legacy bracket d
   await assertSucceeds(getDoc(doc(db('other', { email: 'other@wmsu.edu.ph' }), 'arenahub', 'brackets')));
 });
 
-test('approved students issue QR invitations for password spectators; external Google accounts stay blocked', async () => {
+test('verified campus students issue QR invitations without admin approval for password spectators; external Google accounts stay blocked', async () => {
   const student = db('other', { email: 'other@wmsu.edu.ph' });
   const personal = db('reporter', { email: 'reporter@example.com', firebase: { sign_in_provider: 'google.com' } });
   const password = db('reporter', { email: 'reporter@example.com', firebase: { sign_in_provider: 'password' } });
@@ -107,13 +107,14 @@ test('approved students issue QR invitations for password spectators; external G
     email: 'reporter@example.com', invite, admittedAt: serverTimestamp(),
   });
 
+  await env.withSecurityRulesDisabled(async context => updateDoc(doc(context.firestore(), 'users', 'other'), { spectatorInviteApproved: false }));
   await assertFails(issue(student, 'other', token));
   await assertFails(updateDoc(doc(student, 'users', 'other'), { spectatorInviteApproved: true }));
   await assertFails(issue(personal, 'reporter', token));
   await assertFails(getDoc(doc(personal, 'tournaments', 'rules-t1')));
   await env.withSecurityRulesDisabled(async context => {
     const store = context.firestore();
-    await updateDoc(doc(store, 'users', 'other'), { spectatorInviteApproved: true, email: 'other@wmsu.edu.ph', emailVerified: true, name: 'Test Student' });
+    await updateDoc(doc(store, 'users', 'other'), { spectatorInviteApproved: deleteField(), email: 'other@wmsu.edu.ph', emailVerified: true, name: 'Test Student' });
     const createdAt = Timestamp.fromMillis(Date.now() - 21 * 60 * 1000);
     await setDoc(doc(store, 'studentInviteSlots', 'other'), { token: expired, createdAt });
     await setDoc(doc(store, 'campusInvites', expired), { issuer: 'other', createdAt });
@@ -146,10 +147,18 @@ test('approved students issue QR invitations for password spectators; external G
   await assertFails(message(student, 'other', 'spoofed', 'Someone Else'));
   await assertFails(message(student, 'other', 'email-exposed', 'Anonymous', { email: 'other@wmsu.edu.ph' }));
   await assertFails(message(personal, 'reporter', 'spectator', 'Anonymous'));
+  // A guest admitted with a student invite can comment.
+  await assertSucceeds(message(password, 'reporter', 'guest-comment', 'Anonymous'));
   await assertFails(getDoc(doc(personal, 'matchChat', 'test-match', 'messages', 'anonymous')));
   await assertFails(getDoc(doc(personal, 'matchChat', 'test-match', 'authors', 'anonymous')));
   await assertSucceeds(getDoc(doc(password, 'matchChat', 'test-match', 'messages', 'anonymous')));
   await env.withSecurityRulesDisabled(async context => updateDoc(doc(context.firestore(), 'users', 'other'), { spectatorInviteApproved: false }));
   await assertFails(getDoc(doc(anonymous, 'campusInvites', token)));
+  // Short 10-character codes work like the old tokens; letters that look alike (I, L, O) are never used.
+  await env.withSecurityRulesDisabled(async context => updateDoc(doc(context.firestore(), 'users', 'other'), { spectatorInviteApproved: deleteField() }));
+  await env.withSecurityRulesDisabled(async context => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(context.firestore(), 'studentInviteSlots', 'other')); });
+  await assertFails(issue(student, 'other', '7K3QMX9PRI'));
+  await assertSucceeds(issue(student, 'other', '7K3QMX9PRT'));
+  await assertSucceeds(getDoc(doc(anonymous, 'campusInvites', '7K3QMX9PRT')));
   await assertFails(getDoc(doc(personal, 'tournaments', 'rules-t1')));
 });

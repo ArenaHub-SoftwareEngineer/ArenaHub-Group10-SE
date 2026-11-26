@@ -6,19 +6,26 @@ test.beforeEach(async ({ page }) => {
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
 });
 
-test('the check-in QR verifies the player account and hands off to iPhone inspection', async ({ page, browser }, testInfo) => {
-  test.setTimeout(90_000);
+test('anti-cheat check-in: game, then a match on the bracket, then a QR and an 8-digit code the player types after signing in', async ({ page, browser }, testInfo) => {
+  test.setTimeout(180_000);
   await signIn(page, ORGANIZER);
-  await openMonitorScans(page);
-  const room = page.getByRole('region', { name: 'Player check-in' });
-  const generate = room.getByRole('button', { name: 'Generate check-in QR' });
-  await expect(room.getByRole('heading', { name: 'Player check-in' })).toBeVisible({ timeout: 20000 });
-  // A prior run can leave a QR open in the isolated monitor database.
-  const close = room.getByRole('button', { name: 'Close check-in' });
-  await expect(generate.or(close)).toBeEnabled();
+  await page.evaluate(() => { location.hash = '#/admin/match-monitor'; });
+  await expect(page.getByRole('heading', { name: 'Anti-cheat', exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('tab', { name: 'Check-in' })).toHaveAttribute('aria-selected', 'true');
+  const section = page.getByRole('region', { name: 'Player check-in' });
+  await section.locator('[data-game="mlbb"]').click();
+  // The Bracket step shows the published bracket; a match with both teams set is picked by clicking its card.
+  const board = section.getByRole('region', { name: 'Bracket rounds' });
+  await expect(board).toBeVisible();
+  await board.locator('.viewer-bracket-match:not([disabled]):not([aria-disabled])').first().click();
+
+  // A prior run can leave this match's check-in open in the isolated monitor database.
+  const close = section.getByRole('button', { name: 'Close check-in' });
+  const open = section.getByRole('button', { name: /^Open check-in/ });
+  await expect(open.or(close)).toBeEnabled({ timeout: 20_000 });
   if (await close.isVisible()) { page.once('dialog', dialog => void dialog.accept()); await close.click(); }
-  await generate.click();
-  const qr = room.getByRole('img', { name: 'Player check-in QR' });
+  await open.click();
+  const qr = section.getByRole('img', { name: 'Check-in QR for this match' });
   await expect(qr).toBeVisible();
   const { pixels, width, height } = await qr.evaluate(async node => {
     const image = node as HTMLImageElement;
@@ -31,39 +38,85 @@ test('the check-in QR verifies the player account and hands off to iPhone inspec
   });
   const link = jsQR(new Uint8ClampedArray(pixels), width, height)?.data;
   expect(link).toMatch(/\/player-check-in\?room=[A-Za-z0-9_-]{12}$/);
-  expect(link).toBe(await room.getByRole('link', { name: 'Open check-in link' }).getAttribute('href'));
-  await expect(room.getByText(/choose a match/i)).toHaveCount(0);
+  expect(link).toBe(await section.getByRole('link', { name: 'Open check-in link' }).getAttribute('href'));
+  // The QR never carries the code: only people who can see the organizer screen can check in.
+  const code = ((await section.locator('.ac-code-digits').textContent()) || '').replace(/[^0-9]/g, '');
+  expect(code).toMatch(/^[0-9]{8}$/);
+  await expect(section.getByText(/New code in [0-3]:/)).toBeVisible();
+  await section.getByRole('button', { name: 'Show on screen' }).click();
+  await expect(page.getByRole('dialog').locator('.ac-code-digits')).toHaveText(code.slice(0, 4) + ' ' + code.slice(4));
+  await page.screenshot({ path: testInfo.outputPath('anti-cheat-projector.png') });
+  await page.keyboard.press('Escape');
 
-  const phone = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: IPHONE });
+  const phone = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: ANDROID });
   try {
     const player = await phone.newPage();
     await player.goto(link!);
+    // Signed out: the landing page says why, with sign-in already open. Signing in returns to this same link.
+    await expect(player.locator('.auth-entry-checkin')).toContainText('Sign in first to check in for', { timeout: 30_000 });
+    await expect(player.getByRole('dialog')).toBeVisible();
+    await player.screenshot({ path: testInfo.outputPath('player-sign-in-first.png') });
     await player.getByLabel('Email address').fill(STUDENT);
     await player.getByRole('textbox', { name: 'Password', exact: true }).fill(QA_PASSWORD);
     await player.getByRole('button', { name: 'Sign in with email' }).click();
-    await expect(player.getByText(STUDENT, { exact: true })).toBeVisible();
-    const name = `QA iPhone ${Date.now()}`;
-    await player.getByLabel('In-game name').fill(name);
-    await player.getByLabel('Team', { exact: true }).fill('QA Phoenix');
-    await player.getByLabel('College', { exact: true }).fill('College of Computing Studies');
-    await player.getByRole('combobox', { name: /^Game/ }).selectOption('codm-mp');
-    // Check-in asks which match the player is about to play (it decides who watches their live screen).
-    await player.getByRole('group', { name: 'Your match' }).getByRole('radio', { name: /Not on the schedule/ }).check();
-    await player.getByRole('button', { name: 'Continue to device scan' }).click();
-    await player.getByRole('button', { name: 'Agree and check in' }).click();
-    await expect(player.getByRole('heading', { name: 'You are checked in' })).toBeVisible();
-    await expect(player.getByRole('link', { name: 'Open screen sharing' })).toBeVisible();
-    const row = room.locator('.room-player').filter({ hasText: name });
-    await expect(row).toContainText('iPhone', { timeout: 20000 });
-    await expect(row).toContainText(STUDENT);
+    await expect(player.locator('.checkin-match-card')).toContainText(' vs ', { timeout: 20_000 });
+    await player.getByLabel('Check-in code').fill('00000000' === code ? '11111111' : '00000000');
+    await player.getByRole('button', { name: 'Continue' }).click();
+    await expect(player.getByRole('alert')).toContainText(/code is wrong or has changed/);
+    await player.getByLabel('Check-in code').fill(code);
+    await player.getByRole('button', { name: 'Continue' }).click();
+    // The QA student's email is not on the demo roster: they choose their name, or are told to ask the organizer.
+    await expect(player.getByRole('combobox', { name: /Your name/ }).or(player.getByText(/is not on this match roster/))).toBeVisible();
+    await player.screenshot({ path: testInfo.outputPath('player-match-check-in.png'), fullPage: true });
   } finally {
     await phone.close();
     page.once('dialog', dialog => void dialog.accept());
     await close.click();
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: testInfo.outputPath('player-check-in.png'), fullPage: true });
 });
+
+test('test check-in without sign-in: staff switch with a warning, and the player is told the scan is only a test', async ({ page, browser }, testInfo) => {
+  test.setTimeout(180_000);
+  await signIn(page, ORGANIZER);
+  await page.evaluate(() => { location.hash = '#/admin/match-monitor'; });
+  const section = page.getByRole('region', { name: 'Player check-in' });
+  await section.locator('[data-game="mlbb"]').click();
+  await section.locator('.lw-matches').getByRole('button').first().click();
+  const close = section.getByRole('button', { name: 'Close check-in' });
+  const open = section.getByRole('button', { name: /^Open check-in/ });
+  await expect(open.or(close)).toBeEnabled({ timeout: 20_000 });
+  if (await close.isVisible()) { page.once('dialog', dialog => void dialog.accept()); await close.click(); }
+  const toggle = section.getByRole('checkbox', { name: /Test check-in: no sign-in/ });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await page.screenshot({ path: testInfo.outputPath('anti-cheat-test-toggle.png'), fullPage: true });
+  // Staff confirm what the switch does; dismissing it opens nothing.
+  page.once('dialog', dialog => void dialog.dismiss());
+  await open.click();
+  await expect(close).toHaveCount(0);
+  page.once('dialog', dialog => { expect(dialog.message()).toContain('never count as a pass'); void dialog.accept(); });
+  await open.click();
+  await expect(section.getByText('Test check-in: sign-in is off.')).toBeVisible();
+  const link = await section.getByRole('link', { name: 'Open check-in link' }).getAttribute('href');
+
+  const phone = await browser.newContext({ viewport: { width: 375, height: 812 }, userAgent: ANDROID });
+  try {
+    const player = await phone.newPage();
+    await player.goto(link!);
+    await expect(player.getByText('You are not signed in, so this scan is only a test')).toBeVisible({ timeout: 20_000 });
+    await expect(player.getByLabel('Check-in code')).toBeVisible();
+    await player.screenshot({ path: testInfo.outputPath('player-test-check-in.png'), fullPage: true });
+    // The player can still choose to sign in, which makes the scan count.
+    await player.getByRole('button', { name: 'Sign in instead' }).click();
+    await expect(player.locator('.auth-entry-checkin')).toBeVisible({ timeout: 30_000 });
+  } finally {
+    await phone.close();
+    page.once('dialog', dialog => void dialog.accept());
+    await close.click();
+  }
+});
+
 
 test('the scan chart shows game and team totals and opens individual player sessions', async ({ page, request }, testInfo) => {
   test.setTimeout(120_000);
@@ -166,6 +219,8 @@ test('one QR link: the join page adapts to Android, PC and iPhone', async ({ bro
   expect(a.link).toMatch(/\/join\.html\?c=[A-Z2-9]{8}$/);
   await android.goto(`/join.html?c=${a.code}`);
   await expect(android.getByRole('heading', { name: 'Hi Ace' })).toBeVisible();
+  // First-time setup is folded away so the page shows one main action.
+  await android.getByText('First time on this phone?').click();
   await expect(android.getByRole('link', { name: /Download the app/ })).toHaveAttribute('href', '/api/integrity/downloads/arenahub-companion.apk');
   const open = await android.getByRole('link', { name: 'Open ArenaHub Companion' }).getAttribute('href');
   expect(open).toContain(`intent://pair?s=`); expect(open).toContain(`c=${a.code}`); expect(open).toContain('package=ph.edu.wmsu.arenahub.companion'); expect(open).toContain('browser_fallback_url=');
@@ -180,6 +235,7 @@ test('one QR link: the join page adapts to Android, PC and iPhone', async ({ bro
   // One click for a PC that has run the agent before; otherwise the download already carries the code.
   const origin = new URL(pc.url()).origin;
   await expect(pc.getByRole('link', { name: 'Start my scan' })).toHaveAttribute('href', `arenahub://scan?s=${encodeURIComponent(origin)}&c=${p.code}`);
+  await pc.getByText('First time on this PC?').click();
   const download = pc.getByRole('link', { name: /Download my scan/ });
   await expect(download).toHaveAttribute('href', `/api/integrity/downloads/arenahub-agent.exe?code=${p.code}`);
   await pc.getByText('Start it by typing a command instead').click();
@@ -221,7 +277,7 @@ test('a player who declines is shown to staff as an alert', async ({ page, brows
   const label = `Decline test ${Date.now() % 100000}`;
   await signIn(page, ORGANIZER);
   await openMonitorScans(page);
-  await expect(page.getByRole('heading', { name: /^monitor$/i })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: /^anti-cheat$/i })).toBeVisible({ timeout: 20_000 });
 
   const pair = await (await request.post('/api/integrity/pairings', { headers: staff, data: { matchId, matchLabel: label, game: 'mlbb', platform: 'ios', team: 'COE Titans', playerName: 'Fable', serverUrl: 'http://192.168.50.10:3210' } })).json();
   const phone = await browser.newPage({ userAgent: IPHONE });
